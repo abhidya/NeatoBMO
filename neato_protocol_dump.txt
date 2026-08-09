@@ -1,0 +1,315 @@
+==== Help SetLCD ====
+Help SetLCD
+Help Strlen = 687
+SetLCD - Sets the LCD to the specified display. (TestMode Only)
+    BGWhite - Fill LCD background with White
+    BGBlack - Fill LCD background with Black
+    HLine - Draw a horizontal line (in foreground color) at the following row.
+    VLine - Draw a vertical line (in foreground color) at the following column.
+    HBars - Draw alternating horizontal lines (FG,BG,FG,BG,...),
+across the whole screen.
+    VBars - Draw alternating vertical lines (FG,BG,FG,BG,...),
+across the whole screen.
+    FGWhite - Use White as Foreground (line) color
+    FGBlack - Use Black as Foreground (line) color
+    Contrast - Set the following value as the LCD Contrast value into NAND. 0..63
+
+
+==== Help PlaySound ====
+Help PlaySound
+Help Strlen = 810
+PlaySound - Play the specified sound in the robot.
+    SoundID - Play the sound library entry specified by the number in the next argument.
+
+    Legal values are:
+
+       0 - Waking Up
+       1 - Starting Cleaning
+       2 - Cleaning Completed
+       3 - Attention Needed
+       4 - Backing up into base station
+       5 - Base Station Docking Completed
+       6 - Test Sound 1
+       7 - Test Sound 2
+       8 - Test Sound 3
+       9 - Test Sound 4
+       10 - Test Sound 5
+       11 - Exploring
+       12 - ShutDown
+       13 - Picked Up
+       14 - Going to sleep
+       15 - Returning Home
+       16 - User Canceled Cleaning
+       17 - User Terminated Cleaning
+       18 - Slipped Off Base While Charging
+       19 - Alert
+       20 - Thank You
+
+    Stop - Stop playing sound.
+
+
+==== Help SetLED ====
+Help SetLED
+Help Strlen = 752
+SetLED - Sets the specified LED to on,off,blink, or dim. (TestMode Only)
+    BacklightOn - LCD Backlight On  (mutually exclusive of BacklightOff)
+    BacklightOff - LCD Backlight Off (mutually exclusive of BacklightOn)
+    ButtonAmber - Start Button Amber (mutually exclusive of other Button options)
+    ButtonGreen - Start Button Green (mutually exclusive of other Button options)
+    LEDRed - Start Red LED (mutually exclusive of other Button options)
+    LEDGreen - Start Green LED (mutually exclusive of other Button options)
+    ButtonAmberDim - Start Button Amber Dim (mutually exclusive of other Button options)
+    ButtonGreenDim - Start Button Green Dim (mutually exclusive of other Button options)
+    ButtonOff - Start Button Off
+
+
+==== Help SetMotor ====
+Help SetMotor
+Help Strlen = 1137
+SetMotor - Sets the specified motor to run in a direction at a requested speed. (TestMode Only)
+    LWheelDist - Distance in millimeters to drive Left wheel. (Pos = forward, neg = backward)
+    RWheelDist - Distance in millimeters to drive Right wheel. (Pos = forward, neg = backward)
+    Speed - Speed in millimeters/second. (Required only for wheel movements)
+    Accel - Acceleration in millimeters/second. 
+		(Used only for wheel movements. Defaults to 'Speed'.)
+    RPM - Next argument is the RPM of the motor.
+		Not used for wheels, but applied to all other motors specified in the command line.
+    Brush - Brush motor forward (Mutually exclusive with wheels and vacuum.)
+    VacuumOn - Vacuum motor on (Mutually exclusive with VacuumOff)
+    VacuumOff - Vacuum motor off (Mutually exclusive with VacuumOn)
+    VacuumSpeed - Vacuum speed in percent (1-100).
+    RWheelDisable - Disable Right Wheel motor
+    LWheelDisable - Disable Left Wheel motor
+    BrushDisable - Disable Brush motor
+    RWheelEnable - Enable Right Wheel motor
+    LWheelEnable - Enable Left Wheel motor
+    BrushEnable - Enable Brush motor
+
+
+==== Help DiagTest ====
+Help DiagTest
+Help Strlen = 2359
+DiagTest - Executes different test modes. Once set, press Start button to engage. (Test modes are mutually exclusive.)
+    TestsOff - Stop Diagnostic Test and clears all diagnostic test modes. 
+
+    DrivePath - Sets DrivePath TestMode. Press start button to start. Robot travels straight by commanded distance as path. Mutually exclusive with other diagtest modes. Use 'TestsOff' option to stop.
+
+    DriveForever - Sets DriveForever TestMode. Press start button to start. Robot drives continuously. Mutually exclusive with other diagtest modes. Use 'TestsOff' option to stop.
+
+    MoveAndBump - Sets Move and Bump TestMode. Press start button to start. Executes canned series of motions, but will react to bumps. Mutually exclusive with other diagtest modes.
+
+    DropTest - Enables DropTest. Robot drives forward until a drop is detected. Mutually exclusive with other diagtest modes.
+
+    AutoCycle - DropTest argument to enable automatic restart of the test. The robot will drive backwards and then forward until a drop is detected until the test is over.
+
+    OneShot - Only executes test once.
+
+    BrushOn - Turns on brush during test. May conflict with motor commands of test so use carefully!
+
+    VacuumOn - Turns on vacuum during test. May conflict with motor commands of test so use carefully!
+
+    LDSOn - Turns on LDS during test. May conflict with motor commands of test so use carefully!
+
+    AllMotorsOn - Turns on brush, vacuum, and lds during test. May conflict with motor commands of test so use carefully!
+
+    DisablePickupDetect - Ignores pickup (wheel suspension). By default, pickup detect is enabled and stops the test.
+
+    DrivePathDist - Distance in mm
+
+    DriveForeverLeftDist - Use next arg to set left wheel dist for DriveForever test. Requires DriveForeverRightDist as well. The ratio of this value to DriveForeverRightDist determines turn radius.
+
+    DriveForeverRightDist - Use next arg to set right wheel dist for DriveForever test. Requires DriveForeverLeftDist as well. The ratio of this value to DriveForeverLeftDist determines turn radius.
+
+    DriveForeverSpeed - Use next arg to set turn speed of outer wheel for DriveForever test in mm/s.
+
+    Speed - DropTest argument to set the robot speed in mm/s.
+
+    BrushSpeed - DropTest argument to set the speed of the brush in rpm.
+
+
+
+==== Help SetSystemMode ====
+Help SetSystemMode
+Help Strlen = 304
+SetSystemMode - Set the operation mode of the robot. (TestMode Only)
+    Shutdown - Shut down the robot. (mutually exclusive of other options)
+    Hibernate - Start hibernate operation.(mutually exclusive of other options)
+    Standby - Start standby operation. (mutually exclusive of other options)
+
+
+==== Help Upload ====
+Help Upload
+Help Strlen = 651
+Upload - Uploads new program to the robot.
+    dump - Dump the contents of the upload save area.
+    code - Upload file is the main application. (Mutually exclusive with sound, LDS)
+    sound - Upload file is a sound module. (Mutually exclusive with code, LDS)
+    LDS - Upload file is an LDS module. (Mutually exclusive with sound, code)
+    xmodem - Use xmodem protocal when transmitting upload module
+    size - data size to upload to device.
+    noburn - test option -- do NOT burn the flash after the upload.
+    readflash - test option -- read the flash at the current region.
+    reboot - Reset the robot after performing the upload.
+
+
+==== Help SetWallFollower ====
+Help SetWallFollower
+Help Strlen = 122
+SetWallFollower - Enables/Disables wall follower
+    Enable - Enable wall follower
+    Disable - Disable wall follower
+
+
+==== Help Clean ====
+Help Clean
+Help Strlen = 282
+Clean - Starts a cleaning by simulating press of start button.
+    House - (Optional) Equivalent to pressing 'Start' button once.
+Starts a house cleaning.
+(House cleaning mode is the default cleaning mode.)
+    Spot - (Optional) Starts a spot clean.
+
+    Stop - Stop Cleaning.
+
+
+
+==== GetAccel ====
+GetAccel
+Label,Value
+PitchInDegrees,  1.20
+RollInDegrees,  2.12
+XInG, 0.038
+YInG, 0.021
+ZInG, 1.019
+SumInG, 1.020
+
+==== GetButtons ====
+GetButtons
+Button Name,Pressed
+BTN_SOFT_KEY,0
+BTN_SCROLL_UP,0
+BTN_START,0
+BTN_BACK,0
+BTN_SCROLL_DOWN,0
+
+==== GetCharger ====
+GetCharger
+Label,Value
+FuelPercent,98
+BatteryOverTemp,0
+ChargingActive,0
+ChargingEnabled,0
+ConfidentOnFuel,0
+OnReservedFuel,0
+EmptyFuel,0
+BatteryFailure,0
+ExtPwrPresent,1
+ThermistorPresent[0],1
+ThermistorPresent[1],1
+BattTempCAvg[0],22
+BattTempCAvg[1],22
+VBattV,16.40
+VExtV,24.19
+Charger_mAH,0
+MaxPWM,65536
+PWM,0
+
+==== GetAnalogSensors ====
+GetAnalogSensors
+SensorName,Value
+WallSensorInMM,53
+BatteryVoltageInmV,16435
+LeftDropInMM,60
+RightDropInMM,60
+RightMagSensor,-1
+LeftMagSensor,-2
+XTemp0InC,-30
+XTemp1InC,15
+VacuumCurrentInmA,0
+ChargeVoltInmV,24091
+NotConnected1,0
+BatteryTemp1InC,22
+NotConnected2,0
+CurrentInmA,34
+NotConnected3,0
+BatteryTemp0InC,22
+
+==== GetDigitalSensors ====
+GetDigitalSensors
+Digital Sensor Name, Value
+SNSR_DC_JACK_CONNECT,1
+SNSR_DUSTBIN_IS_IN,1
+SNSR_LEFT_WHEEL_EXTENDED,0
+SNSR_RIGHT_WHEEL_EXTENDED,0
+LSIDEBIT,0
+LFRONTBIT,0
+RSIDEBIT,0
+RFRONTBIT,0
+
+==== GetMotors ====
+GetMotors
+Parameter,Value
+Brush_MaxPWM,65536
+Brush_PWM,0
+Brush_mVolts,0
+Brush_Encoder,0
+Brush_RPM, 0
+Vacuum_MaxPWM,65536
+Vacuum_PWM,0
+Vacuum_CurrentInMA,0
+Vacuum_Encoder,0
+Vacuum_RPM, 0
+LeftWheel_MaxPWM,65536
+LeftWheel_PWM,0
+LeftWheel_mVolts,0
+LeftWheel_Encoder,0
+LeftWheel_PositionInMM,0
+LeftWheel_RPM,0
+RightWheel_MaxPWM,65536
+RightWheel_PWM,0
+RightWheel_mVolts,0
+RightWheel_Encoder,0
+RightWheel_PositionInMM,0
+RightWheel_RPM,0
+Laser_MaxPWM,65536
+Laser_PWM,0
+Laser_mVolts,0
+Laser_Encoder,0
+Laser_RPM, 0
+Charger_MaxPWM,65536
+Charger_PWM,0
+Charger_mAH, 0
+
+==== GetTime ====
+GetTime
+Sunday 0:00:00
+
+==== GetCalInfo ====
+GetCalInfo
+Parameter,Value
+LDSOffset,0
+XAccel,0
+YAccel,0
+ZAccel,0
+RTCOffset,348790
+LCDContrast,43
+RDropMin,209
+RDropMid,66
+RDropMax,19
+LDropMin,223
+LDropMid,88
+LDropMax,47
+WallMin,697
+WallMid,232
+WallMax,85
+
+==== GetWarranty ====
+GetWarranty
+000eac05
+0440
+46ec926d
+
+==== GetErr ====
+GetErr
+
+

@@ -1,0 +1,11 @@
+# secrets — never commit
+esp32-body/src/wifi_secrets.h
+
+# build artifacts
+esp32-body/.pio/
+esp32-body/sdkconfig.esp32s3
+esp32-body/managed_components/
+esp32-body/dependencies.lock
+__pycache__/
+*.pyc
+.DS_Store

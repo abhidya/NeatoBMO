@@ -1,0 +1,104 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Neato Body</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0b0e14; color:#d5dbe5;
+         font:14px -apple-system,sans-serif; display:flex; height:100vh; }
+  #left { flex:1; display:flex; flex-direction:column; align-items:center; padding:8px; min-width:0; }
+  #right { width:400px; display:flex; flex-direction:column; border-left:1px solid #232a36; }
+  canvas { max-width:100%; flex:1; min-height:0; }
+  #hud { padding:6px; }
+  .val { color:#4cc38a; font-weight:600; }
+  #console { flex:1; overflow-y:auto; font:12px ui-monospace,monospace;
+             padding:8px; white-space:pre-wrap; word-break:break-all; }
+  #cmd { width:100%; background:#11151d; color:#d5dbe5; border:0; border-top:1px solid #232a36;
+         padding:10px; font:13px ui-monospace,monospace; outline:none; }
+  button { background:#1a2230; color:#d5dbe5; border:1px solid #2c3547; border-radius:6px;
+           padding:6px 10px; margin:2px; cursor:pointer; font-size:12px; }
+  button:hover { background:#243046; }
+  #quick { padding:6px; border-bottom:1px solid #232a36; }
+  #status { padding:6px 10px; font-weight:600; }
+  .ok { color:#4cc38a; } .bad { color:#e06c75; }
+  #drive { text-align:center; padding:6px; }
+  @media (max-width: 700px) { body { flex-direction:column; } #right { width:100%; height:45%; } }
+</style>
+<div id="left">
+  <div id="hud">RPM <span class="val" id="rpm">-</span> · points <span class="val" id="npts">-</span>
+    <button onclick="lidar(true)">Lidar ON</button>
+    <button onclick="lidar(false)">Lidar OFF</button></div>
+  <canvas id="c" width="900" height="900"></canvas>
+  <div id="drive">
+    <button onclick="drive(200,200)">▲</button><br>
+    <button onclick="drive(-80,80)">◀</button>
+    <button onclick="send('SetMotor 0 0 0')">■</button>
+    <button onclick="drive(80,-80)">▶</button><br>
+    <button onclick="drive(-200,-200)">▼</button>
+  </div>
+</div>
+<div id="right">
+  <div id="status">robot: <span id="conn" class="bad">…</span></div>
+  <div id="quick">
+    <button onclick="send('GetVersion')">GetVersion</button>
+    <button onclick="send('GetCharger')">GetCharger</button>
+    <button onclick="send('TestMode On')">TestMode On</button>
+    <button onclick="send('TestMode Off')">TestMode Off</button>
+    <button onclick="send('GetAnalogSensors')">Analog</button>
+    <button onclick="send('GetDigitalSensors')">Digital</button>
+    <button onclick="send('PlaySound 1')">Beep</button>
+    <button onclick="send('Help')">Help</button>
+  </div>
+  <div id="console"></div>
+  <input id="cmd" placeholder="type any Neato command, Enter to send">
+</div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');let maxR=4000;
+function draw(scan){const W=cv.width,H=cv.height,cx=W/2,cy=H/2,R=Math.min(W,H)/2-20;
+ ctx.fillStyle='#0b0e14';ctx.fillRect(0,0,W,H);
+ ctx.strokeStyle='#232a36';ctx.fillStyle='#5b6676';ctx.font='12px sans-serif';
+ for(let m=1000;m<=maxR;m+=1000){ctx.beginPath();ctx.arc(cx,cy,R*m/maxR,0,7);ctx.stroke();
+  ctx.fillText((m/1000)+' m',cx+R*m/maxR+4,cy-4);}
+ ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+ ctx.fillStyle='#e5c07b';ctx.beginPath();ctx.moveTo(cx,cy-10);ctx.lineTo(cx-7,cy+8);ctx.lineTo(cx+7,cy+8);ctx.closePath();ctx.fill();
+ let n=0;
+ for(const[aS,d]of Object.entries(scan)){if(d<=0||d>maxR)continue;
+  const a=(parseInt(aS)-90)*Math.PI/180,r=R*d/maxR;
+  ctx.fillStyle='#4cc38a';ctx.beginPath();ctx.arc(cx+r*Math.cos(a),cy+r*Math.sin(a),3,0,7);ctx.fill();n++;}
+ document.getElementById('npts').textContent=n;}
+
+let ws, buf='', pollLidar=false;
+const con=document.getElementById('console');
+function log(t){con.textContent=(con.textContent+t).split('\\n').slice(-300).join('\\n');con.scrollTop=con.scrollHeight;}
+function connect(){
+ ws=new WebSocket(`ws://${location.host}/ws`);
+ ws.onopen=()=>{setConn(true);};
+ ws.onclose=()=>{setConn(false);setTimeout(connect,2000);};
+ ws.onmessage=e=>{buf+=e.data;
+  let i;
+  while((i=buf.indexOf('\\x1a'))>=0){handleBlock(buf.slice(0,i));buf=buf.slice(i+1);}
+  if(buf.length>40000)buf=buf.slice(-20000);};
+}
+function setConn(ok){const el=document.getElementById('conn');
+ el.textContent=ok?'link up':'link down';el.className=ok?'ok':'bad';}
+function handleBlock(block){
+ if(block.trimStart().startsWith('GetLDSScan')){
+  const pts={};let rpm=0;
+  for(const line of block.split('\\n')){const p=line.trim().split(',');
+   if(p[0]==='ROTATION_SPEED')rpm=parseFloat(p[1])||0;
+   else if(p.length===4&&/^\\d+$/.test(p[0])){
+    const a=+p[0],d=+p[1],err=+p[3];
+    if(err===0&&d>0&&d<10000)pts[a]=d;}}
+  if(Object.keys(pts).length){draw(pts);document.getElementById('rpm').textContent=rpm.toFixed(1);}
+ } else if(block.trim()) log(block+'\\n');
+}
+function send(c){if(ws&&ws.readyState===1)ws.send(c);log('> '+c+'\\n');}
+function drive(l,r){send('TestMode On');send(`SetMotor ${l} ${r} 100`);}
+function lidar(on){pollLidar=on;
+ if(on){send('TestMode On');send('SetLDSRotation On');}
+ else send('SetLDSRotation Off');}
+setInterval(()=>{if(pollLidar&&ws&&ws.readyState===1)ws.send('GetLDSScan');},450);
+const cmdEl=document.getElementById('cmd');
+cmdEl.addEventListener('keydown',e=>{if(e.key==='Enter'&&cmdEl.value.trim()){send(cmdEl.value.trim());cmdEl.value='';}});
+connect();
+</script>
