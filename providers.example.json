@@ -1,0 +1,24 @@
+{
+  "_comment": "Copy to ~/.neatobmo/providers.json. First reachable provider in 'order' wins.",
+  "order": ["colibri", "lmstudio", "ollama", "openai"],
+  "providers": {
+    "colibri": {
+      "base_url": "http://127.0.0.1:8000/v1",
+      "model": "olmoe",
+      "api_key_file": "~/.neatobmo/coli_api_key"
+    },
+    "lmstudio": {
+      "base_url": "http://10.0.0.63:1234/v1",
+      "model": "auto"
+    },
+    "ollama": {
+      "base_url": "http://10.0.0.63:11434/v1",
+      "model": "qwen3:8b"
+    },
+    "openai": {
+      "base_url": "https://api.openai.com/v1",
+      "model": "gpt-5.2",
+      "api_key_env": "OPENAI_API_KEY"
+    }
+  }
+}
