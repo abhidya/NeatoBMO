@@ -15,6 +15,8 @@
 
 void net_log_raw(const uint8_t *data, size_t len);
 void net_cmd_reply(const uint8_t *data, size_t len);
+void net_ws_push(const uint8_t *data, size_t len);
+void web_start(void);
 
 static const char *TAG = "neato";
 static cdc_acm_dev_hdl_t s_dev = NULL;
@@ -27,6 +29,7 @@ static bool on_rx(const uint8_t *data, size_t len, void *arg)
     fflush(stdout);
     net_log_raw(data, len);
     net_cmd_reply(data, len);
+    net_ws_push(data, len);
     return true;
 }
 
@@ -65,6 +68,7 @@ void app_main(void)
 {
     s_connected = xSemaphoreCreateBinary();
     wifi_log_start();
+    web_start();
 
     const usb_host_config_t host_config = {
         .intr_flags = ESP_INTR_FLAG_LEVEL1,
