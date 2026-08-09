@@ -20,6 +20,7 @@ extern const char index_html_start[] asm("_binary_index_html_start");
 extern const char index_html_end[] asm("_binary_index_html_end");
 
 void neato_send(const char *cmd); /* main.c */
+esp_err_t speak_post(httpd_req_t *req); /* audio.c */
 
 /* ---- push Neato bytes to the websocket client (called from USB rx task) */
 typedef struct {
@@ -129,8 +130,10 @@ void web_start(void)
     static const httpd_uri_t ws = { .uri = "/ws", .method = HTTP_GET, .handler = ws_handler,
                                     .is_websocket = true };
     static const httpd_uri_t ota = { .uri = "/ota", .method = HTTP_POST, .handler = ota_post };
+    static const httpd_uri_t speak = { .uri = "/speak", .method = HTTP_POST, .handler = speak_post };
     httpd_register_uri_handler(s_server, &root);
     httpd_register_uri_handler(s_server, &ws);
     httpd_register_uri_handler(s_server, &ota);
+    httpd_register_uri_handler(s_server, &speak);
     ESP_LOGI(TAG, "web server up on port 80");
 }
