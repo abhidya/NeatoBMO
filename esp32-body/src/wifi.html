@@ -1,0 +1,112 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NeatoBMO WiFi</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0b0e14; color:#d5dbe5;
+         font:15px -apple-system,sans-serif; }
+  #wrap { max-width:480px; margin:0 auto; padding:16px; }
+  h1 { font-size:18px; margin:8px 0 16px; }
+  h1 span { color:#4cc38a; }
+  .card { background:#11151d; border:1px solid #232a36; border-radius:10px;
+          padding:12px; margin-bottom:14px; }
+  .row { display:flex; justify-content:space-between; padding:3px 0; }
+  .muted { color:#5b6676; } .val { color:#4cc38a; font-weight:600; }
+  .bad { color:#e06c75; }
+  #nets { max-height:45vh; overflow-y:auto; }
+  .net { display:flex; align-items:center; gap:10px; padding:10px 6px;
+         border-bottom:1px solid #1a2230; cursor:pointer; border-radius:6px; }
+  .net:hover { background:#1a2230; }
+  .net .ssid { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bars { display:flex; align-items:flex-end; gap:2px; height:14px; }
+  .bars i { width:3px; background:#2c3547; border-radius:1px; }
+  .bars i.on { background:#4cc38a; }
+  .lock { color:#5b6676; font-size:12px; }
+  input { width:100%; background:#0b0e14; color:#d5dbe5; border:1px solid #2c3547;
+          border-radius:6px; padding:10px; margin:5px 0; font-size:15px; outline:none; }
+  input:focus { border-color:#4cc38a; }
+  button { background:#1a2230; color:#d5dbe5; border:1px solid #2c3547; border-radius:6px;
+           padding:10px 14px; margin:4px 2px; cursor:pointer; font-size:14px; }
+  button:hover { background:#243046; }
+  button.go { background:#173226; border-color:#2b5c43; color:#4cc38a; font-weight:600; }
+  button.danger { color:#e06c75; border-color:#4a2c33; }
+  #msg { padding:8px 2px; min-height:22px; }
+  a { color:#4cc38a; text-decoration:none; }
+</style>
+<div id="wrap">
+  <h1>Neato<span>BMO</span> · WiFi setup <span style="float:right;font-weight:400"><a href="/">dashboard</a></span></h1>
+
+  <div class="card" id="statusCard">
+    <div class="row"><span class="muted">mode</span><span class="val" id="mode">…</span></div>
+    <div class="row"><span class="muted">network</span><span id="curssid">…</span></div>
+    <div class="row"><span class="muted">ip</span><span id="ip">…</span></div>
+    <div class="row"><span class="muted">signal</span><span id="rssi">…</span></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="align-items:center">
+      <b>Nearby networks</b>
+      <button onclick="scan()" id="scanBtn">Rescan</button>
+    </div>
+    <div id="nets" class="muted">scanning…</div>
+  </div>
+
+  <div class="card">
+    <b>Join network</b>
+    <input id="ssid" placeholder="network name (SSID)" autocapitalize="off" autocorrect="off">
+    <input id="pass" type="password" placeholder="password (blank for open network)">
+    <button class="go" onclick="save()">Connect &amp; save</button>
+    <button class="danger" onclick="forget()">Forget WiFi</button>
+    <div id="msg"></div>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+function bars(rssi){
+ const lvl=rssi>=-55?4:rssi>=-65?3:rssi>=-75?2:1;
+ let h='<span class="bars">';
+ for(let i=1;i<=4;i++)h+=`<i class="${i<=lvl?'on':''}" style="height:${3+i*3}px"></i>`;
+ return h+'</span>';
+}
+async function status(){
+ try{
+  const s=await(await fetch('/wifi/status')).json();
+  $('mode').textContent=s.mode==='ap'?'setup AP':'joined';
+  $('mode').className=s.mode==='ap'?'bad':'val';
+  $('curssid').textContent=s.ssid||'—';
+  $('ip').textContent=s.mode==='ap'?'192.168.4.1':(s.ip||'—');
+  $('rssi').innerHTML=s.connected?bars(s.rssi)+` ${s.rssi} dBm`:(s.mode==='ap'?'—':'not connected');
+ }catch(e){}
+}
+async function scan(){
+ $('scanBtn').disabled=true;$('nets').textContent='scanning…';
+ try{
+  const nets=await(await fetch('/wifi/scan')).json();
+  nets.sort((a,b)=>b.rssi-a.rssi);
+  const seen=new Set();
+  $('nets').innerHTML=nets.filter(n=>!seen.has(n.ssid)&&seen.add(n.ssid)).map(n=>
+   `<div class="net" onclick="pick('${n.ssid.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+     ${bars(n.rssi)}<span class="ssid">${n.ssid.replace(/</g,'&lt;')}</span>
+     <span class="lock">${n.open?'open':'&#128274;'}</span></div>`).join('')
+   ||'<div class="muted" style="padding:8px">no networks found</div>';
+ }catch(e){$('nets').textContent='scan failed — try again';}
+ $('scanBtn').disabled=false;
+}
+function pick(s){$('ssid').value=s;$('pass').focus();}
+async function save(){
+ const s=$('ssid').value.trim(),p=$('pass').value;
+ if(!s){$('msg').textContent='pick or type a network name first';return;}
+ $('msg').textContent=`Saving… robot reboots and joins “${s}”. If your phone is on `+
+  `NeatoBMO-Setup, rejoin your normal WiFi and find the robot there (logs on port 2323).`;
+ try{await fetch('/wifi/save',{method:'POST',
+  headers:{'Content-Type':'application/x-www-form-urlencoded'},
+  body:`ssid=${encodeURIComponent(s)}&pass=${encodeURIComponent(p)}`});}catch(e){}
+}
+async function forget(){
+ if(!confirm('Forget saved WiFi and reboot into the NeatoBMO-Setup network?'))return;
+ $('msg').textContent='Forgetting… robot reboots into the NeatoBMO-Setup AP.';
+ try{await fetch('/wifi/forget',{method:'POST'});}catch(e){}
+}
+status();scan();setInterval(status,5000);
+</script>

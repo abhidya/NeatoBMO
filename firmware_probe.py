@@ -36,58 +36,34 @@ def raw_cmd(ser, cmd, quiet=2.0, hard_limit=120.0):
     return buf
 
 
-SOH, STX, EOT, ACK, NAK, CAN, CRC = 0x01, 0x02, 0x04, 0x06, 0x15, 0x18, ord("C")
+CAN = 0x18
 
 
-def xmodem_recv(ser, initiate_cmd, max_bytes=1 << 20):
-    """Receive an xmodem transfer the robot initiates after `initiate_cmd`.
-    Read-only from the robot's perspective (it sends, we ACK)."""
+def xmodem_recv(ser, initiate_cmd):
+    """Receive an xmodem transfer the robot initiates after `initiate_cmd`,
+    using the PyPI `xmodem` library. Read-only (robot sends, we ACK)."""
+    import io
+    from xmodem import XMODEM
+
     ser.reset_input_buffer()
     ser.write((initiate_cmd + "\n").encode())
     time.sleep(0.5)
-    data = b""
-    crc_mode = True
-    for _ in range(20):                       # solicit: 'C' for CRC, fall back to NAK
-        ser.write(bytes([CRC if crc_mode else NAK]))
-        hdr = ser.read(1)
-        t0 = time.time()
-        while not hdr and time.time() - t0 < 1.0:
-            hdr = ser.read(1)
-        if hdr and hdr[0] in (SOH, STX):
-            break
-        if hdr and hdr[0] == EOT:
-            ser.write(bytes([ACK]))
-            return data
-        crc_mode = not crc_mode
-    else:
-        sys.exit("no xmodem start (robot never sent SOH); it may not use xmodem for reads")
 
-    while len(data) < max_bytes:
-        if not hdr:
-            hdr = ser.read(1)
-            if not hdr:
-                break
-        b = hdr[0]
-        hdr = b""
-        if b == EOT:
-            ser.write(bytes([ACK]))
-            break
-        if b not in (SOH, STX):
-            continue
-        n = 128 if b == SOH else 1024
-        need = 2 + n + (2 if crc_mode else 1)
-        pkt = b""
-        t0 = time.time()
-        while len(pkt) < need and time.time() - t0 < 3.0:
-            pkt += ser.read(need - len(pkt))
-        if len(pkt) < need:
-            ser.write(bytes([NAK]))
-            continue
-        data += pkt[2:2 + n]
-        ser.write(bytes([ACK]))
-        sys.stderr.write(f"\r{len(data)} bytes")
-    sys.stderr.write("\n")
-    return data
+    def getc(size, timeout=1):
+        old = ser.timeout
+        ser.timeout = timeout
+        d = ser.read(size)
+        ser.timeout = old
+        return d or None
+
+    def putc(d, timeout=1):
+        return ser.write(d)
+
+    sink = io.BytesIO()
+    ok = XMODEM(getc, putc).recv(sink, crc_mode=1, retry=8)
+    if not ok:
+        sys.exit("no xmodem transfer started (robot never sent data)")
+    return sink.getvalue()
 
 
 if __name__ == "__main__":
