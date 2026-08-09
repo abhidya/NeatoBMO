@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# DEPRECATED: consolidated into bmo_web.py (http://localhost:8485) — use its
+# Console and Sensors tabs instead. Kept for reference only.
 """Neato web dashboard.
 
 Talks to the ESP32 body board over WiFi (command bridge on :3333) and serves
