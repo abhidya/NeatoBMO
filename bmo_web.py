@@ -84,12 +84,16 @@ installed_sound_profile = "bmo"
 # bank is one click away.  espeak parameters mirror bmo_brain_server defaults
 # so the voice is identical whether Colibri answers or the local fallback runs.
 TTS_VOICES = {
-    "en+f4": "BMO (en+f4)",
-    "en+f2": "en+f2",
-    "en+m3": "en+m3",
-    "en+m1": "en+m1",
-    "en": "en",
+    "bmo-rvc": "BMO (neural clone)",
+    "en+f4": "espeak en+f4",
+    "en+f2": "espeak en+f2",
+    "en+m3": "espeak en+m3",
+    "en+m1": "espeak en+m1",
+    "en": "espeak en",
 }
+TTS_DEFAULT_VOICE = "bmo-rvc"
+VOICE_SERVER = os.environ.get("NEATOBMO_VOICE", "http://127.0.0.1:8486")
+VOICE_VENV_PY = os.path.expanduser("~/.neatobmo/voice-venv/bin/python")
 TTS_SPEED = 160
 TTS_PITCH = 70
 TTS_ACTIVE_STATES = {"synthesizing", "building", "burning", "speaking", "restoring"}
@@ -115,15 +119,31 @@ def precache_routine_tts(voice="en+f4"):
     print(f"tts: precached {len(_tts_cache)} routine replies")
 
 
-def synthesize_tts(text, voice="en+f4"):
-    """Colibri when it answers; otherwise the same engine run locally.
+def voice_server_tts(text):
+    """Neural BMO voice: Piper prosody -> BMO RVC timbre (tools/bmo_voice_server)."""
+    req = urllib.request.Request(
+        VOICE_SERVER + "/synth", data=json.dumps({"text": text}).encode(),
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=300) as resp:
+        wav = resp.read()
+    if not wav.startswith(b"RIFF"):
+        raise RuntimeError("voice server returned a non-WAV response")
+    return wav
 
-    Both paths are espeak-ng with identical voice/speed/pitch, so BMO sounds
-    the same regardless of which one produced the WAV.
-    """
+
+def synthesize_tts(text, voice=TTS_DEFAULT_VOICE):
+    """Neural BMO clone first; Colibri/espeak as explicit choices/fallbacks."""
     text = tts_bank.sanitize_speech_text(text) or text
     if (cached := _tts_cache.get((text, voice))) is not None:
         return cached
+    if voice == "bmo-rvc":
+        try:
+            wav = voice_server_tts(text)
+            _tts_cache[(text, voice)] = wav
+            return wav
+        except (urllib.error.URLError, OSError, RuntimeError) as exc:
+            print("voice server unavailable, falling back to espeak:", exc)
+            voice = "en+f4"
     try:
         return colibri_tts(text, voice)
     except (urllib.error.URLError, OSError, RuntimeError):
@@ -311,6 +331,31 @@ def brain_listening(timeout=1.5):
             return True
     except OSError:
         return False
+
+
+def ensure_voice():
+    """Start the neural BMO voice server if its venv and models exist."""
+    parsed = urllib.parse.urlparse(VOICE_SERVER)
+    try:
+        import socket
+        with socket.create_connection((parsed.hostname, parsed.port or 80),
+                                      timeout=1.0):
+            print("voice: BMO neural server already running at", VOICE_SERVER)
+            return
+    except OSError:
+        pass
+    model = os.path.expanduser(
+        "~/.neatobmo/voices/bmo-rvc/BmoAdventureTime_115e_3220s.pth")
+    if not (os.path.exists(VOICE_VENV_PY) and os.path.exists(model)):
+        print("voice: neural models not installed — using espeak fallback")
+        return
+    log_path = REPO_ROOT / "logs" / "bmo-voice.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.Popen(
+        [VOICE_VENV_PY, str(REPO_ROOT / "tools" / "bmo_voice_server.py"),
+         "--port", str(parsed.port or 8486)],
+        stdout=open(log_path, "a"), stderr=subprocess.STDOUT)
+    print(f"voice: starting BMO neural server — log at {log_path}")
 
 
 def ensure_brain():
@@ -1198,7 +1243,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/tts-bank/speak":
             request = json.loads(raw)
             text = request.get("text", "").strip()
-            voice = request.get("voice", "en+f4")
+            voice = request.get("voice", TTS_DEFAULT_VOICE)
             if not text:
                 return self._json({"error": "empty text"})
             if voice not in TTS_VOICES:
@@ -1345,7 +1390,7 @@ class Handler(BaseHTTPRequestHandler):
                 # BMO's actual voice: the reply is flashed into the sound
                 # bank and spoken (skip the chirp so speech starts clean).
                 with tts_job_lock:
-                    _, voice_error = tts_start_speak(plan.speech, "en+f4")
+                    _, voice_error = tts_start_speak(plan.speech, TTS_DEFAULT_VOICE)
             elif not plan.actions():
                 # no cue sounds: keep the old tone-guessed chirp fallback
                 body(lambda: (robot.led("green"), robot.play(chirp_for(reply)),
@@ -1387,6 +1432,7 @@ if __name__ == "__main__":
             robot = None
             print("body: not attached — usb:", usb_error, "| bridge:", bridge_error)
     ensure_brain()
+    ensure_voice()
     threading.Thread(target=precache_routine_tts, daemon=True).start()
     print(f"BMO voice console: http://localhost:{PORT}")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

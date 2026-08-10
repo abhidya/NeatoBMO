@@ -24,6 +24,13 @@ import argparse
 import io
 import json
 import os
+
+# rvc-python's rmvpe path auto-picks the Metal (MPS) device, which lacks the
+# fft op it needs on this torch build — fall back to CPU for those ops.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+# torch and faiss each bundle libomp on mac x86; without this the duplicate
+# runtime aborts the process.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 import subprocess
 import sys
 import tempfile
@@ -48,11 +55,21 @@ rvc = None
 def load_rvc():
     """Load the RVC engine once; downloads hubert/rmvpe base models on first run."""
     global rvc
+    # Intel-Mac MPS segfaults inside rmvpe even with the fallback env; make
+    # torch report no MPS so every internal device pick lands on CPU.
+    import torch
+    torch.backends.mps.is_available = lambda: False
+    if hasattr(torch.backends.mps, "is_built"):
+        torch.backends.mps.is_built = lambda: False
     from rvc_python.infer import RVCInference
     rvc = RVCInference(device="cpu")
     rvc.load_model(str(RVC_MODEL), index_path=str(RVC_INDEX))
-    rvc.set_params(f0method=os.environ.get("BMO_VOICE_F0", "rmvpe"),
-                   f0up_key=DEFAULT_TRANSPOSE)
+    # index_rate=0 skips the faiss feature search, which segfaults inside the
+    # RVC pipeline on this mac-x86 torch/faiss combo; the .pth model alone
+    # carries the BMO timbre.  "pm" pitch tracking is the CPU-fast method.
+    rvc.set_params(f0method=os.environ.get("BMO_VOICE_F0", "pm"),
+                   f0up_key=DEFAULT_TRANSPOSE,
+                   index_rate=float(os.environ.get("BMO_VOICE_INDEX_RATE", "0")))
     print("rvc: BMO model loaded", flush=True)
 
 
@@ -72,6 +89,22 @@ def piper_synth(text: str) -> bytes:
         Path(out_path).unlink(missing_ok=True)
 
 
+def rvc_convert(input_path: str, output_path: str) -> None:
+    """infer_file minus its bug: surface vc_single's error tuple as an error."""
+    import numpy as np
+    from scipy.io import wavfile
+    model_info = rvc.models[rvc.current_model]
+    wav_opt = rvc.vc.vc_single(
+        sid=0, input_audio_path=input_path, f0_up_key=rvc.f0up_key,
+        f0_method=rvc.f0method, file_index=model_info.get("index", ""),
+        index_rate=rvc.index_rate, filter_radius=rvc.filter_radius,
+        resample_sr=rvc.resample_sr, rms_mix_rate=rvc.rms_mix_rate,
+        protect=rvc.protect, f0_file="", file_index2="")
+    if not isinstance(wav_opt, np.ndarray):
+        raise RuntimeError(f"RVC conversion failed: {wav_opt[0]}")
+    wavfile.write(output_path, rvc.vc.tgt_sr, wav_opt)
+
+
 def synth_bmo(text: str, transpose: int | None = None) -> bytes:
     base = piper_synth(text)
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as src, \
@@ -81,7 +114,7 @@ def synth_bmo(text: str, transpose: int | None = None) -> bytes:
         try:
             if transpose is not None and transpose != rvc.f0up_key:
                 rvc.set_params(f0up_key=transpose)
-            rvc.infer_file(src.name, dst.name)
+            rvc_convert(src.name, dst.name)
             return Path(dst.name).read_bytes()
         finally:
             Path(src.name).unlink(missing_ok=True)

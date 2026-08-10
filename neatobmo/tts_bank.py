@@ -524,22 +524,32 @@ def plan_speech_chunks(text: str, synthesize, capacities: list[tuple[int, int]],
         if len(chunks) >= max_chunks:
             raise TtsBankError(
                 f"text needs more than {max_chunks} bank writes; shorten it")
-        fitted = None
-        j = i + 1
-        while j <= len(units):
+        def try_span(j):
             candidate = " ".join(units[i:j])
             samples = synthesize(candidate)
             if len(samples) > total_capacity:
-                break
+                return None
             # The real fit test is slot planning itself: boundary-aware cuts
             # spend capacity, so a chunk that fits by total length can still
             # fail to split cleanly across the ten slots.
             try:
                 segments = plan_segments(samples, capacities)
             except TtsBankError:
-                break
-            fitted = (j, candidate, samples, segments)
-            j += 1
+                return None
+            return (j, candidate, samples, segments)
+
+        # Neural synthesis is expensive: try the whole remaining text first
+        # (a typical chat reply fits one bank in a single synth call), then
+        # fall back to growing sentence by sentence.
+        fitted = try_span(len(units))
+        if fitted is None and len(units) - i > 1:
+            j = i + 1
+            while j <= len(units):
+                attempt = try_span(j)
+                if attempt is None:
+                    break
+                fitted = attempt
+                j += 1
         if fitted is None:
             words = units[i].split()
             if len(words) < 2:
