@@ -47,6 +47,7 @@ See [DESIGN.md](DESIGN.md) for the full architecture and milestones.
 | `assets/` | Captured sound-bank evidence, validated BMO bank/previews, and original recovery image |
 | `docs/SOUND_BANK_UPDATE.md` | Exact hashes and guarded web/CLI procedures for installing BMO sounds or restoring the original bank |
 | `docs/SOUND_BANK_TTS_PROMPT.md` | Implementation prompt for routing fixed BMO phrases through the bank and arbitrary speech through streamed WAV TTS |
+| `docs/TTS_BANK.md` | Guarded TTS-to-sound-bank speech: temporary validated bank, typed burn confirmation, duration-paced playback, verified BMO restore (`neatobmo/tts_bank.py` + web “TTS” tab) |
 | `neato_protocol_dump.txt` | Ground-truth protocol harvested from the actual XV-12 (`Help` for every command, sample sensor output) |
 | `FIRMWARE_ARCHIVE.md` | Checksummed 2 TB archive, current-robot recovery snapshot, compatible version inventory, and reproduction commands |
 | `neato-driver-python/` | Vendored clone of [brannonvann/neato-driver-python](https://github.com/brannonvann/neato-driver-python) (MIT) for protocol reference |
