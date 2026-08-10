@@ -42,8 +42,11 @@ BMO_BANK_SHA256 = "9d3d82d9275c03fa9f2abb163cdfd9393445737999916f6337d2d6b639b51
 ORIGINAL_BANK_SHA256 = "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a"
 VERSION_REQUIRED_SUBSTRINGS = ("WTD41611DD", "Software,2,4,15667")
 
-# -1 dBFS peak target; validation additionally rejects any full-scale sample.
-NORMALIZE_PEAK = int(32767 * 10 ** (-1.0 / 20.0))
+# Speech loudness target.  The proven BMO clips in the installed bank peak
+# at 21-52% of full scale (median ~37%); pushing speech to -1 dBFS overdrives
+# the robot's small speaker and sounds harsh, so normalize to the same
+# comfortable level instead.  Validation still rejects full-scale samples.
+NORMALIZE_PEAK = 13100  # ~40% FS, ~-8 dBFS
 TRIM_THRESHOLD = 330            # ~1% full scale
 TRIM_KEEP_SECONDS = 0.012
 FADE_SECONDS = 0.004
