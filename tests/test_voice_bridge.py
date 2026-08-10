@@ -6,7 +6,7 @@ import wave
 from unittest import mock
 
 import bmo_brain_server
-import bmo_web
+from neatobmo.esp32 import Esp32Client
 from neatobmo.robot import Robot
 from neatobmo.sounds import LIVE_SOUND_IDS, SOUNDS
 from neatobmo.transport import BinaryTransferError, SerialTransport
@@ -150,17 +150,18 @@ class ColibriTtsTests(unittest.TestCase):
 
 
 class Esp32VoiceRelayTests(unittest.TestCase):
-    @mock.patch("bmo_web.urllib.request.urlopen")
+    @mock.patch("neatobmo.esp32.urllib.request.urlopen")
     def test_posts_wav_to_esp32_native_speaker_endpoint(self, urlopen):
         response = mock.MagicMock()
         response.read.return_value = b"OK\n"
         urlopen.return_value.__enter__.return_value = response
         wav = b"RIFF" + bytes(4) + b"WAVE" + bytes(32)
+        client = Esp32Client("http://10.0.0.106")
 
-        bmo_web.esp32_play_wav(wav)
+        client.speak(wav)
 
         request = urlopen.call_args.args[0]
-        self.assertEqual(request.full_url, bmo_web.ESP32 + "/speak")
+        self.assertEqual(request.full_url, "http://10.0.0.106/speak")
         self.assertEqual(request.data, wav)
         self.assertEqual(request.headers["Content-type"], "audio/wav")
 

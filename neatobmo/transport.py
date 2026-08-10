@@ -5,14 +5,13 @@ and send_binary(cmd, payload) for the robot's ENQ/checksum/ACK framing —
 direct over serial, or relayed through the ESP32's HTTP endpoints.
 """
 import glob
-import hashlib
 import socket
 import struct
 import time
-import urllib.error
-import urllib.request
 
 import serial
+
+from .esp32 import Esp32Client, Esp32Error
 
 TERM = b"\x1a"
 ENQ = b"\x05"
@@ -107,8 +106,9 @@ class SerialTransport:
 class BridgeTransport:
     """ESP32 WiFi bridge (raw TCP, port 3333)."""
 
-    def __init__(self, host, port=3333):
+    def __init__(self, host, port=3333, esp32=None):
         self.host = host
+        self.esp32 = esp32 or Esp32Client(f"http://{host}")
         self.sock = socket.create_connection((host, port), timeout=3)
         self.sock.settimeout(0.1)
 
@@ -145,22 +145,10 @@ class BridgeTransport:
         if cmd != "Upload sound":
             raise BinaryTransferError(
                 f"the ESP32 bridge only relays sound-bank uploads, not {cmd!r}")
-        req = urllib.request.Request(
-            f"http://{self.host}/soundbank",
-            data=payload,
-            headers={"Content-Type": "application/octet-stream",
-                     "X-Bank-SHA256": hashlib.sha256(payload).hexdigest()})
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                reply = resp.read().decode(errors="replace").strip()
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode(errors="replace").strip()
-            raise BinaryTransferError(
-                detail or f"ESP32 sound-bank relay returned HTTP {exc.code}")
-        except OSError as exc:
-            raise BinaryTransferError(f"ESP32 sound-bank relay unreachable: {exc}")
-        if reply != "OK":
-            raise BinaryTransferError(f"unexpected ESP32 relay reply: {reply or 'empty'}")
+            self.esp32.upload_soundbank(payload)
+        except Esp32Error as exc:
+            raise BinaryTransferError(str(exc))
         return ACK + TERM
 
     def close(self):

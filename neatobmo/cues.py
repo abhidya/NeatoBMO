@@ -211,6 +211,73 @@ SPEECH_WORDS_PER_SECOND = 2.7
 SPEECH_BURST_SECONDS = 1.5
 
 
+def _trim_to_budget(text, max_words):
+    """First max_words words of text, preferring whole sentences.
+
+    ("Hello!" beats "Hello! Did BMO miss"); falls back to a hard cut —
+    finished with a '!' — only when the first sentence alone is over
+    budget.  Returns text unchanged when it already fits.
+    """
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+    kept, count = [], 0
+    for sent in re.split(r"(?<=[.!?])\s+", text):
+        n = len(sent.split())
+        if count + n > max_words:
+            break
+        kept.append(sent)
+        count += n
+    if kept:
+        return " ".join(kept)
+    cut = " ".join(words[:max_words]).rstrip(",;:.")
+    if cut and cut[-1] not in "!?":
+        cut += "!"
+    return cut
+
+
+class BurstBudget:
+    """The one owner of "how much BMO says" in soundbyte mode.
+
+    Both reply paths use it: condense() feeds it the whole reply at once,
+    the streaming /chat loop feeds it sentence by sentence.  Same setting,
+    same rules — including the "always leave with a soundbyte" guarantee
+    that the old inline streaming copy silently lacked.
+
+    feed(speech) -> the admitted (possibly trimmed) text, or None when the
+    sentence doesn't fit the remaining budget.  fallback_sound(...) names
+    the soundboard clip to add when no sound cue was heard.
+    """
+
+    def __init__(self, burst_seconds=SPEECH_BURST_SECONDS, max_words=None):
+        self.max_words = (max_words if max_words is not None
+                          else max(1, round(SPEECH_WORDS_PER_SECOND
+                                            * burst_seconds)))
+        self.words = 0
+
+    def feed(self, speech):
+        words = speech.split()
+        if not words:
+            return None
+        if self.words and self.words + len(words) > self.max_words:
+            return None
+        if len(words) > self.max_words:
+            speech = _trim_to_budget(speech, self.max_words)
+            words = speech.split()
+        self.words += len(words)
+        return speech
+
+    @staticmethod
+    def fallback_sound(steps, speech=""):
+        """The soundboard clip carrying the reply's feeling, when the model
+        gave no sound cue of its own; None when one was already heard."""
+        if any(k == "sound" for k, _ in steps):
+            return None
+        face = (next((n for k, n in steps if k == "face"), None)
+                or _mood_face(speech) or "happy")
+        return FACE_SOUND.get(face, "beep")
+
+
 def condense(plan, max_words=None, burst_seconds=SPEECH_BURST_SECONDS):
     """Soundbyte-first mode: cap the spoken burst, let cues do the talking.
 
@@ -221,33 +288,14 @@ def condense(plan, max_words=None, burst_seconds=SPEECH_BURST_SECONDS):
     soundbyte, one is chosen from the reply's leading (or mood-guessed)
     face so the performance always has a voice.
     """
-    if max_words is None:
-        max_words = max(1, round(SPEECH_WORDS_PER_SECOND * burst_seconds))
-    words = plan.speech.split()
-    if len(words) <= max_words:
+    budget = BurstBudget(burst_seconds=burst_seconds, max_words=max_words)
+    speech = budget.feed(plan.speech)
+    if speech is None:
         speech = plan.speech
-    else:
-        # prefer whole sentences inside the budget ("Hello!" beats
-        # "Hello! Did BMO miss"); fall back to a hard cut only when the
-        # first sentence alone is over budget
-        kept, count = [], 0
-        for sent in re.split(r"(?<=[.!?])\s+", plan.speech):
-            n = len(sent.split())
-            if count + n > max_words:
-                break
-            kept.append(sent)
-            count += n
-        if kept:
-            speech = " ".join(kept)
-        else:
-            speech = " ".join(words[:max_words]).rstrip(",;:.")
-            if speech and speech[-1] not in "!?":
-                speech += "!"
     steps = list(plan.steps)
-    if not any(k == "sound" for k, _ in steps):
-        face = (next((n for k, n in steps if k == "face"), None)
-                or _mood_face(plan.speech) or "happy")
-        steps.append(("sound", FACE_SOUND.get(face, "beep")))
+    sound = BurstBudget.fallback_sound(steps, plan.speech)
+    if sound:
+        steps.append(("sound", sound))
     return Plan(speech, plan.display, steps)
 
 
@@ -294,7 +342,7 @@ def parse(text):
 
     # fallback: no face cues but the model used emojis — count those as faces
     if counts["face"] == 0:
-        from .emote import parse_emojis
+        from .faces import parse_emojis
         emoji_faces = parse_emojis(display)
         steps.extend(("face", f) for f in emoji_faces)
         # last resort: no cues and no emojis — read the mood off the words

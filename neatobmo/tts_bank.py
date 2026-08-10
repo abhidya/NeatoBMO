@@ -42,6 +42,43 @@ BMO_BANK_SHA256 = "9d3d82d9275c03fa9f2abb163cdfd9393445737999916f6337d2d6b639b51
 ORIGINAL_BANK_SHA256 = "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a"
 VERSION_REQUIRED_SUBSTRINGS = ("WTD41611DD", "Software,2,4,15667")
 
+# The two approved flashable images, next to the hashes that gate them.
+# This is the single source the web UI, the install endpoint, and the
+# burn tools read; nothing else may hardcode a bank SHA or path.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+BANK_PROFILES = {
+    "bmo": {
+        "label": "BMO PCM-only bank",
+        "path": _REPO_ROOT / ("assets/bmo-sound-bank-offline-20260810/"
+                              "DfltSoundLib.BMO.pcm-only.Rev1.0.bin"),
+        "sha256": BMO_BANK_SHA256,
+        "confirmation": "INSTALL BMO",
+    },
+    "original": {
+        "label": "Original Neato bank",
+        "path": _REPO_ROOT / ("assets/neato-xv12-sound-capture-20260810/"
+                              "public-reference/DfltSoundLib.Rev1.0.bin"),
+        "sha256": ORIGINAL_BANK_SHA256,
+        "confirmation": "RESTORE ORIGINAL",
+    },
+}
+
+
+def bank_profiles_payload():
+    """JSON-ready catalog of the flashable profiles (web UI)."""
+    return {
+        key: {
+            "label": profile["label"],
+            "sha256": profile["sha256"],
+            "bytes": (profile["path"].stat().st_size
+                      if profile["path"].exists() else None),
+            "available": profile["path"].exists(),
+            "confirmation": profile["confirmation"],
+            "download": f"/sound-bank-file?profile={key}",
+        }
+        for key, profile in BANK_PROFILES.items()
+    }
+
 # Speech loudness target.  The proven BMO clips in the installed bank peak
 # at 21-52% of full scale (median ~37%); pushing speech to -1 dBFS overdrives
 # the robot's small speaker and sounds harsh, so normalize to the same

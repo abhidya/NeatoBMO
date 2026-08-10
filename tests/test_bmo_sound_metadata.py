@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from neatobmo.sounds import BMO_BANK, BMO_SEQUENCES, BMO_SOUND_SLOTS, LIVE_SOUND_IDS, SOUNDS
-from bmo_web import SOUND_BANK_PROFILES, sound_bank_profiles
+from neatobmo.tts_bank import BANK_PROFILES, bank_profiles_payload
 
 
 class BmoSoundMetadataTests(unittest.TestCase):
@@ -21,15 +21,15 @@ class BmoSoundMetadataTests(unittest.TestCase):
 
     def test_runtime_names_and_website_use_bmo_catalog(self):
         self.assertEqual(SOUNDS["hello"], 7)
-        page = Path("bmo_web.py").read_text()
-        self.assertIn('self.path == "/sounds"', page)
-        self.assertIn('self.path == "/sound-sequence"', page)
-        self.assertIn('self.path == "/sound-bank-install"', page)
-        self.assertNotIn(">Beep</button>", page)
+        router = Path("bmo_web.py").read_text()
+        self.assertIn('self.path == "/sounds"', router)
+        self.assertIn('self.path == "/sound-sequence"', router)
+        self.assertIn('self.path == "/sound-bank-install"', router)
+        self.assertNotIn(">Beep</button>", Path("static/console.html").read_text())
 
     def test_web_flash_profiles_are_exact_hash_allowlist(self):
-        self.assertEqual(set(SOUND_BANK_PROFILES), {"bmo", "original"})
-        profiles = sound_bank_profiles()
+        self.assertEqual(set(BANK_PROFILES), {"bmo", "original"})
+        profiles = bank_profiles_payload()
         self.assertTrue(all(profile["available"] for profile in profiles.values()))
         self.assertEqual(profiles["bmo"]["confirmation"], "INSTALL BMO")
         self.assertEqual(profiles["original"]["confirmation"], "RESTORE ORIGINAL")

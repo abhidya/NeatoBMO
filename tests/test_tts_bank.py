@@ -432,27 +432,29 @@ class WebGuardWiringTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.page = (ROOT / "bmo_web.py").read_text()
+        cls.router = (ROOT / "bmo_web.py").read_text()
+        cls.service = (ROOT / "neatobmo" / "speech.py").read_text()
+        cls.voice = (ROOT / "neatobmo" / "voice.py").read_text()
 
     def test_speak_flow_uses_validated_chunk_operation(self):
-        self.assertIn("speak_chunks_operation", self.page)
-        self.assertIn("pack_audio_chunks", self.page)
+        self.assertIn("speak_chunks_operation", self.service)
+        self.assertIn("pack_audio_chunks", self.service)
 
     def test_bank_install_blocked_during_tts_operation(self):
-        self.assertIn("a TTS bank operation is running", self.page)
+        self.assertIn("a TTS bank operation is running", self.service)
 
     def test_chat_robot_voice_routes_through_bank_speech(self):
         # the spoken text is the cue-stripped plan, not the raw reply
-        self.assertIn("tts_start_speak(plan.speech", self.page)
+        self.assertIn("speech.speak(plan.speech)", self.router)
 
     def test_voice_parameters_match_brain_server_defaults(self):
-        self.assertIn("TTS_SPEED = 160", self.page)
-        self.assertIn("TTS_PITCH = 70", self.page)
+        self.assertIn("ESPEAK_SPEED = 160", self.voice)
+        self.assertIn("ESPEAK_PITCH = 70", self.voice)
 
     def test_endpoints_exist(self):
         for path in ("/tts-bank/speak", "/tts-bank/stop",
                      "/tts-bank/restore", "/tts-bank/status"):
-            self.assertIn(path, self.page)
+            self.assertIn(path, self.router)
 
 
 if __name__ == "__main__":
