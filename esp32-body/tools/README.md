@@ -39,6 +39,22 @@ This covers heap-free caller-buffer RMSNorm, RoPE, single-token causal
 attention decode, residual add, SiLU/gated multiply, and bounded KV-cache
 layout math for OLMoE hidden=2048, 16-head attention.
 
+Run the single-layer OLMoE decode check:
+
+```sh
+cc -std=c11 -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L \
+  -Wall -Wextra -Werror -Icomponents/coli_mcu/include \
+  components/coli_mcu/model_format.c components/coli_mcu/store_file.c \
+  components/coli_mcu/q4_matvec.c components/coli_mcu/ops.c \
+  components/coli_mcu/moe.c components/coli_mcu/olmoe.c \
+  tools/test_coli_olmoe_layer.c -lm -o /tmp/test_coli_olmoe_layer && \
+  /tmp/test_coli_olmoe_layer
+```
+
+It connects dense RMSNorm tensors, streamed Q/K/V/O Q4 projections, RoPE,
+KV-cache writes, causal single-token attention, residuals, and streamed MoE for
+one decoder layer against an independent identity-weight reference.
+
 Run the streamed MoE golden test:
 
 ```sh

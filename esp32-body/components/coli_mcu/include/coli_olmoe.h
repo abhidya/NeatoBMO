@@ -1,8 +1,11 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
+#include "coli_moe.h"
 #include "coli_model.h"
+#include "coli_ops.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -89,6 +92,33 @@ static inline uint32_t coli_olmoe_scale_id(uint32_t tensor_id)
 {
     return tensor_id + COLI_OLMOE_SCALE_ID_OFFSET;
 }
+
+typedef struct {
+    coli_q4_stats_t attention_q4;
+    coli_moe_stats_t moe;
+    size_t peak_workspace_bytes;
+} coli_olmoe_layer_stats_t;
+
+size_t coli_olmoe_layer_required_workspace(size_t hidden_count,
+                                           size_t intermediate_count,
+                                           size_t expert_count,
+                                           size_t top_k,
+                                           size_t token_count,
+                                           size_t q4_workspace_bytes);
+
+coli_status_t coli_olmoe_layer_decode(const coli_model_t *model,
+                                      uint32_t layer,
+                                      uint32_t position,
+                                      const float *input,
+                                      size_t hidden_count,
+                                      float *output,
+                                      size_t output_count,
+                                      uint8_t *kv_cache,
+                                      size_t kv_cache_bytes,
+                                      const coli_kv_cache_layout_t *kv_layout,
+                                      void *workspace,
+                                      size_t workspace_bytes,
+                                      coli_olmoe_layer_stats_t *stats);
 
 #ifdef __cplusplus
 }
