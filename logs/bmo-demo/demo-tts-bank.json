@@ -1,0 +1,322 @@
+{
+  "text": "Hi! I am BMO. Welcome to the BMO soundboard. Dance mode activated! Beep boop. I love being a robot. Let us sing. La la la, dance with BMO!",
+  "voice": "en+f4",
+  "seconds": 12.091,
+  "sha256": "10af4aab90542019ba0c237432e89af8f8c7b401240004f275beb8200296ee11",
+  "slots": [
+    0,
+    1,
+    2,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "slot_seconds": [
+    2.881995,
+    1.867392,
+    1.869388,
+    2.008662,
+    2.017324,
+    2.008662,
+    2.008662,
+    1.991338
+  ],
+  "manifest": {
+    "layout": "pcm-only-preserve-directory-headers-padding",
+    "unused_slots": "keep",
+    "file_size": 770048,
+    "sha256": "10af4aab90542019ba0c237432e89af8f8c7b401240004f275beb8200296ee11",
+    "transport_additive_checksum_hex": "0x041243cd",
+    "slot_order": [
+      0,
+      1,
+      2,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "slots": [
+      {
+        "sound_id": 0,
+        "role": "speech",
+        "text_fragment": "Hi! I am BMO. Welcome",
+        "content_seconds": 2.011474,
+        "slot_seconds": 2.881995,
+        "padding_seconds": 0.870522,
+        "content_pcm_bytes": 88706,
+        "slot_pcm_bytes": 127096,
+        "written_pcm_sha256": "95fa00d1051065c9bd4920cf819cbedccfe7ec6d5a8b3c0de0623001b6b1e8d9"
+      },
+      {
+        "sound_id": 1,
+        "role": "speech",
+        "text_fragment": "to the BMO soundboard.",
+        "content_seconds": 1.697778,
+        "slot_seconds": 1.867392,
+        "padding_seconds": 0.169615,
+        "content_pcm_bytes": 74872,
+        "slot_pcm_bytes": 82352,
+        "written_pcm_sha256": "f7645de415fd6751207f0e749949a01d8876f82e70d2b3c03205c23d568aac50"
+      },
+      {
+        "sound_id": 2,
+        "role": "speech",
+        "text_fragment": "Dance mode activated!",
+        "content_seconds": 1.512698,
+        "slot_seconds": 1.869388,
+        "padding_seconds": 0.356689,
+        "content_pcm_bytes": 66710,
+        "slot_pcm_bytes": 82440,
+        "written_pcm_sha256": "1e1c043f052afe0ce0c0f959423b3c3354a8c75865a9e37a2b69a2db5d4c87b9"
+      },
+      {
+        "sound_id": 3,
+        "role": "baseline-bmo",
+        "text_fragment": "",
+        "content_seconds": 0.0,
+        "slot_seconds": 0.321451,
+        "padding_seconds": 0.321451,
+        "content_pcm_bytes": 0,
+        "slot_pcm_bytes": 14176,
+        "written_pcm_sha256": "ac75d0b67153f0fbffd6931c7fa8ea5f5808f615fac5d5461b0398eebf8738ec"
+      },
+      {
+        "sound_id": 6,
+        "role": "speech",
+        "text_fragment": "Beep boop. I love being",
+        "content_seconds": 1.968753,
+        "slot_seconds": 2.008662,
+        "padding_seconds": 0.039909,
+        "content_pcm_bytes": 86822,
+        "slot_pcm_bytes": 88582,
+        "written_pcm_sha256": "76264faef07637652675f58b9952b695d48463a41453f9e516b459d9e5a2463a"
+      },
+      {
+        "sound_id": 7,
+        "role": "speech",
+        "text_fragment": "a robot. Let",
+        "content_seconds": 1.650658,
+        "slot_seconds": 2.017324,
+        "padding_seconds": 0.366667,
+        "content_pcm_bytes": 72794,
+        "slot_pcm_bytes": 88964,
+        "written_pcm_sha256": "265c1e8474c2c7e84b28f6d7765425eae5b18d9d2ec8a9ce7f741772be226769"
+      },
+      {
+        "sound_id": 8,
+        "role": "speech",
+        "text_fragment": "us sing. La",
+        "content_seconds": 1.168073,
+        "slot_seconds": 2.008662,
+        "padding_seconds": 0.84059,
+        "content_pcm_bytes": 51512,
+        "slot_pcm_bytes": 88582,
+        "written_pcm_sha256": "bae1d460eddbdf5f41b6f9e94c6c87a215f5752e17890d69f23c1e311fe63dd1"
+      },
+      {
+        "sound_id": 9,
+        "role": "speech",
+        "text_fragment": "la la, dance with BMO!",
+        "content_seconds": 2.006168,
+        "slot_seconds": 2.008662,
+        "padding_seconds": 0.002494,
+        "content_pcm_bytes": 88472,
+        "slot_pcm_bytes": 88582,
+        "written_pcm_sha256": "38757b3c7cbdd7810c770a5bb35a3a7f58964816ff2d10350b7373f60f7326a2"
+      },
+      {
+        "sound_id": 10,
+        "role": "speech",
+        "text_fragment": "",
+        "content_seconds": 0.07551,
+        "slot_seconds": 1.991338,
+        "padding_seconds": 1.915828,
+        "content_pcm_bytes": 3330,
+        "slot_pcm_bytes": 87818,
+        "written_pcm_sha256": "909dc83b7ca69822ef1a45135ad37136ceab149a5b54864a8aac06b093a81386"
+      },
+      {
+        "sound_id": 19,
+        "role": "baseline-bmo",
+        "text_fragment": "",
+        "content_seconds": 0.0,
+        "slot_seconds": 0.321451,
+        "padding_seconds": 0.321451,
+        "content_pcm_bytes": 0,
+        "slot_pcm_bytes": 14176,
+        "written_pcm_sha256": "ea64eb45e744c1a0141fa73ace7658f5b7b138ea023d88725df191da5c1c0050"
+      }
+    ]
+  },
+  "validation": {
+    "ok": true,
+    "checks": [
+      {
+        "check": "exact_file_size",
+        "ok": true,
+        "detail": "770048 bytes"
+      },
+      {
+        "check": "size_matches_baseline",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "directory_and_headers_unchanged",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "record_table_identical",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "zero_changes_outside_pcm_fields",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "slot_0_fits",
+        "ok": true,
+        "detail": "88706 <= 127096"
+      },
+      {
+        "check": "slot_0_preview_matches_bank",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "slot_0_no_clipping",
+        "ok": true,
+        "detail": "peak 13100"
+      },
+      {
+        "check": "slot_1_fits",
+        "ok": true,
+        "detail": "74872 <= 82352"
+      },
+      {
+        "check": "slot_1_preview_matches_bank",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "slot_1_no_clipping",
+        "ok": true,
+        "detail": "peak 12097"
+      },
+      {
+        "check": "slot_2_fits",
+        "ok": true,
+        "detail": "66710 <= 82440"
+      },
+      {
+        "check": "slot_2_preview_matches_bank",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "slot_2_no_clipping",
+        "ok": true,
+        "detail": "peak 12528"
+      },
+      {
+        "check": "slot_6_fits",
+        "ok": true,
+        "detail": "86822 <= 88582"
+      },
+      {
+        "check": "slot_6_preview_matches_bank",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "slot_6_no_clipping",
+        "ok": true,
+        "detail": "peak 9836"
+      },
+      {
+        "check": "slot_7_fits",
+        "ok": true,
+        "detail": "72794 <= 88964"
+      },
+      {
+        "check": "slot_7_preview_matches_bank",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "slot_7_no_clipping",
+        "ok": true,
+        "detail": "peak 12135"
+      },
+      {
+        "check": "slot_8_fits",
+        "ok": true,
+        "detail": "51512 <= 88582"
+      },
+      {
+        "check": "slot_8_preview_matches_bank",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "slot_8_no_clipping",
+        "ok": true,
+        "detail": "peak 12712"
+      },
+      {
+        "check": "slot_9_fits",
+        "ok": true,
+        "detail": "88472 <= 88582"
+      },
+      {
+        "check": "slot_9_preview_matches_bank",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "slot_9_no_clipping",
+        "ok": true,
+        "detail": "peak 12886"
+      },
+      {
+        "check": "slot_10_fits",
+        "ok": true,
+        "detail": "3330 <= 87818"
+      },
+      {
+        "check": "slot_10_preview_matches_bank",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "slot_10_no_clipping",
+        "ok": true,
+        "detail": "peak 292"
+      },
+      {
+        "check": "slot_3_unused_baseline",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "check": "slot_19_unused_baseline",
+        "ok": true,
+        "detail": ""
+      }
+    ],
+    "sha256": "10af4aab90542019ba0c237432e89af8f8c7b401240004f275beb8200296ee11",
+    "transport_additive_checksum_hex": "0x041243cd",
+    "file_size": 770048
+  },
+  "preserved_bmo_slots": [
+    3,
+    19
+  ]
+}

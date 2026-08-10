@@ -1,0 +1,268 @@
+engine ready
+BMO brain (OLMoE) on http://0.0.0.0:8000/v1
+chat: start ('hi bmo, one short sentence please')
+chat: done in 27.6s (93 chars)
+chat: start ('hi bmo')
+chat: done in 23.9s (104 chars)
+speech: start (10 chars)
+speech: done in 0.2s
+speech: start (61 chars)
+speech: done in 0.0s
+speech: start (101 chars)
+speech: done in 0.0s
+speech: start (104 chars)
+speech: done in 0.0s
+speech: start (104 chars)
+speech: done in 0.1s
+speech: start (96 chars)
+speech: done in 0.0s
+chat: start ("I'm home! did you miss me?")
+chat: done in 30.7s (209 chars)
+speech: start (3 chars)
+speech: done in 0.1s
+speech: start (13 chars)
+speech: done in 0.0s
+speech: start (44 chars)
+speech: done in 0.0s
+speech: start (66 chars)
+speech: done in 0.0s
+speech: start (88 chars)
+speech: done in 0.0s
+speech: start (114 chars)
+speech: done in 0.0s
+speech: start (136 chars)
+speech: done in 0.0s
+speech: start (158 chars)
+speech: done in 0.0s
+speech: start (184 chars)
+speech: done in 0.0s
+speech: start (25 chars)
+speech: done in 0.0s
+speech: start (3 chars)
+speech: done in 0.0s
+speech: start (13 chars)
+speech: done in 0.0s
+speech: start (44 chars)
+speech: done in 0.0s
+speech: start (66 chars)
+speech: done in 0.0s
+speech: start (77 chars)
+speech: done in 0.0s
+speech: start (99 chars)
+speech: done in 0.0s
+speech: start (112 chars)
+speech: done in 0.0s
+speech: start (138 chars)
+speech: done in 0.0s
+speech: start (138 chars)
+speech: done in 0.0s
+chat: start ("I'm home! did you miss me?")
+chat: done in 512.9s (365 chars)
+chat: start ('want to play video games with me?')
+chat: start ('tell me a funny joke!')
+chat: done in 0.0s (0 chars)
+chat: start ('I had a really bad day today...')
+chat: start ('show me your best dance moves!')
+chat: done in 0.0s (0 chars)
+chat: start ('BOO! did I scare you?')
+chat: done in 401.1s (96 chars)
+chat: start ("it's late, time to go to sleep buddy")
+chat: done in 370.2s (141 chars)
+chat: start ("you're my best friend, I love you BMO")
+chat: done in 130.5s (159 chars)
+chat: start ('someone stepped on my sandcastle!')
+chat: done in 32.2s (166 chars)
+chat: start ("guess what? we're going to the beach tomorrow!")
+chat: done in 41.1s (243 chars)
+chat: start ('sing me a song!')
+chat: done in 44.6s (277 chars)
+chat: start ('what do you think is inside the mystery box?')
+speech: start (30 chars)
+speech: done in 0.2s
+speech: start (36 chars)
+speech: done in 0.1s
+speech: start (54 chars)
+speech: done in 0.0s
+speech: start (15 chars)
+speech: done in 0.1s
+speech: start (21 chars)
+speech: done in 0.1s
+speech: start (6 chars)
+speech: done in 0.0s
+speech: start (24 chars)
+speech: done in 0.1s
+speech: start (38 chars)
+speech: done in 0.0s
+speech: start (45 chars)
+speech: done in 0.0s
+speech: start (80 chars)
+speech: done in 0.1s
+speech: start (67 chars)
+speech: done in 0.1s
+speech: start (54 chars)
+speech: done in 0.0s
+speech: start (58 chars)
+speech: done in 0.1s
+speech: start (46 chars)
+speech: done in 0.1s
+speech: start (38 chars)
+speech: done in 0.1s
+speech: start (35 chars)
+speech: done in 0.0s
+speech: start (29 chars)
+speech: done in 0.0s
+speech: start (25 chars)
+speech: done in 0.0s
+chat: done in 46.1s (341 chars)
+speech: start (18 chars)
+speech: done in 0.1s
+speech: start (30 chars)
+speech: done in 0.2s
+speech: start (36 chars)
+speech: done in 0.0s
+speech: start (54 chars)
+speech: done in 0.0s
+speech: start (15 chars)
+speech: done in 0.0s
+speech: start (21 chars)
+speech: done in 0.0s
+speech: start (6 chars)
+speech: done in 0.0s
+speech: start (24 chars)
+speech: done in 0.0s
+speech: start (38 chars)
+speech: done in 0.0s
+speech: start (45 chars)
+speech: done in 0.0s
+speech: start (80 chars)
+speech: done in 0.0s
+speech: start (67 chars)
+speech: done in 0.0s
+speech: start (54 chars)
+speech: done in 0.0s
+speech: start (58 chars)
+speech: done in 0.0s
+speech: start (46 chars)
+speech: done in 0.0s
+speech: start (38 chars)
+speech: done in 0.0s
+speech: start (35 chars)
+speech: done in 0.0s
+speech: start (29 chars)
+speech: done in 0.0s
+speech: start (25 chars)
+speech: done in 0.0s
+chat: start ("how's it going")
+chat: done in 0.0s (181 chars)
+chat: start ('I Choose You')
+chat: done in 4.3s (247 chars)
+chat: start ('it takes two cups')
+chat: done in 13.7s (117 chars)
+chat: start ("I think it's recording")
+chat: done in 0.0s (225 chars)
+chat: start ('BMO should we eat batteries')
+chat: done in 18.2s (559 chars)
+engine ready
+BMO brain (OLMoE) on http://0.0.0.0:8000/v1
+chat: start ("I'm home! did you miss me?")
+chat: done in 34.0s (325 chars)
+chat: start ('want to play video games with me?')
+chat: done in 23.5s (117 chars)
+chat: start ('tell me a funny joke!')
+chat: done in 24.4s (178 chars)
+chat: start ('I had a really bad day today...')
+chat: done in 30.2s (301 chars)
+engine ready
+BMO brain (OLMoE) on http://0.0.0.0:8000/v1
+chat: start ("I'm home! did you miss me?")
+chat: done in 30.3s (120 chars)
+chat: start ('I had a really bad day today...')
+chat: done in 28.8s (88 chars)
+chat: start ("guess what? we're going to the beach tomorrow!")
+chat: done in 26.5s (57 chars)
+chat: start ('hi')
+chat: done in 7.5s (96 chars)
+engine ready
+BMO brain (OLMoE) on http://0.0.0.0:8000/v1
+speech: start (14 chars)
+speech: done in 0.2s
+speech: start (9 chars)
+speech: done in 0.1s
+speech: start (14 chars)
+speech: done in 0.0s
+speech: start (15 chars)
+speech: done in 0.0s
+speech: start (11 chars)
+speech: done in 0.0s
+speech: start (11 chars)
+speech: done in 0.0s
+speech: start (6 chars)
+speech: done in 0.0s
+speech: start (12 chars)
+speech: done in 0.0s
+speech: start (14 chars)
+speech: done in 0.0s
+speech: start (21 chars)
+speech: done in 0.0s
+speech: start (51 chars)
+speech: done in 0.0s
+speech: start (46 chars)
+speech: done in 0.0s
+speech: start (45 chars)
+speech: done in 0.0s
+speech: start (20 chars)
+speech: done in 0.0s
+speech: start (18 chars)
+speech: done in 0.0s
+speech: start (17 chars)
+speech: done in 0.0s
+speech: start (18 chars)
+speech: done in 0.0s
+speech: start (13 chars)
+speech: done in 0.0s
+speech: start (20 chars)
+speech: done in 0.0s
+chat: start ('say two short sentences about video games')
+chat: streamed in 22.4s (246 chars)
+chat: start ("I'm sad my dog was murdered")
+chat: done in 31.7s (214 chars)
+chat: start ("I'm going to bring you out of this digital realm and give yo")
+chat: done in 35.5s (220 chars)
+speech: start (14 chars)
+speech: done in 0.1s
+speech: start (9 chars)
+speech: done in 0.0s
+speech: start (14 chars)
+speech: done in 0.0s
+speech: start (15 chars)
+speech: done in 0.0s
+speech: start (11 chars)
+speech: done in 0.0s
+speech: start (11 chars)
+speech: done in 0.0s
+speech: start (6 chars)
+speech: done in 0.0s
+speech: start (12 chars)
+speech: done in 0.0s
+speech: start (14 chars)
+speech: done in 0.0s
+speech: start (21 chars)
+speech: done in 0.0s
+speech: start (51 chars)
+speech: done in 0.0s
+speech: start (46 chars)
+speech: done in 0.0s
+speech: start (45 chars)
+speech: done in 0.0s
+speech: start (20 chars)
+speech: done in 0.0s
+speech: start (18 chars)
+speech: done in 0.0s
+speech: start (17 chars)
+speech: done in 0.0s
+speech: start (18 chars)
+speech: done in 0.0s
+speech: start (13 chars)
+speech: done in 0.0s
+speech: start (20 chars)
+speech: done in 0.0s

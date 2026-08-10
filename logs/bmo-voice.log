@@ -1,0 +1,57 @@
+/Users/abdulrehmanbhidya/.neatobmo/voice-venv/lib/python3.10/site-packages/pyworld/__init__.py:13: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+2026-08-10 11:22:53 | INFO | fairseq.tasks.text_to_speech | Please install tensorboardX: pip install tensorboardX
+2026-08-10 11:22:53 | INFO | rvc_python.configs.config | No supported Nvidia GPU found, using CPU
+2026-08-10 11:22:53 | INFO | rvc_python.configs.config | Use cpu instead
+2026-08-10 11:22:53 | INFO | rvc_python.modules.vc.modules | Loading: /Users/abdulrehmanbhidya/.neatobmo/voices/bmo-rvc/BmoAdventureTime_115e_3220s.pth
+/Users/abdulrehmanbhidya/.neatobmo/voice-venv/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:28: UserWarning: torch.nn.utils.weight_norm is deprecated in favor of torch.nn.utils.parametrizations.weight_norm.
+  warnings.warn("torch.nn.utils.weight_norm is deprecated in favor of torch.nn.utils.parametrizations.weight_norm.")
+overwrite preprocess and configs.json
+is_half:False, device:cpu
+gin_channels: 256 self.spk_embed_dim: 109
+Model BmoAdventureTime_115e_3220s.pth loaded.
+rvc: BMO model loaded
+BMO voice server on http://127.0.0.1:8486
+2026-08-10 11:23:12 | INFO | fairseq.tasks.hubert_pretraining | current directory is /Users/abdulrehmanbhidya/Documents/neato
+2026-08-10 11:23:12 | INFO | fairseq.tasks.hubert_pretraining | HubertPretrainingTask Config {'_name': 'hubert_pretraining', 'data': 'metadata', 'fine_tuning': False, 'labels': ['km'], 'label_dir': 'label', 'label_rate': 50.0, 'sample_rate': 16000, 'normalize': False, 'enable_padding': False, 'max_keep_size': None, 'max_sample_size': 250000, 'min_sample_size': 32000, 'single_target': False, 'random_crop': True, 'pad_audio': False}
+2026-08-10 11:23:12 | INFO | fairseq.models.hubert.hubert | HubertModel Config: {'_name': 'hubert', 'label_rate': 50.0, 'extractor_mode': default, 'encoder_layers': 12, 'encoder_embed_dim': 768, 'encoder_ffn_embed_dim': 3072, 'encoder_attention_heads': 12, 'activation_fn': gelu, 'layer_type': transformer, 'dropout': 0.1, 'attention_dropout': 0.1, 'activation_dropout': 0.0, 'encoder_layerdrop': 0.05, 'dropout_input': 0.1, 'dropout_features': 0.1, 'final_dim': 256, 'untie_final_proj': True, 'layer_norm_first': False, 'conv_feature_layers': '[(512,10,5)] + [(512,3,2)] * 4 + [(512,2,2)] * 2', 'conv_bias': False, 'logit_temp': 0.1, 'target_glu': False, 'feature_grad_mult': 0.1, 'mask_length': 10, 'mask_prob': 0.8, 'mask_selection': static, 'mask_other': 0.0, 'no_mask_overlap': False, 'mask_min_space': 1, 'mask_channel_length': 10, 'mask_channel_prob': 0.0, 'mask_channel_selection': static, 'mask_channel_other': 0.0, 'no_mask_channel_overlap': False, 'mask_channel_min_space': 1, 'conv_pos': 128, 'conv_pos_groups': 16, 'latent_temp': [2.0, 0.5, 0.999995], 'skip_masked': False, 'skip_nomask': False, 'checkpoint_activations': False, 'required_seq_len_multiple': 2, 'depthwise_conv_kernel_size': 31, 'attn_type': '', 'pos_enc_type': 'abs', 'fp16': False}
+synth: 67 chars in 12.8s
+synth: 130 chars in 18.0s
+synth: 30 chars in 12.2s
+synth: 173 chars in 21.1s
+synth: 73 chars in 13.2s
+OMP: Warning #191: Forking a process while a parallel region is active is potentially unsafe.
+synth: 36 chars in 14.6s
+synth: 178 chars in 25.1s
+synth: 424 chars in 50.8s
+/usr/local/Cellar/python@3.10/3.10.20_4/Frameworks/Python.framework/Versions/3.10/lib/python3.10/multiprocessing/resource_tracker.py:224: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
+/Users/abdulrehmanbhidya/.neatobmo/voice-venv/lib/python3.10/site-packages/pyworld/__init__.py:13: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+2026-08-10 14:34:00 | INFO | fairseq.tasks.text_to_speech | Please install tensorboardX: pip install tensorboardX
+2026-08-10 14:34:01 | INFO | rvc_python.configs.config | No supported Nvidia GPU found, using CPU
+2026-08-10 14:34:01 | INFO | rvc_python.configs.config | Use cpu instead
+2026-08-10 14:34:01 | INFO | rvc_python.modules.vc.modules | Loading: /Users/abdulrehmanbhidya/.neatobmo/voices/bmo-rvc/BmoAdventureTime_115e_3220s.pth
+/Users/abdulrehmanbhidya/.neatobmo/voice-venv/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:28: UserWarning: torch.nn.utils.weight_norm is deprecated in favor of torch.nn.utils.parametrizations.weight_norm.
+  warnings.warn("torch.nn.utils.weight_norm is deprecated in favor of torch.nn.utils.parametrizations.weight_norm.")
+overwrite preprocess and configs.json
+is_half:False, device:cpu
+gin_channels: 256 self.spk_embed_dim: 109
+Model BmoAdventureTime_115e_3220s.pth loaded.
+rvc: BMO model loaded
+BMO voice server on http://127.0.0.1:8486
+2026-08-10 14:34:05 | INFO | fairseq.tasks.hubert_pretraining | current directory is /Users/abdulrehmanbhidya/Documents/neato
+2026-08-10 14:34:05 | INFO | fairseq.tasks.hubert_pretraining | HubertPretrainingTask Config {'_name': 'hubert_pretraining', 'data': 'metadata', 'fine_tuning': False, 'labels': ['km'], 'label_dir': 'label', 'label_rate': 50.0, 'sample_rate': 16000, 'normalize': False, 'enable_padding': False, 'max_keep_size': None, 'max_sample_size': 250000, 'min_sample_size': 32000, 'single_target': False, 'random_crop': True, 'pad_audio': False}
+2026-08-10 14:34:05 | INFO | fairseq.models.hubert.hubert | HubertModel Config: {'_name': 'hubert', 'label_rate': 50.0, 'extractor_mode': default, 'encoder_layers': 12, 'encoder_embed_dim': 768, 'encoder_ffn_embed_dim': 3072, 'encoder_attention_heads': 12, 'activation_fn': gelu, 'layer_type': transformer, 'dropout': 0.1, 'attention_dropout': 0.1, 'activation_dropout': 0.0, 'encoder_layerdrop': 0.05, 'dropout_input': 0.1, 'dropout_features': 0.1, 'final_dim': 256, 'untie_final_proj': True, 'layer_norm_first': False, 'conv_feature_layers': '[(512,10,5)] + [(512,3,2)] * 4 + [(512,2,2)] * 2', 'conv_bias': False, 'logit_temp': 0.1, 'target_glu': False, 'feature_grad_mult': 0.1, 'mask_length': 10, 'mask_prob': 0.8, 'mask_selection': static, 'mask_other': 0.0, 'no_mask_overlap': False, 'mask_min_space': 1, 'mask_channel_length': 10, 'mask_channel_prob': 0.0, 'mask_channel_selection': static, 'mask_channel_other': 0.0, 'no_mask_channel_overlap': False, 'mask_channel_min_space': 1, 'conv_pos': 128, 'conv_pos_groups': 16, 'latent_temp': [2.0, 0.5, 0.999995], 'skip_masked': False, 'skip_nomask': False, 'checkpoint_activations': False, 'required_seq_len_multiple': 2, 'depthwise_conv_kernel_size': 31, 'attn_type': '', 'pos_enc_type': 'abs', 'fp16': False}
+warm: 'Hi daddy!' (8.3s)
+warm: 'Hello!' (5.2s)
+warm: 'Okay!' (5.9s)
+warm: 'Yes!' (5.4s)
+warm: 'No!' (7.3s)
+warm: 'I love you!' (9.0s)
+warm: 'Who wants to play video games?' (8.8s)
+warm: 'I am Beemo!' (5.3s)
+synth: 11 chars in 5.5s
+synth: 160 chars in 14.8s
+synth: 155 chars in 16.0s
+synth: 17 chars in 11.1s

@@ -7,3 +7,21 @@
 {"ts": 1786336465.233, "job": "live-hi-daddy", "message": "burn persistent BMO bank: receiver replied 061a"}
 {"ts": 1786336472.422, "job": "live-hi-daddy", "message": "burn persistent BMO bank: identity + slot map verified [0, 1, 2, 3, 6, 7, 8, 9, 10, 19]"}
 {"ts": 1786336472.425, "job": "live-hi-daddy", "message": "final state: restored"}
+{"ts": 1786344046.454, "job": "tts-1786344046", "message": "speak: voice=en+f4 text=\"Hey there! \ud83d\ude01 I'm here to make your space super clean and fun! \ud83d\udee0\ufe0f Just let me know where to zoom next! \ud83e\udd16\ud83d\udca5\""}
+{"ts": 1786344047.108, "job": "tts-1786344046", "message": "planned 1 chunk(s) for 9.9s of speech"}
+{"ts": 1786344047.216, "job": "tts-1786344046", "message": "burn speech chunk 1/1: 770048 bytes sha256=dd510eb44045c77222b16d760217195f291f67aab05ec57de23cc09a9536271b"}
+{"ts": 1786344050.198, "job": "tts-1786344046", "message": "burn speech chunk 1/1: receiver replied 061a"}
+{"ts": 1786344055.317, "job": "tts-1786344046", "message": "burn speech chunk 1/1: identity verified (silent mode; slots verified during playback)"}
+{"ts": 1786344055.41, "job": "tts-1786344046", "message": "play segment 0: slot 0, waiting 2.881995s"}
+{"ts": 1786344058.311, "job": "tts-1786344046", "message": "play segment 1: slot 1, waiting 1.867392s"}
+{"ts": 1786344060.21, "job": "tts-1786344046", "message": "play segment 2: slot 2, waiting 1.869388s"}
+{"ts": 1786344062.111, "job": "tts-1786344046", "message": "play segment 3: slot 6, waiting 2.008662s"}
+{"ts": 1786344064.209, "job": "tts-1786344046", "message": "play segment 4: slot 7, waiting 2.017324s"}
+{"ts": 1786344066.31, "job": "tts-1786344046", "message": "play segment 5: slot 8, waiting 2.008662s"}
+{"ts": 1786344068.323, "job": "tts-1786344046", "message": "speech finished: state=spoken"}
+{"ts": 1786386189.092, "job": "tts-1786386189", "message": "speak: voice=bmo-rvc text='Hi daddy! Who wants to play video games? This is my real voice now!'"}
+{"ts": 1786386202.056, "job": "tts-1786386189", "message": "planned 1 chunk(s) for 5.1s of speech"}
+{"ts": 1786386207.113, "job": "tts-1786386189", "message": "speech failed: pre-burn GetVersion identity check failed for speech chunk 1/1 (missing ['WTD41611DD', 'Software,2,4,15667'])"}
+{"ts": 1786386779.869, "job": "tts-1786386779", "message": "speak: voice=bmo-rvc text=\"Hmmm, what could be inside the mystery box? Let's see... maybe it's something fun or maybe a surprise! Let's open it and find out!\""}
+{"ts": 1786386798.171, "job": "tts-1786386779", "message": "planned 1 chunk(s) for 8.9s of speech"}
+{"ts": 1786386841.154, "job": "tts-1786386779", "message": "speech failed: pre-burn GetVersion identity check failed for speech chunk 1/1 (missing ['WTD41611DD', 'Software,2,4,15667'])"}

@@ -1,0 +1,25 @@
+2026-08-10 00:26:46 waiting for Neato USB console; wake/power on the robot
+2026-08-10 00:29:11 waiting for Neato USB console: [Errno 2] could not open port /dev/cu.usbmodem143301: [Errno 2] No such file or directory: '/dev/cu.usbmodem143301'
+2026-08-10 00:29:32 Neato USB console ready on /dev/cu.usbmodem143201
+2026-08-10 00:29:32 burn persistent BMO demo bank: 770048 bytes sha256=10af4aab90542019ba0c237432e89af8f8c7b401240004f275beb8200296ee11
+2026-08-10 00:29:35 burn persistent BMO demo bank: receiver replied 061a
+2026-08-10 00:29:40 burn persistent BMO demo bank: identity verified (silent mode; slots verified during playback)
+2026-08-10 00:29:41 demo bank installed; starting dance/speech loop
+2026-08-10 00:29:41 cycle 1: TTS introduction and song
+2026-08-10 00:29:59 cycle 1: original BMO sound slot 3
+2026-08-10 00:29:59 cycle 1: original BMO sound slot 19
+2026-08-10 00:30:02 cycle 2: TTS introduction and song
+2026-08-10 00:30:20 cycle 2: original BMO sound slot 3
+2026-08-10 00:30:21 cycle 2: original BMO sound slot 19
+2026-08-10 00:30:24 cycle 3: TTS introduction and song
+2026-08-10 00:30:42 cycle 3: original BMO sound slot 3
+2026-08-10 00:30:43 cycle 3: original BMO sound slot 19
+2026-08-10 00:30:45 cycle 4: TTS introduction and song
+2026-08-10 00:31:04 cycle 4: original BMO sound slot 3
+2026-08-10 00:31:04 cycle 4: original BMO sound slot 19
+2026-08-10 00:31:07 cycle 5: TTS introduction and song
+2026-08-10 00:31:25 cycle 5: original BMO sound slot 3
+2026-08-10 00:31:26 cycle 5: original BMO sound slot 19
+2026-08-10 00:31:29 cycle 6: TTS introduction and song
+2026-08-10 00:31:29 shutdown warning: (6, 'Device not configured')
+2026-08-10 00:31:29 demo loop stopped safely
