@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from neatobmo import Robot
 from neatobmo import emote
 from neatobmo import faces
+from neatobmo import tts_bank
 from neatobmo.sounds import BMO_BANK, BMO_SEQUENCES, BMO_SOUND_SLOTS, LIVE_SOUND_IDS
 
 BRAIN = os.environ.get("NEATOBMO_BRAIN", "http://127.0.0.1:8000/v1").rstrip("/")
@@ -63,6 +64,151 @@ SOUND_BANK_PROFILES = {
     },
 }
 installed_sound_profile = "bmo"
+
+# ---- guarded TTS-to-sound-bank speech ------------------------------------
+# One job at a time.  A job is previewed (bank built + validated, no robot
+# contact), then optionally burned after the exact typed confirmation, spoken
+# with duration pacing, and restored back to the persistent BMO bank.
+TTS_VOICES = {
+    "en+f4": "espeak-ng en+f4 (BMO default)",
+    "en+f2": "espeak-ng en+f2",
+    "en+m3": "espeak-ng en+m3",
+    "en+m1": "espeak-ng en+m1",
+    "en": "espeak-ng en",
+}
+TTS_ACTIVE_STATES = {"burning", "speaking", "restoring"}
+TTS_LOG_PATH = REPO_ROOT / "logs" / "tts-bank-operations.jsonl"
+tts_job = None
+tts_job_lock = threading.Lock()
+
+
+def tts_log(job, message):
+    entry = {"ts": round(time.time(), 3), "job": job["id"], "message": message}
+    job["log"].append(entry)
+    try:
+        TTS_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(TTS_LOG_PATH, "a") as handle:
+            handle.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass
+
+
+def tts_active():
+    return tts_job is not None and tts_job["state"] in TTS_ACTIVE_STATES
+
+
+def tts_status_payload():
+    if tts_job is None:
+        return {"state": "idle", "voices": TTS_VOICES}
+    job = tts_job
+    return {
+        "id": job["id"],
+        "state": job["state"],
+        "text": job["text"],
+        "voice": job["voice"],
+        "unused_slots": job["unused_slots"],
+        "sha256": job["sha256"],
+        "required_confirmation": tts_bank.required_confirmation(job["sha256"]),
+        "speech_seconds": job["speech_seconds"],
+        "capacity_seconds": job["capacity_seconds"],
+        "auto_restore": job["auto_restore"],
+        "manifest": job["manifest"],
+        "validation": job["validation"],
+        "segments": [{
+            "index": seg.index, "sound_id": seg.sound_id,
+            "text_fragment": seg.text_fragment,
+            "content_seconds": seg.content_seconds,
+            "slot_seconds": seg.slot_seconds,
+            "padding_seconds": seg.padding_seconds,
+        } for seg in job["segments"]],
+        "progress": job["progress"].snapshot(),
+        "temporary_bank_installed": job["state"] in ("temporary-installed",)
+            or (job["state"] == "error" and job.get("burned") and not job.get("restored")),
+        "error": job.get("error"),
+        "report": job.get("report"),
+        "log": job["log"][-40:],
+        "voices": TTS_VOICES,
+    }
+
+
+def tts_build_preview(text, voice, unused_slots):
+    """Text -> validated temporary bank.  Pure local work; no robot contact."""
+    baseline_path = SOUND_BANK_PROFILES["bmo"]["path"]
+    baseline = baseline_path.read_bytes()
+    if hashlib.sha256(baseline).hexdigest() != tts_bank.BMO_BANK_SHA256:
+        raise RuntimeError("persistent BMO artifact hash mismatch; refusing to build")
+    records = {r.sound_id: r for r in tts_bank.record_ranges_from_bytes(baseline)}
+    capacities = [(sid, records[sid].sample_count) for sid in tts_bank.SLOT_SEQUENCE]
+    wav = colibri_tts(text, voice)
+    samples = tts_bank.prepare_speech_pcm(wav)
+    segments = tts_bank.plan_segments(samples, capacities)
+    tts_bank.attach_text_fragments(segments, text)
+    built, manifest = tts_bank.build_tts_bank(baseline, segments, unused_slots)
+    validation = tts_bank.validate_tts_bank(baseline, built, segments, unused_slots)
+    job = {
+        "id": f"tts-{int(time.time())}-{validation['sha256'][:8]}",
+        "created": time.time(),
+        "state": "previewed",
+        "text": text,
+        "voice": voice,
+        "unused_slots": unused_slots,
+        "bank": built,
+        "sha256": validation["sha256"],
+        "speech_seconds": round(len(samples) / tts_bank.PCM_SAMPLE_RATE, 3),
+        "capacity_seconds": round(sum(c for _, c in capacities)
+                                  / tts_bank.PCM_SAMPLE_RATE, 3),
+        "segments": segments,
+        "manifest": manifest,
+        "validation": validation,
+        "auto_restore": True,
+        "progress": tts_bank.PlaybackProgress(),
+        "stop": threading.Event(),
+        "log": [],
+    }
+    tts_log(job, f"preview built: voice={voice} speech={job['speech_seconds']}s "
+                 f"segments={len(segments)} sha256={job['sha256']} "
+                 f"validation_ok={validation['ok']}")
+    return job
+
+
+def tts_run_operation(job):
+    """Background thread: burn -> paced speech -> (auto) BMO restore."""
+    burner = tts_bank.BankBurner(robot, log=lambda m: tts_log(job, m))
+    bmo_path = SOUND_BANK_PROFILES["bmo"]["path"]
+    try:
+        with rlock:
+            job["state"] = "burning"
+            job["burned"] = True
+            report = tts_bank.run_speech_operation(
+                burner, job["bank"], job["sha256"], job["segments"],
+                bmo_path, tts_bank.BMO_BANK_SHA256,
+                auto_restore=job["auto_restore"],
+                progress=job["progress"], stop_event=job["stop"])
+        job["report"] = report
+        job["restored"] = not report.get("temporary_bank_installed", True)
+        job["state"] = job["progress"].state
+        tts_log(job, f"operation finished: state={job['state']}")
+    except Exception as exc:
+        job["error"] = str(exc)
+        job["state"] = "error"
+        tts_log(job, f"operation failed: {exc}")
+
+
+def tts_run_restore(job):
+    burner = tts_bank.BankBurner(robot, log=lambda m: tts_log(job, m))
+    try:
+        with rlock:
+            job["state"] = "restoring"
+            result = tts_bank.BankBurner.restore_bank(
+                burner, SOUND_BANK_PROFILES["bmo"]["path"],
+                tts_bank.BMO_BANK_SHA256, "persistent BMO bank")
+        job["restored"] = True
+        job["state"] = "restored"
+        tts_log(job, f"explicit BMO restore verified: {result['accepted_ids']}")
+    except Exception as exc:
+        job["error"] = str(exc)
+        job["state"] = "error"
+        tts_log(job, f"explicit BMO restore failed: {exc}")
 
 
 def sound_bank_profiles():
