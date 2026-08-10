@@ -16,6 +16,17 @@ Mask the robot as a Vorwerk VR100 with `SetConfig ModelID VR100`, run the
 Rev113 offline updater to flash the **Vorwerk VR100 v3.2** application
 image, then set the ModelID back — no decryption or RE required.
 
+> **Correction (roboter-forum.com + iXBT.com threads, glnc222 / HerzNovy /
+> Medtech):** the SEO blog oversold 3.2. The **oldest Rev113 Cruz boards**
+> — the ones with a **side charging jack and the old clamped LCD cable** —
+> must **NOT** go above **v3.1**: different CPU, and flashing higher is
+> **destructive (bricks)**. Multiple modders report bricked Cruz boards
+> from exactly this. So for our robot the safe ceiling is likely **3.1
+> (build 17844)**, not 3.2 — pending the physical board-variant check
+> below. And the community consensus is that **nothing above 3.1 is worth
+> it** anyway (3.4 only trims cleaning time for NiMH), so for the BMO
+> project the upside is zero and the risk is a brick.
+
 ## Why we missed it
 
 Our firmware docs (`FIRMWARE_ARCHIVE.md`, `FIRMWARE_SOUND_PATCH.md`) framed
@@ -44,10 +55,42 @@ Our robot matches the hackable profile precisely: XV-12, serial
 
 On the robot LCD: **Menu → Support → Show Revision**, read **Board Rev**.
 
-- **113 = Cruz board** (older XV-11/XV-12/early XV-21). Hackable; takes
-  Vorwerk 3.2. ← ours
+- **113 = Cruz board** (older XV-11/XV-12/early XV-21). ← ours. But there
+  are sub-variants: the oldest (side charging jack + old clamped LCD
+  cable) is **capped at v3.1** — 3.2+ is a different CPU and bricks. Our
+  robot ships `2.4.15667`, i.e. the old family, so **inspect for the side
+  charging jack** and assume the 3.1 ceiling until proven otherwise.
 - **64 = Binky board** (newer XV-21 / XV Signature, ships Neato 3.4). Do
-  NOT downgrade to Vorwerk 3.2 — reported to cause errors.
+  NOT flash Rev113 images to it — different firmware structure (below);
+  cross-revision flashing bricks.
+
+### Firmware structure differs by board revision (brick trap)
+
+From the iXBT thread (HerzNovy, Medtech):
+
+- **Rev113 (Cruz) firmware = three parts**: the app image
+  (`XV11App.*.enc`), the LDS/lidar image (`LDS_15295.enc`), and the sound
+  library (`DfltSoundLib.Rev1.0.bin`), tied together by a plaintext
+  `Config.ini` manifest. The updater flashes them per the manifest; if the
+  three files sit beside the updater they flash automatically, else one at
+  a time.
+- **Rev64 (Binky) firmware = a single file** of an exact size.
+- The two are **not compatible**. Flashing a Rev113 part onto a Rev64 (or
+  vice-versa) bricks the board — modders in-thread report "two bricked
+  Cruz boards after client-side flashing." A too-small app-only file on
+  the wrong revision is the classic symptom (`XV11App.18755.P.bin.enc` is
+  ~852 KB and is *only* the app part, not a whole-image).
+
+This is exactly the three-file bundle we already hold under
+`OriginalVorwerkFirmwareFiles/*/` and mapped in `FIRMWARE_ARCHIVE.md`.
+
+### Our 18755 image == Vorwerk's 3.2 web-update file
+
+Confirmed in-thread (ilgiz, Medtech): the Vorwerk VR100 3.2 web updater
+ships the app part as `xv11app.webupdate.box.enc`, which is the same image
+as `XV11App.18755.P.bin.enc` — "any method and file 18755.enc will do."
+So our archived 18755 P image *is* Vorwerk VR100 3.2. Vorwerk's own service
+page historically hosted it: `kobold.vorwerk.de/service/...software-updates-vr100`.
 
 ## Tools / resources — already archived locally
 
@@ -119,7 +162,29 @@ Recorded for completeness; the scripted `NeatoUpgrader` above is simpler.
 
 - **Hard reset:** hold Power ~15 s until fully off.
 - **Safe/recovery mode:** hold the **left bumper** while pressing Power —
-  forces a recovery mode to retry the flash.
+  forces a recovery mode to retry the flash. **Caveat (glnc222):** the
+  key-press "switch to backup" recovery was **removed in v3.4**, so this
+  escape hatch may not exist on newer images — another reason not to climb
+  past 3.1.
+
+### Downgrade / cross-version chain (reference)
+
+An XV25 owner (odoll) walked 3.4 → 3.0 (`XV11App.Prod.Box.17235.enc`) →
+3.1 (`XV11App.Prod.Box.17844.enc`) → 3.4 (`XV11App.Prod.Box.24079.enc`).
+Note the `.Prod.Box.` naming variant (Neato-Robotics-branded) vs the `.P.`
+Vorwerk-branded images we hold; both are Rev113 app parts. Builds: 17235 =
+3.0, 17844 = 3.1, 18755 = 3.2, 24079 = 3.4.
+
+### More resource pointers (unverified)
+
+- **robotreviews.com** "offline files captured in Russia" threads
+  (glnc222): `viewtopic.php?f=20&t=19005`, and posts p=127302 / p=134169 /
+  p=134925 — the community's Rev113 offline bundles, explicitly "to v3.1
+  only" for the oldest Cruz boards.
+- Vorwerk's historical VR100 software page:
+  `kobold.vorwerk.de/service/.../software-updates-vr100`.
+- **heXor** (NeatoControl author) is active in the iXBT thread — same
+  attribution we already cite.
 
 ## Project risk — read before flashing our robot
 
@@ -138,11 +203,17 @@ built**, and possibly more:
   (`WTD41611DD-...-P_sw-2-4-15667_*`), but **no proven readback/restore
   path exists** — a bad flash may not be reversible to our exact baseline.
 
-Recommendation: if we pursue this, do it on a **second scavenged Rev113
-robot** (see the "$20 broken Neato" guide), not our working BMO body, until
-the whole pipeline is re-characterized on VR100 3.2. The navigation/corner
-gains are for the *vacuum*, which BMO doesn't use — for the BMO project the
-upside is low and the blast radius is the entire speech system.
+And now the sharper brick risk from the forum threads: if ours is an
+oldest-Cruz board (side charge jack), **3.2 itself may brick it** — the
+safe ceiling is 3.1. Cross-revision or wrong-part flashing bricks outright.
+
+Recommendation: **don't flash the working BMO body.** If we ever pursue it,
+use a **second scavenged Rev113 robot**, confirm the board sub-variant
+first, and stay at **≤3.1** unless the side-jack check proves otherwise.
+The navigation/corner gains are for the *vacuum*, which BMO doesn't use, and
+the community says >3.1 changes nothing worthwhile — so for the BMO project
+the upside is ~zero and the blast radius is a brick plus the entire speech
+system.
 
 ## Follow-ups if we act
 

@@ -56,6 +56,19 @@ Known state:
   separately encrypted with no `neato` magic. The zip password was a
   shipping wrapper; the envelope decrypt remains the real, unsolved
   blocker. Do not chase the zip password as if it were the decryptor.
+- The `.enc` envelope was **also unsolved in the community**: an iXBT
+  XV-11 thread has a direct "tell me how to decrypt this data" with no
+  answer, alongside modders who could flash but never decrypt. Rev113
+  firmware there is confirmed as **three parts** (app `XV11App.*.enc`,
+  lidar `LDS_15295.enc`, sound `DfltSoundLib.Rev1.0.bin`) bound by a
+  plaintext `Config.ini`, flashed as a bundle — matching our unpacked
+  `OriginalVorwerkFirmwareFiles/`. Rev64 (Binky) firmware is a single file
+  and is not cross-compatible: wrong-revision or wrong-part flashing
+  bricks (multiple reported bricked Cruz boards). Our build-18755 P image
+  == Vorwerk VR100 3.2's `xv11app.webupdate.box.enc`. See
+  [neato-vorwerk-vr100-crossflash.md](docs/neato-vorwerk-vr100-crossflash.md)
+  for the flashing procedure, the v3.1 ceiling on oldest Cruz boards, and
+  the brick traps.
 - `Upload code noburn` accepted a 3.1 encrypted image into the updater receive
   path, but later `dump` returned no application payload. Treat that as a
   transport observation, not cryptographic validation or readback.
