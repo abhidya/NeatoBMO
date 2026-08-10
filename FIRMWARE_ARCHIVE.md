@@ -40,6 +40,22 @@ Known state:
   but no identified host-side decrypt/repack implementation. Static
   disassembly confirms that its upload path sends the caller-provided image
   buffer unchanged, followed by the transport checksum.
+- The installer packaging is a **separate, already-defeated layer** — not
+  the envelope. A 2012 Mikrocontroller.net thread cracked the password on
+  the ZIP inside `VorwerkVR100Setup.msi`: admin-extract with
+  `msiexec /a setup.msi /qn TARGETDIR=...`, a nested archive holds the
+  renamed payloads, and the .exe uses Artpol `CZipArchive` (ASCII-only
+  password, recoverable by logging `strlen` right before the zip opens,
+  e.g. rohitab API Monitor). **This buys us nothing:** the files it
+  unlocks are the same `XV11App.*.P.bin.enc`, `LDS_15295.enc`,
+  `Config.ini`, and unencrypted `DfltSoundLib.Rev1.0.bin` we already hold
+  fully unpacked under `OriginalVorwerkFirmwareFiles/`. Confirmed
+  double-wrapping: the app image inside the (now-open) zip still carries
+  the `neato` format-2 envelope (`XV11App.18755.P.bin.enc` begins
+  `10 00 0D 00 02 "neato"`). `LDS_15295.enc` (16 KB lidar firmware) is
+  separately encrypted with no `neato` magic. The zip password was a
+  shipping wrapper; the envelope decrypt remains the real, unsolved
+  blocker. Do not chase the zip password as if it were the decryptor.
 - `Upload code noburn` accepted a 3.1 encrypted image into the updater receive
   path, but later `dump` returned no application payload. Treat that as a
   transport observation, not cryptographic validation or readback.
