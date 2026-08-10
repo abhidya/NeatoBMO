@@ -34,7 +34,7 @@ from neatobmo.sounds import BMO_BANK, BMO_SEQUENCES, BMO_SOUND_SLOTS, LIVE_SOUND
 BRAIN = os.environ.get("NEATOBMO_BRAIN", "http://127.0.0.1:8000/v1").rstrip("/")
 KEY_FILE = os.path.expanduser("~/.neatobmo/coli_api_key")
 API_KEY = open(KEY_FILE).read().strip() if os.path.exists(KEY_FILE) else None
-PORT = 8485
+PORT = int(os.environ.get("PORT", "8485"))
 ESP32 = os.environ.get("NEATOBMO_ESP32", "http://10.0.0.106")
 
 # The persona's emoji palette is generated from the face engine's table so
@@ -47,6 +47,7 @@ PERSONA = ("You are BMO, a cheerful little robot buddy living inside a Neato rob
            + " — your face screen plays them in order!")
 
 robot = None
+body_via = None  # "usb" | "bridge" | None, set at startup for the UI status pill
 rlock = threading.Lock()
 history = [{"role": "system", "content": PERSONA}]
 
@@ -346,25 +347,60 @@ PAGE = """<!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BMO</title>
 <style>
- body{margin:0;background:#0e3b35;color:#e8f6ef;font:16px -apple-system,sans-serif;
-      display:flex;flex-direction:column;height:100vh;align-items:center}
- #tabs{display:flex;gap:6px;width:min(680px,94vw);padding:10px 0 0}
- .tab{flex:1;text-align:center;padding:10px;border-radius:10px 10px 0 0;cursor:pointer;
-      background:#0a2a26;border:1px solid #2c6b5f;border-bottom:0;opacity:.6;font-weight:700}
- .tab.on{background:#175a50;opacity:1}
+ :root{--bg:#0e3b35;--panel:#0a2a26;--panel2:#175a50;--line:#2c6b5f;--accent:#2fbf9b;
+       --accent-soft:#7ce0c5;--ink:#e8f6ef;--ink-dim:#9fc4b8;--danger:#e06c75}
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--bg);color:var(--ink);font:16px -apple-system,sans-serif;
+      display:flex;flex-direction:column;height:100vh;height:100dvh;align-items:center}
+ ::-webkit-scrollbar{width:8px;height:8px}
+ ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+ ::-webkit-scrollbar-track{background:transparent}
+ #tabs{display:flex;gap:4px;width:min(680px,94vw);padding:10px 0 0;overflow-x:auto;
+       scrollbar-width:none;flex:none}
+ #tabs::-webkit-scrollbar{display:none}
+ .tab{flex:1 0 auto;text-align:center;padding:9px 13px;border-radius:10px 10px 0 0;cursor:pointer;
+      background:var(--panel);border:1px solid var(--line);border-bottom:0;opacity:.6;font-weight:700;
+      font-size:14px;white-space:nowrap;user-select:none;transition:opacity .15s,background .15s;
+      box-shadow:inset 0 -2px 0 transparent}
+ .tab:hover{opacity:.85}
+ .tab.on{background:var(--panel2);opacity:1;box-shadow:inset 0 3px 0 var(--accent)}
  .pane{display:none;flex:1;flex-direction:column;align-items:center;width:100%;min-height:0}
  .pane.on{display:flex}
- #face{font-size:64px;margin:18px 0 4px}
- #status{opacity:.7;font-size:13px;margin-bottom:8px}
- #log{flex:1;overflow-y:auto;width:min(680px,94vw);padding:8px}
- .msg{margin:6px 0;padding:10px 14px;border-radius:14px;max-width:80%;line-height:1.35}
- .you{background:#175a50;margin-left:auto}
- .bmo{background:#0a2a26;border:1px solid #2c6b5f}
- #bar{display:flex;gap:8px;width:min(680px,94vw);padding:12px}
- #txt{flex:1;padding:12px;border-radius:10px;border:1px solid #2c6b5f;background:#0a2a26;color:#e8f6ef;font-size:16px}
- button{border:0;border-radius:10px;padding:12px 16px;font-size:16px;cursor:pointer;background:#2fbf9b;color:#04211c;font-weight:700}
- #mic.listening{background:#e06c75;color:#fff}
- .mini{padding:6px 10px;font-size:13px;background:#175a50;color:#e8f6ef;border:1px solid #2c6b5f}
+ #face{font-size:64px;margin:14px 0 2px;transition:transform .2s}
+ #conn{font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);
+       background:var(--panel);color:var(--ink-dim);margin:4px 0}
+ #conn::before{content:'●';margin-right:6px;color:var(--danger)}
+ #conn.ok::before{color:var(--accent)}
+ #status{opacity:.7;font-size:13px;margin:4px 0 8px;min-height:1.2em}
+ #log{flex:1;overflow-y:auto;width:min(680px,94vw);padding:8px;scroll-behavior:smooth}
+ #log:empty::before{content:'Say hi — BMO is listening 🎮';display:block;text-align:center;
+       opacity:.45;padding:36px 0;font-size:15px}
+ .msg{margin:6px 0;padding:10px 14px;border-radius:14px;max-width:80%;line-height:1.35;
+      width:fit-content;animation:pop .18s ease-out}
+ @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+ .you{background:var(--panel2);margin-left:auto;border-bottom-right-radius:4px}
+ .bmo{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:4px}
+ .think span{display:inline-block;width:7px;height:7px;margin:0 2px;border-radius:50%;
+      background:var(--accent-soft);animation:blip 1s infinite}
+ .think span:nth-child(2){animation-delay:.15s}.think span:nth-child(3){animation-delay:.3s}
+ @keyframes blip{0%,60%,100%{opacity:.25;transform:none}30%{opacity:1;transform:translateY(-3px)}}
+ #bar{display:flex;gap:8px;width:min(680px,94vw);padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
+ #txt{flex:1;min-width:0;padding:12px;border-radius:10px;border:1px solid var(--line);
+      background:var(--panel);color:var(--ink);font-size:16px}
+ input,textarea,select{transition:border-color .15s,box-shadow .15s}
+ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);
+      box-shadow:0 0 0 2px rgba(47,191,155,.25)}
+ button{border:0;border-radius:10px;padding:12px 16px;font-size:16px;cursor:pointer;
+      background:var(--accent);color:#04211c;font-weight:700;
+      transition:filter .15s,transform .06s,opacity .15s}
+ button:hover{filter:brightness(1.1)}
+ button:active{transform:scale(.96)}
+ button:disabled{opacity:.5;cursor:default;transform:none;filter:none}
+ button:focus-visible{outline:2px solid var(--accent-soft);outline-offset:2px}
+ #mic.listening{background:var(--danger);color:#fff;animation:pulse 1.2s infinite}
+ @keyframes pulse{50%{box-shadow:0 0 0 8px rgba(224,108,117,.18)}}
+ .mini{padding:6px 10px;font-size:13px;background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+ .mini.playing{background:var(--accent);color:#04211c}
  #quick,#drive{width:min(680px,94vw);padding:6px 0}
  #drive{text-align:center}
  #clog{flex:1;overflow-y:auto;width:min(680px,94vw);padding:8px;font:12px ui-monospace,monospace;
@@ -381,7 +417,13 @@ PAGE = """<!doctype html>
  #p-sounds{overflow-y:auto}
  #soundgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;
             width:min(680px,94vw);padding:0 0 16px}
- .soundcard{padding:12px;background:#0a2a26;border:1px solid #2c6b5f;border-radius:12px}
+ .soundcard{padding:12px;background:#0a2a26;border:1px solid #2c6b5f;border-radius:12px;
+            transition:border-color .15s}
+ .soundcard:hover{border-color:var(--accent)}
+ #ttsbar{height:6px;border-radius:3px;background:var(--panel2);margin:8px 0 2px;overflow:hidden;display:none}
+ #ttsbar.on{display:block}
+ #ttsbar i{display:block;height:100%;width:0;background:var(--accent);border-radius:3px;
+           transition:width .4s ease}
  .soundcard h3{margin:0 0 4px;color:#7ce0c5;font-size:16px}
  .soundmeta{opacity:.75;font-size:12px;line-height:1.45;margin:5px 0 9px}
  #soundseq{display:flex;flex-wrap:wrap;gap:6px;width:min(680px,94vw);padding:0 0 10px}
@@ -399,15 +441,16 @@ PAGE = """<!doctype html>
        background:#0a2a26;color:#e8f6ef;font-size:16px}
 </style>
 <div id="tabs">
- <div class="tab on" data-p="chat" onclick="show('chat')">Chat</div>
- <div class="tab" data-p="sounds" onclick="show('sounds');loadSounds()">Sounds</div>
- <div class="tab" data-p="tts" onclick="show('tts');ttsPoll()">TTS</div>
- <div class="tab" data-p="console" onclick="show('console')">Console</div>
- <div class="tab" data-p="sensors" onclick="show('sensors')">Sensors</div>
- <div class="tab" data-p="esp32" onclick="show('esp32')">ESP32</div>
+ <div class="tab on" data-p="chat" onclick="show('chat')">💬 Chat</div>
+ <div class="tab" data-p="sounds" onclick="show('sounds');loadSounds()">🎵 Sounds</div>
+ <div class="tab" data-p="tts" onclick="show('tts');ttsPoll()">🗣 TTS</div>
+ <div class="tab" data-p="console" onclick="show('console')">⌨️ Console</div>
+ <div class="tab" data-p="sensors" onclick="show('sensors')">📡 Sensors</div>
+ <div class="tab" data-p="esp32" onclick="show('esp32')">🔧 ESP32</div>
 </div>
 <div class="pane on" id="p-chat">
 <div id="face">🤖</div>
+<div id="conn">checking body…</div>
 <div id="status">BMO · voice: espeak-ng → sound-bank speech</div>
 <div id="log"></div>
 <div id="bar">
@@ -452,6 +495,7 @@ PAGE = """<!doctype html>
  </div>
  <div class="card">
   <div id="ttsprogress" class="soundmeta">no speech yet</div>
+  <div id="ttsbar"><i></i></div>
   <div id="ttschunks" class="soundmeta"></div>
   <div style="margin-top:8px">
    <button class="mini" onclick="ttsRestore()">🎵 Bring back BMO sounds</button>
@@ -516,6 +560,16 @@ const log=document.getElementById('log'),face=document.getElementById('face');
 function add(cls,text){const d=document.createElement('div');d.className='msg '+cls;
  d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;}
 const STATUS_DEFAULT='BMO · voice: espeak-ng → sound-bank speech';
+// body connection pill
+async function health(){const c=document.getElementById('conn');
+ try{const j=await(await fetch('/health')).json();
+  c.classList.toggle('ok',!!j.robot);
+  c.textContent=j.robot?('body connected'+(j.via?' · '+j.via:'')):'body not attached';
+ }catch(e){c.classList.remove('ok');c.textContent='console offline';}}
+health();setInterval(health,5000);
+function thinkBubble(){const d=document.createElement('div');d.className='msg bmo think';
+ d.innerHTML='<span></span><span></span><span></span>';
+ log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
 // voice output selector (persisted)
 const voiceSel=document.getElementById('voice');
 try{voiceSel.value=localStorage.getItem('bmoVoice')||'local';}catch(e){voiceSel.value='local';}
@@ -541,11 +595,12 @@ async function send(text){
  st.textContent='thinking… 0s';
  const tick=setInterval(()=>{st.textContent='thinking… '+Math.floor((Date.now()-t0)/1000)+'s';},1000);
  add('you',text);face.textContent='🤔';
+ const think=thinkBubble();
  try{
   const r=await fetch('/chat',{method:'POST',body:JSON.stringify({text,
    speak:voiceSel.value==='robot'})});
   const j=await r.json();
-  clearInterval(tick);
+  clearInterval(tick);think.remove();
   face.textContent='😊';add('bmo',j.reply);
   st.textContent=j.voice_error
    ? 'BMO · robot voice: '+j.voice_error
@@ -553,7 +608,7 @@ async function send(text){
   try{if(facesOpen())previewOnly(j.reply);}catch(e){}
   if(voiceSel.value==='local')speakLocal(j.reply);
  }catch(e){
-  clearInterval(tick);
+  clearInterval(tick);think.remove();
   face.textContent='😵';add('bmo','(brain unreachable)');
   st.textContent=STATUS_DEFAULT;
  }finally{
@@ -598,7 +653,10 @@ async function loadSounds(){
    const role=document.createElement('div');role.textContent=s.role;
    const meta=document.createElement('div');meta.className='soundmeta';
    meta.textContent=`${s.content_seconds.toFixed(3)}s audio · ${s.slot_seconds.toFixed(3)}s slot · source: ${s.source}`;
-   const play=document.createElement('button');play.className='mini';play.textContent='▶ Play';play.onclick=()=>cmd('PlaySound '+s.id);
+   const play=document.createElement('button');play.className='mini';play.textContent='▶ Play';
+   play.onclick=()=>{cmd('PlaySound '+s.id);play.classList.add('playing');play.textContent='♪ playing';
+    setTimeout(()=>{play.classList.remove('playing');play.textContent='▶ Play';},
+     Math.max(800,s.slot_seconds*1000));};
    const source=document.createElement('a');source.href=s.source_url;source.target='_blank';source.textContent='source';source.style.marginLeft='10px';
    card.append(title,role,meta,play,source);grid.appendChild(card);});
  }catch(e){document.getElementById('soundbank').textContent='Could not load sound metadata: '+e;}}
@@ -619,8 +677,16 @@ async function playSequence(name){
  catch(e){clogAdd('(sound sequence failed)');}}
 function drive(l,r){cmd('TestMode On');cmd(`SetMotor LWheelDist ${l} RWheelDist ${r} Speed 100`);}
 const cmdEl=document.getElementById('cmd');
-function sendCmd(){if(cmdEl.value.trim()){cmd(cmdEl.value.trim());cmdEl.value='';}}
-cmdEl.addEventListener('keydown',e=>{if(e.key==='Enter')sendCmd();});
+let cmdHist=[],cmdIdx=-1;
+try{cmdHist=JSON.parse(localStorage.getItem('bmoCmdHist')||'[]');}catch(e){}
+function sendCmd(){const c=cmdEl.value.trim();if(!c)return;
+ cmd(c);cmdEl.value='';cmdIdx=-1;
+ if(cmdHist[0]!==c){cmdHist.unshift(c);cmdHist=cmdHist.slice(0,50);
+  try{localStorage.setItem('bmoCmdHist',JSON.stringify(cmdHist));}catch(e){}}}
+cmdEl.addEventListener('keydown',e=>{
+ if(e.key==='Enter')sendCmd();
+ else if(e.key==='ArrowUp'){if(cmdIdx<cmdHist.length-1){cmdIdx++;cmdEl.value=cmdHist[cmdIdx];}e.preventDefault();}
+ else if(e.key==='ArrowDown'){cmdIdx=Math.max(-1,cmdIdx-1);cmdEl.value=cmdIdx<0?'':cmdHist[cmdIdx];e.preventDefault();}});
 // lidar radar
 const cv=document.getElementById('c'),ctx=cv.getContext('2d');let maxR=4000,polling=false;
 function draw(scan){const W=cv.width,H=cv.height,cx=W/2,cy=H/2,R=Math.min(W,H)/2-20;
@@ -750,8 +816,16 @@ function ttsRender(j){
  bank.textContent=j.installed_profile==='tts'
   ?'speech is installed in the sound flash — BMO chirps are paused'
   :'BMO sounds are installed';
- if(j.state==='idle'){prog.textContent='no speech yet';return;}
+ const bar=document.getElementById('ttsbar'),fill=bar.firstElementChild;
+ if(j.state==='idle'){prog.textContent='no speech yet';bar.classList.remove('on');return;}
  const p=j.progress||{};
+ if(ttsActiveStates.includes(j.state)&&p.total_chunks){
+  let done=p.chunk_index||0;
+  if(j.state==='speaking'&&p.total_segments)done+=((p.segment_index||0)+1)/p.total_segments;
+  else if(j.state==='spoken')done=p.total_chunks;
+  bar.classList.add('on');fill.style.width=Math.min(100,100*done/p.total_chunks)+'%';
+ }else if(j.state==='spoken'){bar.classList.add('on');fill.style.width='100%';}
+ else bar.classList.remove('on');
  let line=ttsStateLabels[j.state]||j.state;
  if(p.total_chunks>1&&p.chunk_index!=null)line+=` · chunk ${p.chunk_index+1}/${p.total_chunks}`;
  if(j.state==='speaking'&&p.segment_index!=null)
@@ -818,6 +892,9 @@ class Handler(BaseHTTPRequestHandler):
             if hashlib.sha256(data).hexdigest() != profile["sha256"]:
                 return self._json({"error": "local sound-bank hash mismatch"})
             return self._reply(data, "application/octet-stream")
+        if self.path == "/health":
+            return self._json({"robot": robot is not None, "via": body_via,
+                               "esp32": ESP32})
         if self.path == "/tts-bank/status":
             with tts_job_lock:
                 return self._json(tts_status_payload())
@@ -1038,6 +1115,7 @@ if __name__ == "__main__":
         robot.testmode(True)
         robot.led("backlight_on")
         robot.play("hello")
+        body_via = "usb"
         print("body: connected over USB")
     except Exception as usb_error:
         try:
@@ -1045,6 +1123,7 @@ if __name__ == "__main__":
             robot = Robot(bridge_host)
             if "Software" not in robot.cmd("GetVersion", timeout=5):
                 raise RuntimeError("bridge reachable but robot did not answer")
+            body_via = "bridge"
             print(f"body: connected via ESP32 bridge at {bridge_host}")
         except Exception as bridge_error:
             robot = None

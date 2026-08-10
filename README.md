@@ -72,8 +72,9 @@ See [DESIGN.md](DESIGN.md) for the full architecture and milestones.
 
 ```bash
 cd esp32-body
-cp src/wifi_secrets.example.h src/wifi_secrets.h   # fill in your WiFi
 pio run -t upload   # first flash over USB; later flashes via OTA (POST /ota)
+# fresh flash boots the "NeatoBMO-Setup" AP: join it and browse to
+# http://192.168.4.1/wifi to save your WiFi creds (persisted in NVS)
 ```
 
 Then: `http://<board-ip>/` (dashboard), `nc <board-ip> 2323` (logs),

@@ -14,7 +14,8 @@
       "name": "bmo-web",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["bmo_web.py"],
-      "port": 8485
+      "port": 8485,
+      "autoPort": true
     },
     {
       "name": "lidar-viewer",

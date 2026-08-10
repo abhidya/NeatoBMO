@@ -13,7 +13,6 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "dns_server.h"
-#include "wifi_secrets.h" /* gitignored compiled-in fallback creds */
 #include "wifi_mgr.h"
 
 #define AP_SSID        "NeatoBMO-Setup"
@@ -59,8 +58,8 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
     }
 }
 
-/* Load creds: NVS wins; an explicitly-saved empty ssid means "forget" was
- * used -> force setup AP. Absent keys (fresh flash) -> compiled-in secrets. */
+/* Load creds from NVS; an explicitly-saved empty ssid means "forget" was
+ * used -> force setup AP. Absent keys (fresh flash) -> setup AP too. */
 static bool load_creds(char *ssid, size_t scap, char *pass, size_t pcap, bool *force_ap)
 {
     *force_ap = false;
@@ -76,9 +75,7 @@ static bool load_creds(char *ssid, size_t scap, char *pass, size_t pcap, bool *f
         }
         nvs_close(h);
     }
-    strlcpy(ssid, WIFI_SSID, scap);
-    strlcpy(pass, WIFI_PASS, pcap);
-    return ssid[0] != 0;
+    return false;
 }
 
 static void start_ap(void)

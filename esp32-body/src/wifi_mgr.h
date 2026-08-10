@@ -1,6 +1,6 @@
 /* WiFi manager: NVS-provisioned STA with captive-portal fallback AP.
  *
- * Boot: try NVS creds (else compiled-in wifi_secrets.h). If join fails,
+ * Boot: try NVS creds. If none saved or the join fails,
  * start an open softAP "NeatoBMO-Setup" at 192.168.4.1 with a DNS hijack
  * so phones auto-open the /wifi config page.
  */
