@@ -91,9 +91,10 @@ class BurnVerifyTests(unittest.TestCase):
             self.bank, self.sha, "temporary TTS bank")
         self.assertEqual(result["sha256"], self.sha)
         self.assertEqual(set(result["accepted_ids"]), tts_bank.LIVE_SOUND_IDS)
-        self.assertEqual(robot.events[0], ("upload", "Upload sound", self.sha))
-        self.assertEqual(robot.events[1], ("cmd", "GetVersion"))
-        sweep = [e[1] for e in robot.events[2:]]
+        self.assertEqual(robot.events[0], ("cmd", "GetVersion"))  # pre-burn
+        self.assertEqual(robot.events[1], ("upload", "Upload sound", self.sha))
+        self.assertEqual(robot.events[2], ("cmd", "GetVersion"))  # post-burn
+        sweep = [e[1] for e in robot.events[3:]]
         self.assertEqual(sweep, [f"PlaySound {i}" for i in range(21)])
 
     def test_identity_mismatch_fails_verification(self):
@@ -228,6 +229,109 @@ class RestoreTests(unittest.TestCase):
         self.assertEqual(len(uploads), 2)
         self.assertTrue(report["playback"]["stopped"])
         self.assertFalse(report["temporary_bank_installed"])
+
+
+class SilentModeAndAutoSpeechTests(unittest.TestCase):
+    """The automatic path: no audible sweep, chunked speech, persistence."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.baseline = BMO_ARTIFACT.read_bytes()
+
+    def make_chunks(self, count=2):
+        from array import array
+        records = {r.sound_id: r for r in
+                   tts_bank.record_ranges_from_bytes(self.baseline)}
+        capacities = [(sid, records[sid].sample_count)
+                      for sid in tts_bank.SLOT_SEQUENCE]
+        chunks = []
+        for i in range(count):
+            samples = array("h", [1000 + i] * 4000)
+            segments = tts_bank.plan_segments(samples, capacities)
+            tts_bank.attach_text_fragments(segments, f"chunk {i}")
+            chunks.append({"text": f"chunk {i}", "samples": samples,
+                           "segments": segments})
+        return chunks
+
+    def test_silent_burn_skips_the_audible_sweep(self):
+        robot = FakeRobot()
+        result = BankBurner(robot, sleep=FakeSleep()).burn_and_verify(
+            self.baseline, tts_bank.BMO_BANK_SHA256, "chunk", sweep=False)
+        self.assertIsNone(result["accepted_ids"])
+        commands = [e[1] for e in robot.events if e[0] == "cmd"]
+        self.assertEqual(commands, ["GetVersion", "GetVersion"])  # no sounds
+
+    def test_playback_reply_verifies_slots_after_silent_burn(self):
+        robot = FakeRobot(live_ids=tts_bank.LIVE_SOUND_IDS - {0})
+        with self.assertRaisesRegex(RobotVerificationError, "slot 0"):
+            BankBurner(robot, sleep=FakeSleep()).play_paced(
+                make_segments(), PlaybackProgress())
+
+    def test_speak_chunks_burns_and_speaks_each_chunk_in_order(self):
+        robot = FakeRobot()
+        progress = PlaybackProgress()
+        chunks = self.make_chunks(2)
+        report = tts_bank.speak_chunks_operation(
+            BankBurner(robot, sleep=FakeSleep()), self.baseline, chunks,
+            progress=progress)
+        uploads = [e for e in robot.events if e[0] == "upload"]
+        self.assertEqual(len(uploads), 2)  # one write per chunk, no restore
+        self.assertTrue(report["persisted"])
+        self.assertFalse(report["stopped"])
+        self.assertEqual(report["installed_bank_sha256"],
+                         report["chunks"][-1]["sha256"])
+        self.assertEqual(progress.state, "spoken")
+        self.assertEqual(progress.total_chunks, 2)
+        # every chunk's bank differs from the BMO artifact (speech, not BMO)
+        for chunk in report["chunks"]:
+            self.assertNotEqual(chunk["sha256"], tts_bank.BMO_BANK_SHA256)
+
+    def test_stop_between_chunks_halts_cleanly(self):
+        import threading
+        stop = threading.Event()
+        stop.set()
+        robot = FakeRobot()
+        report = tts_bank.speak_chunks_operation(
+            BankBurner(robot, sleep=FakeSleep()), self.baseline,
+            self.make_chunks(2), stop_event=stop)
+        self.assertTrue(report["stopped"])
+        self.assertEqual([e for e in robot.events if e[0] == "upload"], [])
+
+    def test_validation_failure_blocks_the_burn(self):
+        # corrupt the baseline's directory so every build fails validation
+        robot = FakeRobot()
+        chunks = self.make_chunks(1)
+        bad_baseline = bytearray(self.baseline)
+        bad_baseline[300] ^= 0xFF  # inside page 0, outside the slot table
+
+        class TamperedBuild(dict):
+            pass
+
+        original_build = tts_bank.build_tts_bank
+
+        def tampered_build(baseline, segments, unused):
+            built, manifest = original_build(baseline, segments, unused)
+            tampered = bytearray(built)
+            tampered[300] ^= 0xFF  # directory byte: validation must fail
+            return bytes(tampered), manifest
+
+        tts_bank.build_tts_bank, saved = tampered_build, tts_bank.build_tts_bank
+        try:
+            with self.assertRaises(tts_bank.BankValidationError):
+                tts_bank.speak_chunks_operation(
+                    BankBurner(robot, sleep=FakeSleep()), self.baseline, chunks)
+        finally:
+            tts_bank.build_tts_bank = saved
+        self.assertEqual([e for e in robot.events if e[0] == "upload"], [])
+
+
+class BridgeRelayTests(unittest.TestCase):
+    def test_bridge_only_relays_sound_bank_uploads(self):
+        from neatobmo.transport import BridgeTransport, BinaryTransferError
+        bridge = BridgeTransport.__new__(BridgeTransport)
+        bridge.host = "192.0.2.1"
+        with self.assertRaisesRegex(BinaryTransferError, "only relays"):
+            bridge.send_binary("PlaySound File", b"\x00" * 64)
 
 
 class NoHardwareAccessTests(unittest.TestCase):

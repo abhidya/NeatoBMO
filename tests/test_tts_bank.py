@@ -275,27 +275,87 @@ class BuildAndValidateTests(unittest.TestCase):
         self.assertEqual(required_confirmation(sha), f"BURN TTS {'a' * 64}")
 
 
+class TextChunkingTests(unittest.TestCase):
+    """Long text packs into bank-sized chunks at sentence/word boundaries."""
+
+    @staticmethod
+    def synth_by_words(seconds_per_word):
+        def synth(text):
+            n = int(len(text.split()) * seconds_per_word * PCM_SAMPLE_RATE)
+            return array("h", [1000] * n)
+        return synth
+
+    def setUp(self):
+        records = record_ranges_from_bytes(BMO_ARTIFACT.read_bytes())
+        by_id = {r.sound_id: r for r in records}
+        self.capacities = [(sid, by_id[sid].sample_count)
+                           for sid in SLOT_SEQUENCE]
+
+    def test_short_text_is_one_chunk(self):
+        chunks = tts_bank.plan_speech_chunks(
+            "Hello there.", self.synth_by_words(0.4), self.capacities)
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0]["text"], "Hello there.")
+        self.assertTrue(chunks[0]["segments"])
+
+    def test_long_text_splits_at_sentence_boundaries(self):
+        # 3 sentences x 10 words x 1.2 s/word = 12 s each: one per bank
+        text = " ".join(["one two three four five six seven eight nine ten."] * 3)
+        chunks = tts_bank.plan_speech_chunks(
+            text, self.synth_by_words(1.2), self.capacities)
+        self.assertEqual(len(chunks), 3)
+        for chunk in chunks:
+            self.assertTrue(chunk["text"].endswith("."))
+            total = sum(s.sample_count for s in chunk["segments"])
+            self.assertLessEqual(total, sum(c for _, c in self.capacities))
+        joined = " ".join(c["text"] for c in chunks)
+        self.assertEqual(joined.split(), text.split())
+
+    def test_overlong_sentence_splits_at_word_boundaries(self):
+        text = " ".join(f"word{i}" for i in range(30))  # one 36 s "sentence"
+        chunks = tts_bank.plan_speech_chunks(
+            text, self.synth_by_words(1.2), self.capacities)
+        self.assertGreater(len(chunks), 1)
+        joined = " ".join(c["text"] for c in chunks)
+        self.assertEqual(joined.split(), text.split())
+
+    def test_single_overlong_word_is_rejected_not_truncated(self):
+        with self.assertRaisesRegex(TtsBankError, "single word"):
+            tts_bank.plan_speech_chunks(
+                "supercalifragilistic", self.synth_by_words(20.0),
+                self.capacities)
+
+    def test_absurd_length_hits_chunk_ceiling(self):
+        text = ". ".join(["a b c d e f g h i j"] * 60)
+        with self.assertRaisesRegex(TtsBankError, "shorten"):
+            tts_bank.plan_speech_chunks(
+                text, self.synth_by_words(1.5), self.capacities, max_chunks=3)
+
+
 class WebGuardWiringTests(unittest.TestCase):
-    """The web layer keeps every gate (style follows test_bmo_sound_metadata)."""
+    """The web layer keeps the internal gates while staying automatic."""
 
     @classmethod
     def setUpClass(cls):
         cls.page = (ROOT / "bmo_web.py").read_text()
 
-    def test_burn_endpoint_enforces_confirmation_and_validation(self):
-        self.assertIn('tts_bank.required_confirmation(job["sha256"])', self.page)
-        self.assertIn('refusing to burn: validation failed', self.page)
-        self.assertIn('job["state"] != "previewed"', self.page)
-
-    def test_flash_endurance_warning_is_shown(self):
-        self.assertIn("two full flash writes", self.page)
+    def test_speak_flow_uses_validated_chunk_operation(self):
+        self.assertIn("speak_chunks_operation", self.page)
+        self.assertIn("plan_speech_chunks", self.page)
 
     def test_bank_install_blocked_during_tts_operation(self):
         self.assertIn("a TTS bank operation is running", self.page)
 
+    def test_chat_robot_voice_routes_through_bank_speech(self):
+        self.assertIn("tts_start_speak(reply", self.page)
+
+    def test_voice_parameters_match_brain_server_defaults(self):
+        self.assertIn("TTS_SPEED = 160", self.page)
+        self.assertIn("TTS_PITCH = 70", self.page)
+
     def test_endpoints_exist(self):
-        for path in ("/tts-bank/preview", "/tts-bank/burn", "/tts-bank/stop",
-                     "/tts-bank/restore", "/tts-bank/status", "/tts-bank/wav?"):
+        for path in ("/tts-bank/speak", "/tts-bank/stop",
+                     "/tts-bank/restore", "/tts-bank/status"):
             self.assertIn(path, self.page)
 
 

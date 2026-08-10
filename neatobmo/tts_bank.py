@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import re
 import struct
 import time
 import wave
@@ -462,6 +463,69 @@ def required_confirmation(bank_sha256: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Long-text chunking: pack sentences into ~17 s banks, never mid-word
+# ---------------------------------------------------------------------------
+
+_SENTENCE_END = re.compile(r"(?<=[.!?;:])\s+")
+
+
+def split_text_units(text: str) -> list[str]:
+    """Sentence-ish units for chunk packing; falls back to the whole text."""
+    units = [u.strip() for u in _SENTENCE_END.split(text.strip()) if u.strip()]
+    return units or [text.strip()]
+
+
+def plan_speech_chunks(text: str, synthesize, capacities: list[tuple[int, int]],
+                       max_chunks: int = 12) -> list[dict]:
+    """Split ``text`` into bank-sized chunks at sentence/word boundaries.
+
+    ``synthesize(chunk_text) -> array('h')`` returns prepared (trimmed,
+    normalized) PCM.  Each returned chunk carries its planned slot segments,
+    ready to build one temporary bank.  Greedy: grow a chunk sentence by
+    sentence while its synthesized audio still fits; a single over-long
+    sentence is split at word boundaries.  Raises instead of ever truncating.
+    """
+    total_capacity = sum(cap for _, cap in capacities)
+    units = split_text_units(text)
+    chunks: list[dict] = []
+    i = 0
+    while i < len(units):
+        if len(chunks) >= max_chunks:
+            raise TtsBankError(
+                f"text needs more than {max_chunks} bank writes; shorten it")
+        fitted = None
+        j = i + 1
+        while j <= len(units):
+            candidate = " ".join(units[i:j])
+            samples = synthesize(candidate)
+            if len(samples) > total_capacity:
+                break
+            # The real fit test is slot planning itself: boundary-aware cuts
+            # spend capacity, so a chunk that fits by total length can still
+            # fail to split cleanly across the ten slots.
+            try:
+                segments = plan_segments(samples, capacities)
+            except TtsBankError:
+                break
+            fitted = (j, candidate, samples, segments)
+            j += 1
+        if fitted is None:
+            words = units[i].split()
+            if len(words) < 2:
+                raise TtsBankError(
+                    f"a single word renders longer than one bank: {units[i]!r}")
+            half = len(words) // 2
+            units[i:i + 1] = [" ".join(words[:half]), " ".join(words[half:])]
+            continue
+        end, chunk_text, samples, segments = fitted
+        attach_text_fragments(segments, chunk_text)
+        chunks.append({"text": chunk_text, "samples": samples,
+                       "segments": segments})
+        i = end
+    return chunks
+
+
+# ---------------------------------------------------------------------------
 # Robot-facing controller (fully injectable; no hardware in unit tests)
 # ---------------------------------------------------------------------------
 
@@ -472,6 +536,9 @@ class PlaybackProgress:
     current_slot: int | None = None
     elapsed_seconds: float = 0.0
     remaining_segments: int = 0
+    chunk_index: int | None = None
+    total_chunks: int = 0
+    current_text: str = ""
     stopped: bool = False
     error: str | None = None
     state: str = "idle"
@@ -484,6 +551,9 @@ class PlaybackProgress:
             "current_slot": self.current_slot,
             "elapsed_seconds": round(self.elapsed_seconds, 3),
             "remaining_segments": self.remaining_segments,
+            "chunk_index": self.chunk_index,
+            "total_chunks": self.total_chunks,
+            "current_text": self.current_text,
             "stopped": self.stopped,
             "error": self.error,
         }
@@ -507,17 +577,30 @@ class BankBurner:
         self.log = log or (lambda message: None)
 
     def burn_and_verify(self, payload: bytes, expected_sha256: str,
-                        label: str) -> dict:
+                        label: str, sweep: bool = True) -> dict:
         """Write one pre-validated image and prove the robot survived it.
 
         The only accepted payload is the exact bytes whose hash the caller
         validated in this operation; there is no other allowlist entry.
+        With ``sweep=False`` the audible PlaySound 0-20 sweep is skipped
+        (identity is still checked); paced playback then verifies each live
+        slot silently via its command reply.
         """
         digest = sha256(payload)
         if len(payload) != EXPECTED_BANK_BYTES or digest != expected_sha256:
             raise BankValidationError(
                 f"refusing to burn {label}: payload does not match the "
                 f"validated image for this operation")
+        # Pre-burn identity check: never write to a robot we can't identify.
+        # The benign command also flushes any stale parser state (a confused
+        # line parser once prepended garbage to the burn header).
+        before = self.robot.cmd("GetVersion", timeout=5)
+        missing = [needle for needle in VERSION_REQUIRED_SUBSTRINGS
+                   if needle not in before]
+        if missing:
+            raise RobotVerificationError(
+                f"pre-burn GetVersion identity check failed for {label} "
+                f"(missing {missing})")
         self.log(f"burn {label}: {len(payload)} bytes sha256={digest}")
         reply = self.robot.t.send_binary("Upload sound", payload, timeout=45.0)
         self.log(f"burn {label}: receiver replied {reply.hex()}")
@@ -529,11 +612,16 @@ class BankBurner:
             raise RobotVerificationError(
                 f"GetVersion identity check failed after {label} "
                 f"(missing {missing})")
-        accepted = self.sweep_sound_ids()
-        if set(accepted) != LIVE_SOUND_IDS:
-            raise RobotVerificationError(
-                f"post-write slot map mismatch after {label}: {accepted}")
-        self.log(f"burn {label}: identity + slot map verified {accepted}")
+        accepted = None
+        if sweep:
+            accepted = self.sweep_sound_ids()
+            if set(accepted) != LIVE_SOUND_IDS:
+                raise RobotVerificationError(
+                    f"post-write slot map mismatch after {label}: {accepted}")
+            self.log(f"burn {label}: identity + slot map verified {accepted}")
+        else:
+            self.log(f"burn {label}: identity verified (silent mode; slots "
+                     "verified during playback)")
         return {"sha256": digest, "receiver_hex": reply.hex(),
                 "accepted_ids": accepted}
 
@@ -562,7 +650,12 @@ class BankBurner:
                 break
             progress.segment_index = seg.index
             progress.current_slot = seg.sound_id
-            replies.append(self.robot.cmd(f"PlaySound {seg.sound_id}", timeout=4))
+            reply = self.robot.cmd(f"PlaySound {seg.sound_id}", timeout=4)
+            if "out of range" in reply.lower():
+                raise RobotVerificationError(
+                    f"slot {seg.sound_id} rejected after burn: the installed "
+                    f"bank does not expose the expected live map")
+            replies.append(reply)
             self.log(f"play segment {seg.index}: slot {seg.sound_id}, "
                      f"waiting {seg.slot_seconds}s")
             self.sleep(seg.slot_seconds)
@@ -628,4 +721,54 @@ def run_speech_operation(burner: BankBurner, bank_bytes: bytes,
         raise playback_error
     if playback_error:
         report["playback_error"] = str(playback_error)
+    return report
+
+
+def speak_chunks_operation(burner: BankBurner, baseline: bytes,
+                           chunks: list[dict],
+                           unused_slots: str = "silence",
+                           progress: PlaybackProgress | None = None,
+                           stop_event=None) -> dict:
+    """Fully automatic speech: build+validate+burn+play each chunk in order.
+
+    The last chunk's bank stays installed (persistent mode — no restore
+    write).  Validation still gates every burn internally: an image that
+    fails byte-exact validation is never sent.  Playback verifies each slot
+    via its command reply, so no audible sweep interrupts the speech.
+    """
+    progress = progress or PlaybackProgress()
+    progress.total_chunks = len(chunks)
+    report: dict = {"chunks": [], "persisted": True}
+    for index, chunk in enumerate(chunks):
+        if stop_event is not None and stop_event.is_set():
+            progress.stopped = True
+            break
+        progress.chunk_index = index
+        progress.current_text = chunk["text"]
+        progress.state = "building"
+        built, manifest = build_tts_bank(baseline, chunk["segments"],
+                                         unused_slots)
+        validation = validate_tts_bank(baseline, built, chunk["segments"],
+                                       unused_slots)
+        if not validation["ok"]:
+            failed = [c["check"] for c in validation["checks"] if not c["ok"]]
+            raise BankValidationError(
+                f"chunk {index} failed validation ({failed}); burn blocked")
+        progress.state = "burning"
+        burn = burner.burn_and_verify(built, validation["sha256"],
+                                      f"speech chunk {index + 1}/{len(chunks)}",
+                                      sweep=False)
+        playback = burner.play_paced(chunk["segments"], progress, stop_event)
+        report["chunks"].append({
+            "index": index,
+            "text": chunk["text"],
+            "sha256": validation["sha256"],
+            "segments": len(chunk["segments"]),
+            "burn": burn,
+            "playback": playback,
+        })
+    progress.state = "stopped" if progress.stopped else "spoken"
+    report["stopped"] = progress.stopped
+    report["installed_bank_sha256"] = (
+        report["chunks"][-1]["sha256"] if report["chunks"] else None)
     return report

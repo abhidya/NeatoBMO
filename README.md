@@ -42,12 +42,12 @@ See [DESIGN.md](DESIGN.md) for the full architecture and milestones.
 | `bmo_brain_server.py` | OpenAI-compatible wrapper around Colibri's OLMoE + espeak-ng TTS |
 | `bmo_agent.py` | CLI tool-calling agent (drive/sounds/LED via any OpenAI-compatible LLM) |
 | `neatobmo/` | Robot library: transports, typed commands, sounds, behaviors, emoji faces (`emote.py`) |
-| `tools/` | Probe & archive utilities: `lidar_viewer.py`, `backup_neato.py`, `firmware_probe.py`, `neato_firmware.py`, `neato_sound_bank.py`, `neato_sound_noburn_matrix.py` |
+| `tools/` | Probe & archive utilities: `lidar_viewer.py`, `backup_neato.py`, `firmware_probe.py`, `neato_firmware.py`, offline `neato_cfw.py` version patch/verification, `neato_sound_bank.py`, `neato_sound_noburn_matrix.py` |
 | `tests/` | Unit tests (`PYTHONPATH=".:tools" python3 -m unittest discover -s tests` from the repo root) |
 | `assets/` | Captured sound-bank evidence, validated BMO bank/previews, and original recovery image |
 | `docs/SOUND_BANK_UPDATE.md` | Exact hashes and guarded web/CLI procedures for installing BMO sounds or restoring the original bank |
 | `docs/SOUND_BANK_TTS_PROMPT.md` | Implementation prompt for routing fixed BMO phrases through the bank and arbitrary speech through streamed WAV TTS |
-| `docs/TTS_BANK.md` | Guarded TTS-to-sound-bank speech: temporary validated bank, typed burn confirmation, duration-paced playback, verified BMO restore (`neatobmo/tts_bank.py` + web “TTS” tab) |
+| `docs/TTS_BANK.md` | BMO speaks: automatic TTS through the sound flash — sentence-boundary chunking for long text, validated persistent banks, silent verification, ESP32 `/soundbank` relay (`neatobmo/tts_bank.py` + web “TTS” tab) |
 | `neato_protocol_dump.txt` | Ground-truth protocol harvested from the actual XV-12 (`Help` for every command, sample sensor output) |
 | `FIRMWARE_ARCHIVE.md` | Checksummed 2 TB archive, current-robot recovery snapshot, compatible version inventory, and reproduction commands |
 | `neato-driver-python/` | Vendored clone of [brannonvann/neato-driver-python](https://github.com/brannonvann/neato-driver-python) (MIT) for protocol reference |

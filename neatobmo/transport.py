@@ -1,11 +1,16 @@
 """Transports to reach the Neato: direct USB serial, or the ESP32 WiFi bridge.
 
 Both expose: send(cmd) -> str  (full reply text, 0x1A terminator stripped)
+and send_binary(cmd, payload) for the robot's ENQ/checksum/ACK framing —
+direct over serial, or relayed through the ESP32's HTTP endpoints.
 """
 import glob
+import hashlib
 import socket
 import struct
 import time
+import urllib.error
+import urllib.request
 
 import serial
 
@@ -103,6 +108,7 @@ class BridgeTransport:
     """ESP32 WiFi bridge (raw TCP, port 3333)."""
 
     def __init__(self, host, port=3333):
+        self.host = host
         self.sock = socket.create_connection((host, port), timeout=3)
         self.sock.settimeout(0.1)
 
@@ -128,11 +134,34 @@ class BridgeTransport:
                 pass
         return buf.split(TERM)[0].decode(errors="replace")
 
-    def send_binary(self, cmd, payload, timeout=15.0):
-        raise BinaryTransferError(
-            "binary PlaySound transfer needs direct USB; the ESP32 line bridge "
-            "does not expose a raw byte tunnel yet"
-        )
+    def send_binary(self, cmd, payload, timeout=90.0):
+        """Relay a binary transaction through the ESP32's HTTP endpoints.
+
+        The ESP32 firmware runs the actual ENQ/checksum/ACK exchange on its
+        USB link (POST /soundbank -> ``Upload sound``).  The SHA-256 header
+        lets the firmware verify the staged bytes before touching the robot.
+        """
+        payload = bytes(payload)
+        if cmd != "Upload sound":
+            raise BinaryTransferError(
+                f"the ESP32 bridge only relays sound-bank uploads, not {cmd!r}")
+        req = urllib.request.Request(
+            f"http://{self.host}/soundbank",
+            data=payload,
+            headers={"Content-Type": "application/octet-stream",
+                     "X-Bank-SHA256": hashlib.sha256(payload).hexdigest()})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                reply = resp.read().decode(errors="replace").strip()
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace").strip()
+            raise BinaryTransferError(
+                detail or f"ESP32 sound-bank relay returned HTTP {exc.code}")
+        except OSError as exc:
+            raise BinaryTransferError(f"ESP32 sound-bank relay unreachable: {exc}")
+        if reply != "OK":
+            raise BinaryTransferError(f"unexpected ESP32 relay reply: {reply or 'empty'}")
+        return ACK + TERM
 
     def close(self):
         self.sock.close()

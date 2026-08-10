@@ -115,7 +115,7 @@ static esp_err_t wait_binary_event(uint8_t expected, uint32_t timeout_ms)
 esp_err_t neato_send_binary(const char *cmd, const uint8_t *payload,
                             size_t payload_len, uint32_t timeout_ms)
 {
-    if (!cmd || !payload || payload_len == 0 || payload_len > NEATO_MAX_WAV_BYTES)
+    if (!cmd || !payload || payload_len == 0 || payload_len > NEATO_MAX_BINARY_BYTES)
         return ESP_ERR_INVALID_ARG;
     if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(2000)) != pdTRUE)
         return ESP_ERR_TIMEOUT;

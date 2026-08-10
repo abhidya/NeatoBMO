@@ -13,6 +13,8 @@ Open http://localhost:8485 in Chrome (mic needs Chrome/Edge).
 import hashlib
 import json
 import os
+import subprocess
+import tempfile
 import threading
 import time
 import urllib.error
@@ -65,21 +67,50 @@ SOUND_BANK_PROFILES = {
 }
 installed_sound_profile = "bmo"
 
-# ---- guarded TTS-to-sound-bank speech ------------------------------------
-# One job at a time.  A job is previewed (bank built + validated, no robot
-# contact), then optionally burned after the exact typed confirmation, spoken
-# with duration pacing, and restored back to the persistent BMO bank.
+# ---- automatic TTS-to-sound-bank speech ----------------------------------
+# Type text -> robot talks.  Long text is packed into ~17 s banks at sentence
+# boundaries and burned+spoken chunk by chunk; the last bank stays installed
+# (persistent mode — no restore write per utterance).  Validation still gates
+# every burn internally, robot access serializes through rlock, and the BMO
+# bank is one click away.  espeak parameters mirror bmo_brain_server defaults
+# so the voice is identical whether Colibri answers or the local fallback runs.
 TTS_VOICES = {
-    "en+f4": "espeak-ng en+f4 (BMO default)",
-    "en+f2": "espeak-ng en+f2",
-    "en+m3": "espeak-ng en+m3",
-    "en+m1": "espeak-ng en+m1",
-    "en": "espeak-ng en",
+    "en+f4": "BMO (en+f4)",
+    "en+f2": "en+f2",
+    "en+m3": "en+m3",
+    "en+m1": "en+m1",
+    "en": "en",
 }
-TTS_ACTIVE_STATES = {"burning", "speaking", "restoring"}
+TTS_SPEED = 160
+TTS_PITCH = 70
+TTS_ACTIVE_STATES = {"synthesizing", "building", "burning", "speaking", "restoring"}
 TTS_LOG_PATH = REPO_ROOT / "logs" / "tts-bank-operations.jsonl"
 tts_job = None
 tts_job_lock = threading.Lock()
+
+
+def synthesize_tts(text, voice="en+f4"):
+    """Colibri when it answers; otherwise the same engine run locally.
+
+    Both paths are espeak-ng with identical voice/speed/pitch, so BMO sounds
+    the same regardless of which one produced the WAV.
+    """
+    try:
+        return colibri_tts(text, voice)
+    except (urllib.error.URLError, OSError, RuntimeError):
+        pass
+    with tempfile.NamedTemporaryFile(suffix=".wav") as handle:
+        proc = subprocess.run(
+            ["espeak-ng", "-v", voice, "-s", str(TTS_SPEED),
+             "-p", str(TTS_PITCH), "-w", handle.name, text],
+            capture_output=True, timeout=30)
+        if proc.returncode:
+            raise RuntimeError(proc.stderr.decode(errors="replace").strip()
+                               or "local espeak-ng failed")
+        wav = Path(handle.name).read_bytes()
+    if not wav.startswith(b"RIFF"):
+        raise RuntimeError("local espeak-ng did not produce a WAV")
+    return wav
 
 
 def tts_log(job, message):
@@ -99,102 +130,92 @@ def tts_active():
 
 def tts_status_payload():
     if tts_job is None:
-        return {"state": "idle", "voices": TTS_VOICES}
+        return {"state": "idle", "voices": TTS_VOICES,
+                "installed_profile": installed_sound_profile}
     job = tts_job
+    progress = job["progress"].snapshot()
     return {
         "id": job["id"],
         "state": job["state"],
         "text": job["text"],
         "voice": job["voice"],
-        "unused_slots": job["unused_slots"],
-        "sha256": job["sha256"],
-        "required_confirmation": tts_bank.required_confirmation(job["sha256"]),
-        "speech_seconds": job["speech_seconds"],
-        "capacity_seconds": job["capacity_seconds"],
-        "auto_restore": job["auto_restore"],
-        "manifest": job["manifest"],
-        "validation": job["validation"],
-        "segments": [{
-            "index": seg.index, "sound_id": seg.sound_id,
-            "text_fragment": seg.text_fragment,
-            "content_seconds": seg.content_seconds,
-            "slot_seconds": seg.slot_seconds,
-            "padding_seconds": seg.padding_seconds,
-        } for seg in job["segments"]],
-        "progress": job["progress"].snapshot(),
-        "temporary_bank_installed": job["state"] in ("temporary-installed",)
-            or (job["state"] == "error" and job.get("burned") and not job.get("restored")),
+        "chunks": job.get("chunk_summaries", []),
+        "progress": progress,
+        "installed_profile": installed_sound_profile,
+        "installed_bank_sha256": job.get("installed_sha"),
         "error": job.get("error"),
-        "report": job.get("report"),
         "log": job["log"][-40:],
         "voices": TTS_VOICES,
     }
 
 
-def tts_build_preview(text, voice, unused_slots):
-    """Text -> validated temporary bank.  Pure local work; no robot contact."""
-    baseline_path = SOUND_BANK_PROFILES["bmo"]["path"]
-    baseline = baseline_path.read_bytes()
-    if hashlib.sha256(baseline).hexdigest() != tts_bank.BMO_BANK_SHA256:
-        raise RuntimeError("persistent BMO artifact hash mismatch; refusing to build")
+def tts_capacities(baseline):
     records = {r.sound_id: r for r in tts_bank.record_ranges_from_bytes(baseline)}
-    capacities = [(sid, records[sid].sample_count) for sid in tts_bank.SLOT_SEQUENCE]
-    wav = colibri_tts(text, voice)
-    samples = tts_bank.prepare_speech_pcm(wav)
-    segments = tts_bank.plan_segments(samples, capacities)
-    tts_bank.attach_text_fragments(segments, text)
-    built, manifest = tts_bank.build_tts_bank(baseline, segments, unused_slots)
-    validation = tts_bank.validate_tts_bank(baseline, built, segments, unused_slots)
+    return [(sid, records[sid].sample_count) for sid in tts_bank.SLOT_SEQUENCE]
+
+
+def tts_run_speak(job):
+    """Background thread: synthesize -> chunk -> burn+speak each chunk.
+
+    The finished bank persists; BMO restore is an explicit action.
+    """
+    global installed_sound_profile
+    try:
+        baseline = SOUND_BANK_PROFILES["bmo"]["path"].read_bytes()
+        if hashlib.sha256(baseline).hexdigest() != tts_bank.BMO_BANK_SHA256:
+            raise RuntimeError("persistent BMO artifact hash mismatch; refusing")
+        capacities = tts_capacities(baseline)
+        job["state"] = "synthesizing"
+        synth = lambda t: tts_bank.prepare_speech_pcm(synthesize_tts(t, job["voice"]))
+        chunks = tts_bank.plan_speech_chunks(job["text"], synth, capacities)
+        job["chunk_summaries"] = [{
+            "index": i, "text": c["text"],
+            "seconds": round(len(c["samples"]) / tts_bank.PCM_SAMPLE_RATE, 3),
+            "segments": len(c["segments"]),
+        } for i, c in enumerate(chunks)]
+        tts_log(job, f"planned {len(chunks)} chunk(s) for "
+                     f"{sum(s['seconds'] for s in job['chunk_summaries']):.1f}s of speech")
+        burner = tts_bank.BankBurner(robot, log=lambda m: tts_log(job, m))
+        with rlock:
+            report = tts_bank.speak_chunks_operation(
+                burner, baseline, chunks, "silence",
+                progress=job["progress"], stop_event=job["stop"])
+        job["report"] = report
+        job["installed_sha"] = report.get("installed_bank_sha256")
+        if job["installed_sha"]:
+            installed_sound_profile = "tts"
+        job["state"] = job["progress"].state
+        tts_log(job, f"speech finished: state={job['state']}")
+    except Exception as exc:
+        job["error"] = str(exc)
+        job["state"] = "error"
+        tts_log(job, f"speech failed: {exc}")
+
+
+def tts_start_speak(text, voice):
+    """Create and launch a speech job; returns (job, error)."""
+    global tts_job
+    if robot is None:
+        return None, "body not attached"
+    if tts_active():
+        return None, "already speaking; stop first or wait"
     job = {
-        "id": f"tts-{int(time.time())}-{validation['sha256'][:8]}",
-        "created": time.time(),
-        "state": "previewed",
+        "id": f"tts-{int(time.time())}",
+        "state": "synthesizing",
         "text": text,
         "voice": voice,
-        "unused_slots": unused_slots,
-        "bank": built,
-        "sha256": validation["sha256"],
-        "speech_seconds": round(len(samples) / tts_bank.PCM_SAMPLE_RATE, 3),
-        "capacity_seconds": round(sum(c for _, c in capacities)
-                                  / tts_bank.PCM_SAMPLE_RATE, 3),
-        "segments": segments,
-        "manifest": manifest,
-        "validation": validation,
-        "auto_restore": True,
         "progress": tts_bank.PlaybackProgress(),
         "stop": threading.Event(),
         "log": [],
     }
-    tts_log(job, f"preview built: voice={voice} speech={job['speech_seconds']}s "
-                 f"segments={len(segments)} sha256={job['sha256']} "
-                 f"validation_ok={validation['ok']}")
-    return job
-
-
-def tts_run_operation(job):
-    """Background thread: burn -> paced speech -> (auto) BMO restore."""
-    burner = tts_bank.BankBurner(robot, log=lambda m: tts_log(job, m))
-    bmo_path = SOUND_BANK_PROFILES["bmo"]["path"]
-    try:
-        with rlock:
-            job["state"] = "burning"
-            job["burned"] = True
-            report = tts_bank.run_speech_operation(
-                burner, job["bank"], job["sha256"], job["segments"],
-                bmo_path, tts_bank.BMO_BANK_SHA256,
-                auto_restore=job["auto_restore"],
-                progress=job["progress"], stop_event=job["stop"])
-        job["report"] = report
-        job["restored"] = not report.get("temporary_bank_installed", True)
-        job["state"] = job["progress"].state
-        tts_log(job, f"operation finished: state={job['state']}")
-    except Exception as exc:
-        job["error"] = str(exc)
-        job["state"] = "error"
-        tts_log(job, f"operation failed: {exc}")
+    tts_job = job
+    tts_log(job, f"speak: voice={voice} text={text!r}")
+    threading.Thread(target=tts_run_speak, args=(job,), daemon=True).start()
+    return job, None
 
 
 def tts_run_restore(job):
+    global installed_sound_profile
     burner = tts_bank.BankBurner(robot, log=lambda m: tts_log(job, m))
     try:
         with rlock:
@@ -202,13 +223,14 @@ def tts_run_restore(job):
             result = burner.restore_bank(
                 SOUND_BANK_PROFILES["bmo"]["path"],
                 tts_bank.BMO_BANK_SHA256, "persistent BMO bank")
-        job["restored"] = True
+        installed_sound_profile = "bmo"
+        job["installed_sha"] = None
         job["state"] = "restored"
-        tts_log(job, f"explicit BMO restore verified: {result['accepted_ids']}")
+        tts_log(job, f"BMO restore verified: {result['accepted_ids']}")
     except Exception as exc:
         job["error"] = str(exc)
         job["state"] = "error"
-        tts_log(job, f"explicit BMO restore failed: {exc}")
+        tts_log(job, f"BMO restore failed: {exc}")
 
 
 def sound_bank_profiles():
@@ -386,14 +408,14 @@ PAGE = """<!doctype html>
 </div>
 <div class="pane on" id="p-chat">
 <div id="face">🤖</div>
-<div id="status">BMO · TTS: Colibri · voice: ESP32 USB → PlaySound File</div>
+<div id="status">BMO · voice: espeak-ng → sound-bank speech</div>
 <div id="log"></div>
 <div id="bar">
   <button id="mic" title="hold to talk">🎤</button>
   <select id="voice" class="mini" title="where BMO's voice plays">
    <option value="off">🔇 muted</option>
    <option value="local">🔊 this device</option>
-   <option value="robot" title="needs the ESP32 body board + voice firmware patch">🤖 robot</option>
+   <option value="robot" title="BMO speaks replies out loud through the sound bank">🤖 robot</option>
   </select>
   <input id="txt" placeholder="say something to BMO…">
   <button id="sendbtn" onclick="sendTxt()">➤</button>
@@ -415,41 +437,27 @@ PAGE = """<!doctype html>
  <div id="soundgrid"></div>
 </div>
 <div class="pane" id="p-tts" style="overflow-y:auto">
- <div class="card"><b>TTS Bank — speak arbitrary text through the sound flash</b><br>
-  <span class="soundmeta">⚠️ Every utterance performs <b>two full flash writes</b>
-  (temporary speech bank + BMO restore) and consumes flash endurance. Use sparingly.</span><br>
-  <textarea id="ttstext" rows="3" placeholder="what should BMO say? (max ≈17.3 s of speech)"
-   style="width:100%;box-sizing:border-box;margin:6px 0;padding:8px;border-radius:10px;border:1px solid #2c6b5f;background:#0e3b35;color:#e8f6ef;font-size:15px"></textarea>
-  <select id="ttsvoice" class="mini"></select>
-  <select id="ttsunused" class="mini" title="what unused slots contain in the temporary bank">
-   <option value="silence">unused slots: silence</option>
-   <option value="keep">unused slots: keep BMO audio</option>
-  </select>
-  <button class="mini" onclick="ttsPreview()">Generate Preview</button>
+ <div class="card"><b>🗣 BMO speaks</b><br>
+  <span class="soundmeta">Type anything and BMO says it out loud. Long text is split at
+  sentence boundaries into ≈17 s chunks and spoken back to back — each chunk is one
+  sound-flash write, and the speech stays installed until you bring the BMO sounds back.</span>
+  <textarea id="ttstext" rows="3" placeholder="what should BMO say?"
+   style="width:100%;box-sizing:border-box;margin:8px 0;padding:10px;border-radius:10px;border:1px solid #2c6b5f;background:#0e3b35;color:#e8f6ef;font-size:16px"></textarea>
+  <div style="display:flex;gap:8px;align-items:center">
+   <select id="ttsvoice" class="mini"></select>
+   <button onclick="ttsSpeak()" style="flex:1">🗣 Speak</button>
+   <button class="mini" onclick="ttsStop()">■ Stop</button>
+  </div>
   <div id="ttsprevmsg" class="soundmeta"></div>
  </div>
- <div class="card" id="ttspreview" style="display:none">
-  <b>Preview</b> <span id="ttssummary" class="soundmeta"></span><br>
-  stitched speech: <audio id="ttsstitched" controls style="width:100%;margin:4px 0"></audio>
-  <div id="ttsslots"></div>
-  <div id="ttsvalidation" class="soundmeta"></div>
-  <div class="soundmeta">bank SHA-256: <span id="ttssha" style="word-break:break-all"></span></div>
-  <input id="ttsconfirm" placeholder="type BURN TTS &lt;sha256&gt;"
-   style="width:100%;box-sizing:border-box;margin:6px 0;padding:7px;border-radius:8px;border:1px solid #2c6b5f;background:#0e3b35;color:#e8f6ef;font:12px ui-monospace,monospace">
-  <label class="soundmeta"><input type="checkbox" id="ttsauto" checked>
-   automatically restore the BMO bank after speaking (recommended)</label><br>
-  <button class="mini" onclick="ttsBurn()">🔥 Burn and Speak</button>
-  <button class="mini" onclick="ttsStop()">■ Stop</button>
- </div>
  <div class="card">
-  <b>Recovery</b><br>
-  <span id="ttsprogress" class="soundmeta"></span>
-  <div id="ttswarn" style="display:none;color:#e5c07b;font-weight:700;margin:6px 0">
-   ⚠️ temporary TTS bank is still installed — restore BMO!</div>
-  <button class="mini" onclick="ttsRestore()">Restore BMO bank</button>
-  <span class="soundmeta">Original emergency bank: use the Sounds tab installer
-   (type RESTORE ORIGINAL) — manual fallback only.</span>
-  <pre id="ttsoplog" style="max-height:180px;overflow-y:auto;font:11px ui-monospace,monospace;white-space:pre-wrap;word-break:break-all"></pre>
+  <div id="ttsprogress" class="soundmeta">no speech yet</div>
+  <div id="ttschunks" class="soundmeta"></div>
+  <div style="margin-top:8px">
+   <button class="mini" onclick="ttsRestore()">🎵 Bring back BMO sounds</button>
+   <span class="soundmeta" id="ttsbank"></span>
+  </div>
+  <pre id="ttsoplog" style="max-height:160px;overflow-y:auto;font:11px ui-monospace,monospace;white-space:pre-wrap;word-break:break-all"></pre>
  </div>
 </div>
 <div class="pane" id="p-console">
@@ -507,7 +515,7 @@ function show(p){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle
 const log=document.getElementById('log'),face=document.getElementById('face');
 function add(cls,text){const d=document.createElement('div');d.className='msg '+cls;
  d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;}
-const STATUS_DEFAULT='BMO · TTS: Colibri · voice: ESP32 USB → PlaySound File';
+const STATUS_DEFAULT='BMO · voice: espeak-ng → sound-bank speech';
 // voice output selector (persisted)
 const voiceSel=document.getElementById('voice');
 try{voiceSel.value=localStorage.getItem('bmoVoice')||'local';}catch(e){voiceSel.value='local';}
@@ -534,12 +542,13 @@ async function send(text){
  const tick=setInterval(()=>{st.textContent='thinking… '+Math.floor((Date.now()-t0)/1000)+'s';},1000);
  add('you',text);face.textContent='🤔';
  try{
-  const r=await fetch('/chat',{method:'POST',body:JSON.stringify({text})});
+  const r=await fetch('/chat',{method:'POST',body:JSON.stringify({text,
+   speak:voiceSel.value==='robot'})});
   const j=await r.json();
   clearInterval(tick);
   face.textContent='😊';add('bmo',j.reply);
   st.textContent=j.voice_error
-   ? 'BMO · voice firmware patch still needed: '+j.voice_error
+   ? 'BMO · robot voice: '+j.voice_error
    : STATUS_DEFAULT;
   try{if(facesOpen())previewOnly(j.reply);}catch(e){}
   if(voiceSel.value==='local')speakLocal(j.reply);
@@ -722,9 +731,13 @@ function playEmote(text){
  previewOnly(text);}
 function playEmoteInput(){playEmote(document.getElementById('etxt').value);}
 document.getElementById('etxt').addEventListener('keydown',e=>{if(e.key==='Enter')playEmoteInput();});
-// ---- TTS bank panel ----
+// ---- BMO speaks (automatic TTS bank) ----
 let ttsTimer=null,ttsVoicesLoaded=false;
-const ttsActiveStates=['burning','speaking','restoring'];
+const ttsActiveStates=['synthesizing','building','burning','speaking','restoring'];
+const ttsStateLabels={synthesizing:'🎙 synthesizing…',building:'🧱 preparing sound bank…',
+ burning:'🔥 flashing chunk…',speaking:'🗣 speaking',restoring:'🎵 bringing BMO sounds back…',
+ spoken:'✅ done speaking',stopped:'■ stopped',restored:'🎵 BMO sounds are back',
+ error:'❌ error'};
 function ttsRenderVoices(voices){
  if(ttsVoicesLoaded||!voices)return;ttsVoicesLoaded=true;
  const sel=document.getElementById('ttsvoice');sel.innerHTML='';
@@ -732,77 +745,50 @@ function ttsRenderVoices(voices){
   o.value=v;o.textContent=label;sel.appendChild(o);}}
 function ttsRender(j){
  ttsRenderVoices(j.voices);
- const prog=document.getElementById('ttsprogress'),warn=document.getElementById('ttswarn'),
-       oplog=document.getElementById('ttsoplog');
- if(j.state==='idle'){prog.textContent='no TTS job yet';warn.style.display='none';return;}
+ const prog=document.getElementById('ttsprogress'),oplog=document.getElementById('ttsoplog'),
+       chunks=document.getElementById('ttschunks'),bank=document.getElementById('ttsbank');
+ bank.textContent=j.installed_profile==='tts'
+  ?'speech is installed in the sound flash — BMO chirps are paused'
+  :'BMO sounds are installed';
+ if(j.state==='idle'){prog.textContent='no speech yet';return;}
  const p=j.progress||{};
- let line=`state: ${j.state}`;
+ let line=ttsStateLabels[j.state]||j.state;
+ if(p.total_chunks>1&&p.chunk_index!=null)line+=` · chunk ${p.chunk_index+1}/${p.total_chunks}`;
  if(j.state==='speaking'&&p.segment_index!=null)
-  line+=` · segment ${p.segment_index+1}/${p.total_segments} · slot ${p.current_slot}`+
-   ` · elapsed ${p.elapsed_seconds}s · ${p.remaining_segments} left`;
- if(p.stopped)line+=' · stopped';
- if(j.error)line+=` · error: ${j.error}`;
+  line+=` · part ${p.segment_index+1}/${p.total_segments}`;
+ if(j.error)line+=` — ${j.error}`;
  prog.textContent=line;
- warn.style.display=j.temporary_bank_installed?'block':'none';
+ chunks.innerHTML='';
+ (j.chunks||[]).forEach(c=>{const d=document.createElement('div');
+  const now=p.chunk_index===c.index&&ttsActiveStates.includes(j.state);
+  d.textContent=`${now?'▶':'·'} “${c.text}” (${c.seconds.toFixed(1)}s, ${c.segments} slots)`;
+  if(now)d.style.color='#7ce0c5';
+  chunks.appendChild(d);});
  oplog.textContent=(j.log||[]).map(e=>new Date(e.ts*1000).toLocaleTimeString()+' '+e.message).join('\\n');
  oplog.scrollTop=oplog.scrollHeight;
- if(j.sha256){
-  document.getElementById('ttspreview').style.display='block';
-  document.getElementById('ttssha').textContent=j.sha256;
-  document.getElementById('ttsconfirm').placeholder=j.required_confirmation;
-  document.getElementById('ttssummary').textContent=
-   `“${j.text}” · ${j.voice} · ${j.speech_seconds}s of ${j.capacity_seconds}s capacity`+
-   ` · ${j.segments.length} segments · unused: ${j.unused_slots}`;
-  document.getElementById('ttsstitched').src='/tts-bank/wav?stitched=1&sha='+j.sha256;
-  const slots=document.getElementById('ttsslots');slots.innerHTML='';
-  const tbl=document.createElement('table');tbl.style.width='100%';tbl.style.fontSize='12px';
-  tbl.innerHTML='<tr style="opacity:.7"><td>#</td><td>slot</td><td>fragment</td>'+
-   '<td>content</td><td>slot len</td><td>pad</td><td>preview</td></tr>';
-  j.segments.forEach(s=>{const tr=document.createElement('tr');
-   tr.innerHTML=`<td>${s.index}</td><td>${s.sound_id}</td><td>${s.text_fragment}</td>`+
-    `<td>${s.content_seconds.toFixed(3)}s</td><td>${s.slot_seconds.toFixed(3)}s</td>`+
-    `<td>${s.padding_seconds.toFixed(3)}s</td>`;
-   const td=document.createElement('td'),a=document.createElement('audio');
-   a.controls=true;a.style.width='120px';a.src='/tts-bank/wav?seg='+s.index+'&sha='+j.sha256;
-   td.appendChild(a);tr.appendChild(td);tbl.appendChild(tr);});
-  slots.appendChild(tbl);
-  const v=j.validation||{checks:[]},bad=v.checks.filter(c=>!c.ok);
-  document.getElementById('ttsvalidation').innerHTML=v.ok
-   ?`✅ validation passed (${v.checks.length} checks) · checksum ${v.transport_additive_checksum_hex}`
-   :`❌ validation FAILED: ${bad.map(c=>c.check).join(', ')} — burn is blocked`;
- }
- if(ttsActiveStates.includes(j.state)){if(!ttsTimer)ttsTimer=setInterval(ttsPoll,1000);}
+ if(ttsActiveStates.includes(j.state)){if(!ttsTimer)ttsTimer=setInterval(ttsPoll,700);}
  else if(ttsTimer){clearInterval(ttsTimer);ttsTimer=null;}}
 async function ttsPoll(){
  try{ttsRender(await(await fetch('/tts-bank/status')).json());}catch(e){}}
-async function ttsPreview(){
+async function ttsSpeak(){
  const msg=document.getElementById('ttsprevmsg');
  const text=document.getElementById('ttstext').value.trim();
- if(!text){msg.textContent='enter some text first';return;}
- msg.textContent='synthesizing, splitting, building and validating the temporary bank…';
- try{const r=await fetch('/tts-bank/preview',{method:'POST',body:JSON.stringify({
-   text,voice:document.getElementById('ttsvoice').value,
-   unused_slots:document.getElementById('ttsunused').value})});
+ if(!text){msg.textContent='type something first';return;}
+ msg.textContent='';
+ try{const r=await fetch('/tts-bank/speak',{method:'POST',body:JSON.stringify({
+   text,voice:document.getElementById('ttsvoice').value})});
   const j=await r.json();
-  if(j.error){msg.textContent='preview failed: '+j.error;return;}
-  msg.textContent='preview ready — listen below, then type the burn confirmation.';
-  document.getElementById('ttsconfirm').value='';ttsRender(j);
- }catch(e){msg.textContent='preview request failed: '+e;}}
-async function ttsBurn(){
- const msg=document.getElementById('ttsprevmsg');
- try{const r=await fetch('/tts-bank/burn',{method:'POST',body:JSON.stringify({
-   confirmation:document.getElementById('ttsconfirm').value.trim(),
-   auto_restore:document.getElementById('ttsauto').checked})});
-  const j=await r.json();
-  if(j.error){msg.textContent='burn blocked: '+j.error;return;}
-  msg.textContent='burning… keep the robot powered and connected.';ttsPoll();
- }catch(e){msg.textContent='burn request failed: '+e;}}
+  if(j.error){msg.textContent=j.error;return;}
+  ttsPoll();
+ }catch(e){msg.textContent='request failed: '+e;}}
 async function ttsStop(){try{await fetch('/tts-bank/stop',{method:'POST',body:'{}'});ttsPoll();}catch(e){}}
 async function ttsRestore(){
  const msg=document.getElementById('ttsprevmsg');
  try{const j=await(await fetch('/tts-bank/restore',{method:'POST',body:'{}'})).json();
-  msg.textContent=j.error?('restore blocked: '+j.error):'restoring the BMO bank…';ttsPoll();
- }catch(e){msg.textContent='restore request failed: '+e;}}
+  msg.textContent=j.error||'';ttsPoll();
+ }catch(e){msg.textContent='request failed: '+e;}}
+document.getElementById('ttstext').addEventListener('keydown',e=>{
+ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ttsSpeak();}});
 </script>
 """
 
@@ -835,20 +821,6 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/tts-bank/status":
             with tts_job_lock:
                 return self._json(tts_status_payload())
-        if self.path.startswith("/tts-bank/wav?"):
-            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            with tts_job_lock:
-                if tts_job is None:
-                    return self._json({"error": "no TTS preview available"})
-                if query.get("stitched", ["0"])[0] == "1":
-                    pcm = tts_bank.stitch_segments(tts_job["segments"])
-                else:
-                    try:
-                        index = int(query.get("seg", ["-1"])[0])
-                        pcm = tts_job["segments"][index].pcm
-                    except (ValueError, IndexError):
-                        return self._json({"error": "unknown preview segment"})
-                return self._reply(tts_bank.pcm_to_wav_bytes(pcm), "audio/wav")
         if self.path == "/sounds":
             slots = [{"id": sound_id, **metadata}
                      for sound_id, metadata in sorted(BMO_SOUND_SLOTS.items())]
@@ -882,6 +854,7 @@ class Handler(BaseHTTPRequestHandler):
         self._reply(PAGE.replace("__ESP32__", ESP32).encode(), "text/html")
 
     def do_POST(self):
+        global tts_job, installed_sound_profile
         n = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(n)
         if self.path == "/cmd":
@@ -917,46 +890,20 @@ class Handler(BaseHTTPRequestHandler):
                                    "replies": replies, "delays_seconds": delays})
             except Exception as e:
                 return self._json({"error": str(e)})
-        if self.path == "/tts-bank/preview":
-            global tts_job
+        if self.path == "/tts-bank/speak":
             request = json.loads(raw)
             text = request.get("text", "").strip()
             voice = request.get("voice", "en+f4")
-            unused_slots = request.get("unused_slots", "silence")
             if not text:
                 return self._json({"error": "empty text"})
             if voice not in TTS_VOICES:
                 return self._json({"error": "unknown TTS voice"})
-            if unused_slots not in ("silence", "keep"):
-                return self._json({"error": "unused_slots must be silence or keep"})
             with tts_job_lock:
-                if tts_active():
-                    return self._json({"error": "a TTS bank operation is already running"})
-                try:
-                    tts_job = tts_build_preview(text, voice, unused_slots)
-                except Exception as exc:
-                    return self._json({"error": str(exc)})
-                return self._json(tts_status_payload())
-        if self.path == "/tts-bank/burn":
-            request = json.loads(raw)
-            with tts_job_lock:
-                job = tts_job
-                if job is None or job["state"] != "previewed":
-                    return self._json({"error": "no previewed TTS bank; generate a preview first"})
-                if not job["validation"]["ok"]:
-                    return self._json({"error": "refusing to burn: validation failed"})
-                required = tts_bank.required_confirmation(job["sha256"])
-                if request.get("confirmation", "") != required:
-                    return self._json({"error": f"type exactly: {required}"})
-                if robot is None:
-                    return self._json({"error": "body not attached"})
-                job["auto_restore"] = bool(request.get("auto_restore", True))
-                job["state"] = "burning"
-                tts_log(job, f"burn confirmed (auto_restore={job['auto_restore']}); "
-                             "two full flash writes ahead")
-                threading.Thread(target=tts_run_operation, args=(job,),
-                                 daemon=True).start()
-                return self._json({"ok": True, "state": "burning"})
+                job, error = tts_start_speak(text, voice)
+                if error:
+                    return self._json({"error": error})
+                return self._json({"ok": True, "id": job["id"],
+                                   "state": job["state"]})
         if self.path == "/tts-bank/stop":
             with tts_job_lock:
                 if tts_job is None:
@@ -966,19 +913,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
         if self.path == "/tts-bank/restore":
             with tts_job_lock:
-                job = tts_job
-                if job is None:
-                    return self._json({"error": "no TTS job"})
-                if job["state"] in TTS_ACTIVE_STATES:
+                if tts_active():
                     return self._json({"error": "operation still running"})
                 if robot is None:
                     return self._json({"error": "body not attached"})
+                if tts_job is None:
+                    tts_job = {"id": f"restore-{int(time.time())}",
+                               "state": "restoring", "text": "", "voice": "",
+                               "progress": tts_bank.PlaybackProgress(),
+                               "stop": threading.Event(), "log": []}
+                job = tts_job
                 job["state"] = "restoring"
                 threading.Thread(target=tts_run_restore, args=(job,),
                                  daemon=True).start()
                 return self._json({"ok": True, "state": "restoring"})
         if self.path == "/sound-bank-install":
-            global installed_sound_profile
             request = json.loads(raw)
             if tts_active():
                 return self._json({"error": "a TTS bank operation is running"})
@@ -1049,7 +998,9 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._json({"error": str(e)})
         # /chat
-        text = json.loads(raw).get("text", "")
+        chat_request = json.loads(raw)
+        text = chat_request.get("text", "")
+        speak_on_robot = bool(chat_request.get("speak"))
         body(lambda: (robot.led("amber"), faces.scanline(robot, range(20, 110, 30), 0.08)))
         try:
             reply = brain_chat(text)
@@ -1057,17 +1008,17 @@ class Handler(BaseHTTPRequestHandler):
             reply = None
             err = str(e)
         if reply:
-            body(lambda: (robot.led("green"), robot.play(chirp_for(reply)),
-                          faces.blink(robot, 2, 0.1)))
             emote_react(reply)
             voice_error = None
-            try:
-                wav = colibri_tts(reply)
-                esp32_play_wav(wav)
-            except Exception as ex:
-                voice_error = str(ex)
-                print("PlaySound File failed:", ex)
-            out = {"reply": reply, "spoke": voice_error is None}
+            if speak_on_robot:
+                # BMO's actual voice: the reply is flashed into the sound
+                # bank and spoken (skip the chirp so speech starts clean).
+                with tts_job_lock:
+                    _, voice_error = tts_start_speak(reply, "en+f4")
+            else:
+                body(lambda: (robot.led("green"), robot.play(chirp_for(reply)),
+                              faces.blink(robot, 2, 0.1)))
+            out = {"reply": reply, "spoke": speak_on_robot and voice_error is None}
             if voice_error:
                 out["voice_error"] = voice_error
         else:
@@ -1088,8 +1039,15 @@ if __name__ == "__main__":
         robot.led("backlight_on")
         robot.play("hello")
         print("body: connected over USB")
-    except Exception as e:
-        robot = None
-        print("body: not attached —", e)
+    except Exception as usb_error:
+        try:
+            bridge_host = urllib.parse.urlparse(ESP32).hostname
+            robot = Robot(bridge_host)
+            if "Software" not in robot.cmd("GetVersion", timeout=5):
+                raise RuntimeError("bridge reachable but robot did not answer")
+            print(f"body: connected via ESP32 bridge at {bridge_host}")
+        except Exception as bridge_error:
+            robot = None
+            print("body: not attached — usb:", usb_error, "| bridge:", bridge_error)
     print(f"BMO voice console: http://localhost:{PORT}")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
