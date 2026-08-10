@@ -28,7 +28,7 @@ class TestSloppyModelOutput(unittest.TestCase):
         p = cues.parse("*wiggles* I love you!! *happy*")
         self.assertIn(("move", "wiggle"), p.steps)
         self.assertIn(("face", "happy"), p.steps)
-        self.assertEqual(p.speech, "I love you!!")
+        self.assertEqual(p.speech, "I love you!")   # punctuation runs collapse
 
     def test_fuzzy_and_alias_names(self):
         p = cues.parse("[laughs] That tickles! [dancing]")
@@ -117,6 +117,41 @@ class TestFallbacksAndCaps(unittest.TestCase):
     def test_distinct_faces_do_not_collapse(self):
         p = cues.parse("[happy] [sad] mood swings")
         self.assertEqual(p.steps, [("face", "happy"), ("face", "sad")])
+
+
+class TestCondense(unittest.TestCase):
+    def test_long_speech_trims_to_burst(self):
+        p = cues.condense(cues.parse(
+            "Oh I am so happy you are home again my friend! [happy] [sound:yeah]"))
+        self.assertLessEqual(len(p.speech.split()), 4)
+        self.assertTrue(p.speech.endswith("!"))
+        self.assertIn(("sound", "yeah"), p.steps)
+
+    def test_short_speech_untouched(self):
+        p = cues.condense(cues.parse("You are back! [happy] [sound:hello]"))
+        self.assertEqual(p.speech, "You are back!")
+
+    def test_soundless_reply_gains_a_matching_soundbyte(self):
+        p = cues.condense(cues.parse("I love you so much friend! [love]"))
+        self.assertIn(("sound", cues.FACE_SOUND["love"]), p.steps)
+
+    def test_display_keeps_full_subtitles(self):
+        p = cues.condense(cues.parse(
+            "Oh I am so happy you are home again! [happy]"))
+        self.assertIn("home again", p.display)
+        self.assertNotIn("home again", p.speech)
+
+    def test_burst_scales_with_seconds(self):
+        plan = cues.parse("one two three four five six seven eight nine ten")
+        self.assertLessEqual(
+            len(cues.condense(plan, burst_seconds=1.0).speech.split()), 3)
+        self.assertGreaterEqual(
+            len(cues.condense(plan, burst_seconds=3.0).speech.split()), 7)
+
+    def test_truncated_trailing_cue_fragment_dropped(self):
+        p = cues.parse("Let us dance! [dance] [sound")
+        self.assertNotIn("sound", p.speech)
+        self.assertIn(("move", "dance"), p.steps)
 
 
 class TestVocabularyIntegrity(unittest.TestCase):

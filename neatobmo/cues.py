@@ -191,8 +191,71 @@ class Plan:
         return [s for s in self.steps if s[0] != "face"]
 
 
+# face -> the soundboard clip that carries the same feeling, used when a
+# performance needs a voice but the model gave none
+FACE_SOUND = {
+    "happy": "yeah", "laugh": "yeah", "love": "homeboys", "sad": "beep",
+    "surprised": "json", "party": "videogames", "sleepy": "beep",
+    "angry": "beep", "wink": "butt", "neutral": "hello",
+}
+
+
+# Soundbyte-first speech budget. Precedent (Anki Cozmo/Vector; the HRI
+# semantic-free-utterance literature) says expressive sounds should sit
+# ALONGSIDE a few words, not replace them, and that fluent speech inflates
+# expectations of intelligence the small brain can't meet. The installed BMO
+# clips run 0.3-2.9 s, so spoken bursts are budgeted by DURATION to blend
+# into the same performance: at espeak -s160 (~2.7 words/s), the default
+# 1.5 s burst is 4 words.
+SPEECH_WORDS_PER_SECOND = 2.7
+SPEECH_BURST_SECONDS = 1.5
+
+
+def condense(plan, max_words=None, burst_seconds=SPEECH_BURST_SECONDS):
+    """Soundbyte-first mode: cap the spoken burst, let cues do the talking.
+
+    The spoken reply is trimmed to its first ``max_words`` words — by
+    default a ``burst_seconds`` speech burst at the espeak rate — finished
+    with a '!' when the cut lands mid-sentence. The full text stays in
+    ``display`` so the chat log reads like subtitles. If the model gave no
+    soundbyte, one is chosen from the reply's leading (or mood-guessed)
+    face so the performance always has a voice.
+    """
+    if max_words is None:
+        max_words = max(1, round(SPEECH_WORDS_PER_SECOND * burst_seconds))
+    words = plan.speech.split()
+    if len(words) <= max_words:
+        speech = plan.speech
+    else:
+        # prefer whole sentences inside the budget ("Hello!" beats
+        # "Hello! Did BMO miss"); fall back to a hard cut only when the
+        # first sentence alone is over budget
+        kept, count = [], 0
+        for sent in re.split(r"(?<=[.!?])\s+", plan.speech):
+            n = len(sent.split())
+            if count + n > max_words:
+                break
+            kept.append(sent)
+            count += n
+        if kept:
+            speech = " ".join(kept)
+        else:
+            speech = " ".join(words[:max_words]).rstrip(",;:.")
+            if speech and speech[-1] not in "!?":
+                speech += "!"
+    steps = list(plan.steps)
+    if not any(k == "sound" for k, _ in steps):
+        face = (next((n for k, n in steps if k == "face"), None)
+                or _mood_face(plan.speech) or "happy")
+        steps.append(("sound", FACE_SOUND.get(face, "beep")))
+    return Plan(speech, plan.display, steps)
+
+
 def parse(text):
     """Extract stage cues from a brain reply, best-effort."""
+    # MAX_NEW truncation can shear a trailing cue in half ("... [sound");
+    # an unterminated bracket at the end is never speech — drop it
+    text = re.sub(r"[\[<{(][^\[\]<>{}()]*$", "", text).rstrip()
     steps = []
     counts = {"face": 0, "move": 0, "sound": 0}
     caps = {"face": MAX_FACES, "move": MAX_MOVES, "sound": MAX_SOUNDS}
@@ -225,6 +288,9 @@ def parse(text):
     for e in FACE_EMOJI.values():
         speech = speech.replace(e, " ")
     speech = re.sub(r"\s+([.,!?;:])", r"\1", re.sub(r" {2,}", " ", speech)).strip()
+    # cue removal can butt punctuation together ("[party]!" -> "Hello!!",
+    # "[sad]." -> "that,."): keep the first mark of any run
+    speech = re.sub(r"([.,!?;:])[.,!?;:]+", r"\1", speech)
 
     # fallback: no face cues but the model used emojis — count those as faces
     if counts["face"] == 0:

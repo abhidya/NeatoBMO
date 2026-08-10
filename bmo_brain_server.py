@@ -243,9 +243,10 @@ def main():
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--cache", type=int, default=64)
     ap.add_argument("--bits", type=int, default=8)
-    # 1-3 spoken-style sentences plus cues fit in well under 96 tokens;
-    # 300 tripled decode latency for output the persona forbids anyway.
-    ap.add_argument("--max-new", type=int, default=96)
+    # Soundbyte-first persona: a few spoken words plus 3-5 cue tokens fit
+    # comfortably in 64; longer budgets only add decode latency for text
+    # that cues.condense() will trim anyway.
+    ap.add_argument("--max-new", type=int, default=64)
     ap.add_argument("--temp", type=float, default=0.7)
     ap.add_argument("--tts-engine", default="espeak-ng")
     ap.add_argument("--tts-voice", default="en+f4")

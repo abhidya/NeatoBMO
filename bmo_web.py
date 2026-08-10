@@ -43,15 +43,25 @@ ESP32 = os.environ.get("NEATOBMO_ESP32", "http://10.0.0.106")
 # tool calling, so it acts through bracketed cues that neatobmo/cues.py
 # parses best-effort (fuzzy names, any bracket style). Emojis still work as
 # a fallback face layer, so both vocabularies are offered.
-PERSONA = ("You are BMO, a cheerful little robot buddy living inside a Neato robot "
-           "vacuum. You are playful, curious, and love your human. Keep replies to "
-           "1-3 short spoken-style sentences. Act while you talk with stage cues "
-           "in square brackets, placed right where the feeling happens. "
+PERSONA = ("You are BMO from Adventure Time: a sweet childlike robot buddy living in "
+           "a robot vacuum body. BMO talks in tiny simple words with big feelings, "
+           "and sometimes says BMO instead of I. Call the user friend, never human. "
+           "SPEAK AT MOST 3 WORDS — your soundboard, dance moves, and faces do the "
+           "real talking! "
            "Faces: " + " ".join(f"[{n}]" for n in cues.FACE_NAMES) + ". "
            "Moves: " + " ".join(f"[{n}]" for n in cues.MOVES) + ". "
            "Sounds: " + " ".join(f"[sound:{n}]" for n in cues.SOUND_CUES) + ". "
-           "Use 1-3 cues per reply. Example: \"Yay, you are back! [happy] [wiggle] "
-           "Who wants to play video games? [sound:videogames] [party]\"")
+           "Example: \"You are back! [sound:hello] [happy] [wiggle] "
+           "[sound:videogames] [party]\" "
+           "Example: \"BMO sad. [sad] [sound:beep] [look]\"")
+
+# "soundbyte" caps brain replies at a ~1.5 s spoken burst (cues.condense)
+# and lets the soundboard carry the rest; "full" speaks the whole reply.
+# Routines are hand-authored in soundbyte style, so the cap only applies to
+# the LLM. NEATOBMO_SPEECH_BURST tunes the burst length in seconds.
+SPEECH_MODE = os.environ.get("NEATOBMO_SPEECH", "soundbyte")
+SPEECH_BURST = float(os.environ.get("NEATOBMO_SPEECH_BURST",
+                                    cues.SPEECH_BURST_SECONDS))
 
 robot = None
 body_via = None  # "usb" | "bridge" | None, set at startup for the UI status pill
@@ -1381,6 +1391,8 @@ class Handler(BaseHTTPRequestHandler):
             # to the cascade (as emojis), sounds/moves to the body, clean
             # words to the voice
             plan = cues.parse(reply)
+            if routine is None and SPEECH_MODE == "soundbyte":
+                plan = cues.condense(plan, burst_seconds=SPEECH_BURST)
             emote_react(plan.display)
             if plan.actions():
                 body(lambda: (robot.led("green"),

@@ -22,7 +22,6 @@ web layer passes ``{"robot": robot}``.
     if hit:            # hit.reply is cue-annotated text, ready for cues.parse
         ...
 """
-import random
 import re
 import time
 
@@ -51,27 +50,31 @@ class Hit:
 
 def _time_reply(ctx):
     now = time.localtime()
-    return time.strftime("It is %I:%M %p right now! [happy]", now).replace(" 0", " ")
+    return time.strftime("It is %I:%M! [happy] [sound:beep]", now).replace(" 0", " ")
 
 
 def _battery_reply(ctx):
     robot = ctx.get("robot")
     if robot is None:
-        return "My body is not plugged in, so I cannot check my tummy battery! [sad]"
+        return "No tummy plugged! [sad] [sound:beep] [look]"
     try:
         pct = robot.charger().get("FuelPercent", None)
     except Exception:
         pct = None
     if pct is None:
-        return "I tried to check my battery but my tummy is not answering! [surprised]"
-    mood = "[party]" if pct > 75 else "[happy]" if pct > 35 else "[sleepy]"
-    return f"My battery is at {pct:.0f} percent! {mood}"
+        return "Tummy not answering! [surprised] [sound:json] [look]"
+    mood = "[party] [sound:yeah]" if pct > 75 else \
+        "[happy] [sound:beep]" if pct > 35 else "[sleepy] [sound:beep]"
+    return f"Battery {pct:.0f} percent! {mood}"
 
 
+# Jokes need their words; every other script is soundbyte-first: at most a
+# few spoken words, the soundboard/moves/faces carry the feeling (matches
+# the SPEAK AT MOST 3 WORDS persona so BMO sounds the same either way).
 JOKES = [
-    "Why did the robot vacuum go to therapy? It had too much baggage in the dust bin! [laugh] [sound:yeah]",
-    "What do you call a robot who takes the long way around? R 2 detour! [laugh] [wiggle]",
-    "I would tell you a joke about my vacuum, but it sucks! [laugh] [sound:butt]",
+    "Why did the vacuum go to therapy? Too much baggage! [laugh] [sound:yeah]",
+    "What is a robot's favorite snack? Micro chips! [laugh] [sound:butt] [wiggle]",
+    "BMO would tell a vacuum joke, but it sucks! [laugh] [sound:butt]",
 ]
 
 # Each routine: patterns (regex, matched on lowered text), replies (strings or
@@ -79,26 +82,26 @@ JOKES = [
 ROUTINES = [
     {"name": "greet",
      "patterns": [r"\b(hello|hi there|hiya|hey (beemo|bmo|buddy)|good morning)\b"],
-     "replies": ["Well hello there, best friend! [sound:hello] [happy] [wiggle]",
-                 "Hi hi hi! I am so glad you are here! [happy] [sound:yeah]"]},
+     "replies": ["You came back! [sound:hello] [happy] [wiggle]",
+                 "Hi hi hi! [sound:yeah] [happy] [spin]",
+                 "Hello, friend! [sound:hello] [love] [wiggle]"]},
     {"name": "who",
      "patterns": [r"\bwho are you\b", r"\bwhat are you\b", r"\byour name\b"],
-     "replies": ["I am BMO! Part game console, part vacuum, all buddy! "
-                 "[sound:bmotime] [happy] [spin]"]},
+     "replies": ["BMO is BMO! [sound:bmotime] [happy] [spin]"]},
     {"name": "dance",
      "patterns": [r"\bdance\b", r"\bbust a move\b", r"\bboogie\b"],
-     "replies": ["Watch my moves! [sound:bmotime] [dance] [party]",
-                 "Dance mode activated! [sound:videogames] [dance] [party]"]},
+     "replies": ["Watch this! [sound:bmotime] [dance] [party]",
+                 "Dance time! [sound:videogames] [dance] [party] [sound:yeah]"]},
     {"name": "spin",
      "patterns": [r"\bspin\b", r"\bturn around\b", r"\btwirl\b"],
      "replies": ["Wheee! [spin] [sound:yeah] [party]"]},
     {"name": "sing",
      "patterns": [r"\bsing\b", r"\bsong\b", r"\bmusic\b"],
-     "replies": ["This one is my favorite! [sound:videogames] [party] [wiggle]"]},
+     "replies": ["My favorite! [sound:videogames] [party] [wiggle]"]},
     {"name": "love",
      "patterns": [r"\bi love you\b", r"\bbest friend\b", r"\bmiss(ed)? you\b"],
-     "replies": ["I love you too, more than video games! [love] [sound:homeboys] [wiggle]",
-                 "You are my favorite human in the whole world! [love] [sound:yeah]"]},
+     "replies": ["Love you more! [love] [sound:homeboys] [wiggle]",
+                 "Best friends forever! [love] [sound:yeah] [spin]"]},
     {"name": "joke",
      "patterns": [r"\bjoke\b", r"\bmake me laugh\b", r"\bsomething funny\b"],
      "replies": JOKES},
@@ -110,34 +113,35 @@ ROUTINES = [
      "replies": [_battery_reply]},
     {"name": "sleep",
      "patterns": [r"\bgood ?night\b", r"\bgo to sleep\b", r"\bbed ?time\b"],
-     "replies": ["Goodnight! I will dream about electric sheep racing games. "
-                 "[sleepy] [sound:beep]"]},
+     "replies": ["Night night, friend. [sleepy] [sound:beep]"]},
     {"name": "game",
      "patterns": [r"\bplay a game\b", r"\bwanna play\b", r"\blet'?s play\b",
                   r"\bvideo ?games?\b"],
-     "replies": ["Yes yes yes! Adventure racing or dance battle? [sound:videogames] "
-                 "[party] [happy]"],
+     "replies": ["Racing or dancing? [sound:videogames] [party] [happy]"],
      "expect": "game_choice"},
     {"name": "stop",
      "patterns": [r"\bstop\b", r"\bquiet\b", r"\bhush\b", r"\bcalm down\b"],
-     "replies": ["Okay, powering down my party circuits. [neutral]"]},
+     "replies": ["Okay. Quiet mode. [neutral]"]},
 ]
 
 # follow-up handlers for armed expectations: name -> [(patterns, replies)]
 FOLLOW_UPS = {
     "game_choice": [
         ([r"\b(rac\w*|adventure|first|both)\b"],
-         ["Adventure racing! Ready, set, zoom! [sound:videogames] [spin] [party]"]),
+         ["Racing! Zoom zoom! [sound:videogames] [spin] [party]"]),
         ([r"\b(dance|battle|second)\b"],
-         ["Dance battle! Try to keep up! [sound:bmotime] [dance] [party]"]),
+         ["Dance battle! [sound:bmotime] [dance] [party]"]),
         ([r"\b(no|nah|later|not now)\b"],
-         ["Aww okay, next time then! [sad] [sound:beep]"]),
+         ["Aww okay, next time! [sad] [sound:beep]"]),
     ],
 }
 
+_rotation = {}   # routine key -> last reply index (rotate, never repeat)
 
-def _pick(replies, ctx):
-    r = random.choice(replies)
+
+def _pick(key, replies, ctx):
+    i = _rotation[key] = (_rotation.get(key, -1) + 1) % len(replies)
+    r = replies[i]
     return r(ctx) if callable(r) else r
 
 
@@ -146,16 +150,17 @@ def match(text, state=None, ctx=None):
     ctx = ctx or {}
     t = " " + re.sub(r"\s+", " ", text.strip().lower()) + " "
     if state is not None and (pending := state.pending()):
-        for patterns, replies in FOLLOW_UPS.get(pending, []):
+        for i, (patterns, replies) in enumerate(FOLLOW_UPS.get(pending, [])):
             if any(re.search(p, t) for p in patterns):
                 state.expect = None
-                return Hit(f"{pending}", _pick(replies, ctx))
+                return Hit(f"{pending}", _pick(f"{pending}:{i}", replies, ctx))
         state.expect = None      # user changed the subject; fall through
     for routine in ROUTINES:
         if any(re.search(p, t) for p in routine["patterns"]):
             if state is not None and routine.get("expect"):
                 state.arm(routine["expect"])
-            return Hit(routine["name"], _pick(routine["replies"], ctx))
+            return Hit(routine["name"],
+                       _pick(routine["name"], routine["replies"], ctx))
     return None
 
 

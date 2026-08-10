@@ -35,7 +35,7 @@ class TestIntentMatching(unittest.TestCase):
         hit = routines.match("how is your battery?", routines.ConvoState(),
                              {"robot": None})
         self.assertEqual(hit.routine, "battery")
-        self.assertIn("battery", hit.reply.lower())
+        self.assertIn("tummy", hit.reply.lower())
 
 
 class TestFollowUpStateMachine(unittest.TestCase):
