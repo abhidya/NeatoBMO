@@ -261,6 +261,48 @@ def brain_chat(text):
     return reply
 
 
+# Colibri brain auto-start: same engine/snapshot the bmo-brain launch config
+# uses.  Only attempted when BRAIN points at this machine and the engine
+# volume is mounted; chat degrades gracefully while the model loads.
+BRAIN_ENGINE = os.environ.get("NEATOBMO_BRAIN_ENGINE",
+                              "/Volumes/2TB/colibri-v1.5.0-macos-arm64/olmoe")
+BRAIN_SNAP = os.environ.get("NEATOBMO_BRAIN_SNAP", "/Volumes/2TB/models/olmoe-snap")
+
+
+def brain_listening(timeout=1.5):
+    parsed = urllib.parse.urlparse(BRAIN)
+    try:
+        import socket
+        with socket.create_connection((parsed.hostname, parsed.port or 80),
+                                      timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def ensure_brain():
+    """Start the Colibri brain server if localhost should have one but doesn't."""
+    parsed = urllib.parse.urlparse(BRAIN)
+    if parsed.hostname not in ("127.0.0.1", "localhost"):
+        return
+    if brain_listening():
+        print("brain: Colibri already running at", BRAIN)
+        return
+    if not os.path.exists(BRAIN_ENGINE):
+        print(f"brain: Colibri engine not found at {BRAIN_ENGINE} — chat uses "
+              "espeak-only fallback (mount the 2TB volume to enable OLMoE)")
+        return
+    log_path = REPO_ROOT / "logs" / "bmo-brain.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.Popen(
+        [sys.executable, str(REPO_ROOT / "bmo_brain_server.py"),
+         "--engine", BRAIN_ENGINE, "--snap", BRAIN_SNAP,
+         "--port", str(parsed.port or 8000)],
+        stdout=open(log_path, "a"), stderr=subprocess.STDOUT)
+    print(f"brain: starting Colibri (OLMoE) — log at {log_path}; "
+          "chat answers once the model finishes loading")
+
+
 def colibri_tts(text, voice="en+f4"):
     """Ask the Colibri server for the WAV that the Neato will play."""
     req = urllib.request.Request(
@@ -1058,7 +1100,7 @@ class Handler(BaseHTTPRequestHandler):
                 text = json.loads(raw).get("text", "").strip()
                 if not text:
                     return self._json({"error": "empty text"})
-                return self._reply(colibri_tts(text), "audio/wav")
+                return self._reply(synthesize_tts(text), "audio/wav")
             except Exception as e:
                 return self._json({"error": str(e)})
         if self.path == "/emote":
@@ -1128,5 +1170,6 @@ if __name__ == "__main__":
         except Exception as bridge_error:
             robot = None
             print("body: not attached — usb:", usb_error, "| bridge:", bridge_error)
+    ensure_brain()
     print(f"BMO voice console: http://localhost:{PORT}")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
