@@ -32,6 +32,16 @@ static bool multiply_u64(uint64_t left, uint64_t right, uint64_t *product)
 
 static bool validate_known_tensor(const bmoq_tensor_t *tensor)
 {
+    uint64_t elements = 1;
+    for (size_t d = 0; d < 4; ++d) {
+        uint32_t dimension = tensor->dimensions[d] ? tensor->dimensions[d] : 1;
+        if (!multiply_u64(elements, dimension, &elements)) return false;
+    }
+    if (tensor->layout == BMOQ_LAYOUT_DENSE_F32) {
+        return tensor->dtype == BMOQ_DTYPE_F32 &&
+               elements <= UINT64_MAX / sizeof(float) &&
+               tensor->byte_length == elements * sizeof(float);
+    }
     if (tensor->layout == BMOQ_LAYOUT_Q4_ROW_MAJOR) {
         if (tensor->dtype != BMOQ_DTYPE_Q4_SYM || tensor->dimensions[0] == 0 ||
             tensor->dimensions[1] == 0 || tensor->dimensions[2] != 1 ||
@@ -39,7 +49,6 @@ static bool validate_known_tensor(const bmoq_tensor_t *tensor)
             (tensor->quant_group & 1u) != 0 ||
             tensor->dimensions[1] % tensor->quant_group != 0)
             return false;
-        uint64_t elements;
         return multiply_u64(tensor->dimensions[0], tensor->dimensions[1],
                             &elements) &&
                (elements & 1u) == 0 && tensor->byte_length == elements / 2;
@@ -50,13 +59,32 @@ static bool validate_known_tensor(const bmoq_tensor_t *tensor)
             tensor->dimensions[3] != 1 || tensor->quant_group < 2 ||
             (tensor->quant_group & 1u) != 0)
             return false;
-        uint64_t elements;
         return multiply_u64(tensor->dimensions[0], tensor->dimensions[1],
                             &elements) &&
                elements <= UINT64_MAX / sizeof(float) &&
                tensor->byte_length == elements * sizeof(float);
     }
     return true;
+}
+
+static void read_model_config(const uint8_t *raw, bmoq_model_config_t *config)
+{
+    config->arch = read_u32(raw);
+    config->flags = read_u32(raw + 4);
+    config->hidden_size = read_u32(raw + 8);
+    config->intermediate_size = read_u32(raw + 12);
+    config->num_hidden_layers = read_u32(raw + 16);
+    config->num_attention_heads = read_u32(raw + 20);
+    config->num_key_value_heads = read_u32(raw + 24);
+    config->num_experts = read_u32(raw + 28);
+    config->num_experts_per_tok = read_u32(raw + 32);
+    config->vocab_size = read_u32(raw + 36);
+    config->max_position_embeddings = read_u32(raw + 40);
+    config->rope_theta = read_u32(raw + 44);
+    config->eos_token_id = read_u32(raw + 48);
+    config->pad_token_id = read_u32(raw + 52);
+    config->quant_group = read_u32(raw + 56);
+    config->manifest_tensor_id = read_u32(raw + 60);
 }
 
 coli_status_t coli_model_open(coli_store_t *store, coli_model_t *model)
@@ -114,10 +142,16 @@ coli_status_t coli_model_open(coli_store_t *store, coli_model_t *model)
     model->store = store;
     model->tensor_count = count;
     model->tensors = tensors;
+    uint8_t config[sizeof(model->config)];
+    status = coli_store_read_at(store, BMOQ_MODEL_CONFIG_OFFSET, config,
+                                sizeof(config));
+    if (status != COLI_OK) goto fail;
+    read_model_config(config, &model->config);
     return COLI_OK;
 
 fail:
     free(tensors);
+    memset(model, 0, sizeof(*model));
     return status;
 }
 
