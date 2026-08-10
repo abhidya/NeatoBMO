@@ -2,6 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "bmo-brain",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["bmo_brain_server.py",
+                      "--engine", "/Volumes/2TB/colibri-v1.5.0-macos-arm64/olmoe",
+                      "--snap", "/Volumes/2TB/models/olmoe-snap",
+                      "--port", "8000"],
+      "port": 8000
+    },
+    {
       "name": "bmo-web",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["bmo_web.py"],

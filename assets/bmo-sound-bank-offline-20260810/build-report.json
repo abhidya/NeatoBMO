@@ -1,0 +1,123 @@
+{
+  "changes": [
+    {
+      "duration_seconds": 2.740136,
+      "pcm_byte_count": 120840,
+      "pcm_sha256": "edbeb39e3768dbaaeb64b03f843fb2304497a493f7196f03c915af6881eba99c",
+      "record_capacity_bytes": 127488,
+      "sample_count": 60420,
+      "sound_id": 0,
+      "source_wav": "assets/bmo-sound-bank-offline-20260810/reviewed-source-wavs/slot-00-video-games-segment-1.wav",
+      "zero_padding_bytes": 6632
+    },
+    {
+      "duration_seconds": 1.799819,
+      "pcm_byte_count": 79372,
+      "pcm_sha256": "b04448ee0aa79fcefe101b125f727d749354f64ac82379ae8340331518c9109d",
+      "record_capacity_bytes": 82432,
+      "sample_count": 39686,
+      "sound_id": 1,
+      "source_wav": "assets/bmo-sound-bank-offline-20260810/reviewed-source-wavs/slot-01-video-games-segment-2.wav",
+      "zero_padding_bytes": 3044
+    },
+    {
+      "duration_seconds": 0.916735,
+      "pcm_byte_count": 40428,
+      "pcm_sha256": "560d7c1e78be5a0171266d548427c303ba03ad0f449c19ea869491439892636d",
+      "record_capacity_bytes": 82944,
+      "sample_count": 20214,
+      "sound_id": 2,
+      "source_wav": "assets/bmo-sound-bank-offline-20260810/reviewed-source-wavs/slot-02-video-games-segment-3.wav",
+      "zero_padding_bytes": 42500
+    },
+    {
+      "duration_seconds": 0.3,
+      "pcm_byte_count": 13230,
+      "pcm_sha256": "30d4fe1fb4ef4cf0a48e7b3578bbded84f60c500039bd52b70de9cec0511fd0e",
+      "record_capacity_bytes": 14336,
+      "sample_count": 6615,
+      "sound_id": 3,
+      "source_wav": "assets/bmo-sound-bank-offline-20260810/reviewed-source-wavs/slot-03-yeah-reaction-excerpt.wav",
+      "zero_padding_bytes": 1090
+    },
+    {
+      "duration_seconds": 1.930023,
+      "pcm_byte_count": 85114,
+      "pcm_sha256": "1496e783a05cf9eda9467681e26936dd7cb62a7fb69fe905759f672b80bbcacf",
+      "record_capacity_bytes": 89088,
+      "sample_count": 42557,
+      "sound_id": 6,
+      "source_wav": "assets/bmo-sound-bank-offline-20260810/reviewed-source-wavs/slot-06-its-bmo-time.wav",
+      "zero_padding_bytes": 3958
+    },
+    {
+      "duration_seconds": 1.7,
+      "pcm_byte_count": 74970,
+      "pcm_sha256": "5a10c87b543ff86130981bfa44b91bbcbce5d52fedd39cb70b8b04acc7da5098",
+      "record_capacity_bytes": 89088,
+      "sample_count": 37485,
+      "sound_id": 7,
+      "source_wav": "assets/bmo-sound-bank-offline-20260810/reviewed-source-wavs/slot-07-well-hello-there.wav",
+      "zero_padding_bytes": 14102
+    },
+    {
+      "duration_seconds": 1.950023,
+      "pcm_byte_count": 85996,
+      "pcm_sha256": "23c1083aef5c8b3eb405fc5b3977e0c91a833c2f4aabacea16da090b9412ba47",
+      "record_capacity_bytes": 89088,
+      "sample_count": 42998,
+      "sound_id": 8,
+      "source_wav": "assets/bmo-sound-bank-offline-20260810/reviewed-source-wavs/slot-08-bmobutt-approved-excerpt.wav",
+      "zero_padding_bytes": 3076
+    },
+    {
+      "duration_seconds": 1.32,
+      "pcm_byte_count": 58212,
+      "pcm_sha256": "434d4af79e5c58f677dd7205686fbf98d87f24287a601704738b02e7b89422d9",
+      "record_capacity_bytes": 89088,
+      "sample_count": 29106,
+      "sound_id": 9,
+      "source_wav": "assets/bmo-sound-bank-offline-20260810/reviewed-source-wavs/slot-09-json-bmon-reaction.wav",
+      "zero_padding_bytes": 30860
+    },
+    {
+      "duration_seconds": 1.98,
+      "pcm_byte_count": 87318,
+      "pcm_sha256": "41c748b10efdfa9950f30d8d9842aad88048d93aa92e1c4219e5794b349ed60e",
+      "record_capacity_bytes": 88064,
+      "sample_count": 43659,
+      "sound_id": 10,
+      "source_wav": "assets/bmo-sound-bank-offline-20260810/reviewed-source-wavs/slot-10-bmo-homeboys-excerpt.wav",
+      "zero_padding_bytes": 730
+    },
+    {
+      "duration_seconds": 0.3,
+      "pcm_byte_count": 13230,
+      "pcm_sha256": "a64c904519d97826017fccf2ee886e7f58772f55901411a6aee1dbbb4c99e3d9",
+      "record_capacity_bytes": 14336,
+      "sample_count": 6615,
+      "sound_id": 19,
+      "source_wav": "assets/bmo-sound-bank-offline-20260810/reviewed-source-wavs/slot-19-short-reaction-excerpt.wav",
+      "zero_padding_bytes": 1090
+    }
+  ],
+  "destination": "assets/bmo-sound-bank-offline-20260810/DfltSoundLib.BMO.Rev1.0.bin",
+  "file_size": 770048,
+  "page_count": 1504,
+  "preserved_sound_ids": [],
+  "replaced_sound_ids": [
+    0,
+    1,
+    2,
+    3,
+    6,
+    7,
+    8,
+    9,
+    10,
+    19
+  ],
+  "sha256": "c17d42ec605efde8affd3d184ce41a2fd08aae80795633c4d6fe6b3e6750900f",
+  "source": "assets/neato-xv12-sound-capture-20260810/public-reference/DfltSoundLib.Rev1.0.bin",
+  "transport_additive_checksum_hex": "0x047d66ad"
+}

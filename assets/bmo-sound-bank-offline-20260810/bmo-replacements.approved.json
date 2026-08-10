@@ -1,0 +1,14 @@
+{
+  "replacements": {
+    "0": "reviewed-source-wavs/slot-00-video-games-segment-1.wav",
+    "1": "reviewed-source-wavs/slot-01-video-games-segment-2.wav",
+    "10": "reviewed-source-wavs/slot-10-bmo-homeboys-excerpt.wav",
+    "19": "reviewed-source-wavs/slot-19-short-reaction-excerpt.wav",
+    "2": "reviewed-source-wavs/slot-02-video-games-segment-3.wav",
+    "3": "reviewed-source-wavs/slot-03-yeah-reaction-excerpt.wav",
+    "6": "reviewed-source-wavs/slot-06-its-bmo-time.wav",
+    "7": "reviewed-source-wavs/slot-07-well-hello-there.wav",
+    "8": "reviewed-source-wavs/slot-08-bmobutt-approved-excerpt.wav",
+    "9": "reviewed-source-wavs/slot-09-json-bmon-reaction.wav"
+  }
+}

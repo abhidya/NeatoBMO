@@ -1,0 +1,47 @@
+{
+  "command_model": "burst separate single-ID commands only",
+  "default_delay_seconds": 0.0,
+  "fallback_delay_seconds_user_configurable": true,
+  "sequences": {
+    "bmo_all_slots_demo_burst": {
+      "description": "All ten live BMO-filled slots in a burst/reference order.",
+      "ids": [
+        0,
+        1,
+        2,
+        6,
+        7,
+        8,
+        9,
+        10,
+        3,
+        19
+      ],
+      "stitched_duration_seconds": 14.936735,
+      "stitched_preview_sha256": "ddd837f3815b13d7e8633de4c2274d5484970472fbacde7725e5544b58e38cd9",
+      "stitched_preview_wav": "stitched-sequence-previews/bmo_all_slots_demo_burst.wav"
+    },
+    "bmo_short_reactions_burst": {
+      "description": "Two short <=0.321s reaction excerpts.",
+      "ids": [
+        3,
+        19
+      ],
+      "stitched_duration_seconds": 0.6,
+      "stitched_preview_sha256": "4201c3e1fe35f627e1fabdc1e153d03b1d5fe08c9de685846de377bac94abd5c",
+      "stitched_preview_wav": "stitched-sequence-previews/bmo_short_reactions_burst.wav"
+    },
+    "bmo_video_games_burst": {
+      "description": "Long approved BMO Video Games source split across three slots; host sends PlaySound 0, 1, 2 immediately.",
+      "ids": [
+        0,
+        1,
+        2
+      ],
+      "stitched_duration_seconds": 5.456689,
+      "stitched_preview_sha256": "d229b30d2ea100e71cee2b4ad0d9fc98266c810bfa5a075757a57852c2924b9f",
+      "stitched_preview_wav": "stitched-sequence-previews/bmo_video_games_burst.wav"
+    }
+  },
+  "warning": "Do not use combined-ID syntax. Native robot events trigger one slot; these multi-slot lines require a host helper issuing multiple PlaySound commands."
+}

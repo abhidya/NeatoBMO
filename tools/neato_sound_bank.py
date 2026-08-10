@@ -14,10 +14,11 @@ import argparse
 from dataclasses import asdict, dataclass
 import hashlib
 import json
+import math
 from pathlib import Path
 import shutil
 import struct
-from typing import Iterable
+from typing import Iterable, Mapping
 import wave
 
 
@@ -26,6 +27,8 @@ PAGE_MAGIC = b"KT"
 DEFAULT_AUDIO_START_PAGE = 8
 PCM_SAMPLE_RATE = 22_050
 PCM_BYTES_PER_SAMPLE = 2
+RECORD_HEADER_SIZE = 16
+RECORD_FLAGS = b"\x01\x01"
 
 
 def sha256(data: bytes) -> str:
@@ -145,6 +148,60 @@ def slot_page_table(source: Path) -> list[tuple[int, int]]:
     ]
 
 
+def record_ranges(source: Path) -> list[dict[str, object]]:
+    """Return parsed record boundaries and metadata for every live slot."""
+    data = source.read_bytes()
+    bank = SoundBank.read(source)
+    slots = slot_page_table(source)
+    records: list[dict[str, object]] = []
+    for (sound_id, start_page), (_, end_page) in zip(
+        slots, slots[1:] + [(-1, bank.page_count)]
+    ):
+        record_offset = start_page * PAGE_SIZE
+        record_capacity = (end_page - start_page) * PAGE_SIZE
+        header = data[record_offset:record_offset + RECORD_HEADER_SIZE]
+        if len(header) != RECORD_HEADER_SIZE:
+            raise ValueError(f"slot {sound_id}: truncated record header")
+        flags = header[:2]
+        sample_rate = struct.unpack_from("<H", header, 2)[0]
+        sample_count = struct.unpack_from("<I", header, 4)[0]
+        pcm_byte_count = struct.unpack_from("<I", header, 8)[0]
+        reserved = struct.unpack_from("<I", header, 12)[0]
+        pcm_offset = record_offset + RECORD_HEADER_SIZE
+        padding_offset = pcm_offset + pcm_byte_count
+        if flags != RECORD_FLAGS:
+            raise ValueError(f"slot {sound_id}: unsupported record flags {flags.hex()}")
+        if sample_rate != PCM_SAMPLE_RATE:
+            raise ValueError(f"slot {sound_id}: unsupported sample rate {sample_rate}")
+        if pcm_byte_count != sample_count * PCM_BYTES_PER_SAMPLE:
+            raise ValueError(f"slot {sound_id}: PCM byte count does not match samples")
+        if reserved != 0:
+            raise ValueError(f"slot {sound_id}: reserved record field is nonzero")
+        if pcm_byte_count % PCM_BYTES_PER_SAMPLE:
+            raise ValueError(f"slot {sound_id}: PCM byte count is not sample-aligned")
+        if RECORD_HEADER_SIZE + pcm_byte_count > record_capacity:
+            raise ValueError(f"slot {sound_id}: PCM exceeds record capacity")
+        padding = data[padding_offset:record_offset + record_capacity]
+        if any(padding):
+            raise ValueError(f"slot {sound_id}: record padding is not zero")
+        pcm = data[pcm_offset:padding_offset]
+        records.append({
+            "sound_id": sound_id,
+            "start_page": start_page,
+            "end_page_exclusive": end_page,
+            "record_offset": record_offset,
+            "record_capacity_bytes": record_capacity,
+            "pcm_offset": pcm_offset,
+            "sample_rate": sample_rate,
+            "sample_count": sample_count,
+            "pcm_byte_count": pcm_byte_count,
+            "duration_seconds": round(sample_count / PCM_SAMPLE_RATE, 6),
+            "zero_padding_bytes": record_capacity - RECORD_HEADER_SIZE - pcm_byte_count,
+            "pcm_sha256": sha256(pcm),
+        })
+    return records
+
+
 def candidate_boundaries(source: Path) -> list[dict[str, object]]:
     bank = SoundBank.read(source)
     slots = slot_page_table(source)
@@ -190,6 +247,181 @@ def export_candidate_wavs(source: Path, destination: Path) -> dict[str, object]:
     return {"source": str(source), "candidate_files": files}
 
 
+def export_record_wavs(source: Path, destination: Path) -> dict[str, object]:
+    data = source.read_bytes()
+    destination.mkdir(parents=True, exist_ok=True)
+    files: list[dict[str, object]] = []
+    for record in record_ranges(source):
+        start = int(record["pcm_offset"])
+        end = start + int(record["pcm_byte_count"])
+        output = destination / f"slot-{int(record['sound_id']):02d}.wav"
+        with wave.open(str(output), "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(PCM_BYTES_PER_SAMPLE)
+            wav.setframerate(PCM_SAMPLE_RATE)
+            wav.writeframes(data[start:end])
+        files.append({**record, "path": str(output), "wav_sha256": sha256(output.read_bytes())})
+    return {"source": str(source), "record_wavs": files}
+
+
+def read_exact_pcm_wav(path: Path) -> bytes:
+    with wave.open(str(path), "rb") as wav:
+        params = (
+            wav.getnchannels(),
+            wav.getsampwidth(),
+            wav.getframerate(),
+            wav.getcomptype(),
+        )
+        if params != (1, PCM_BYTES_PER_SAMPLE, PCM_SAMPLE_RATE, "NONE"):
+            raise ValueError(
+                f"{path}: expected mono signed 16-bit PCM WAV at 22050 Hz, got "
+                f"channels={params[0]} width={params[1]} rate={params[2]} compression={params[3]}"
+            )
+        frames = wav.readframes(wav.getnframes())
+    if len(frames) % PCM_BYTES_PER_SAMPLE:
+        raise ValueError(f"{path}: PCM payload is not 16-bit sample aligned")
+    return frames
+
+
+def load_replacement_manifest(path: Path) -> dict[int, Path]:
+    manifest = json.loads(path.read_text())
+    replacements = manifest.get("replacements", manifest)
+    if not isinstance(replacements, dict):
+        raise ValueError(f"{path}: expected object with a replacements map")
+    loaded: dict[int, Path] = {}
+    for key, value in replacements.items():
+        sound_id = int(key)
+        clip = Path(value)
+        if not clip.is_absolute():
+            clip = path.parent / clip
+        loaded[sound_id] = clip
+    return loaded
+
+
+def build_from_wavs(source: Path, replacements: Mapping[int, Path],
+                    destination: Path) -> dict[str, object]:
+    """Build an edited bank while preserving the directory and page starts."""
+    original = source.read_bytes()
+    bank = SoundBank.read(source)
+    output = bytearray(original)
+    records = record_ranges(source)
+    record_by_id = {int(record["sound_id"]): record for record in records}
+    unknown = sorted(set(replacements) - set(record_by_id))
+    if unknown:
+        raise ValueError(f"replacement requested for absent sound IDs: {unknown}")
+
+    changes: list[dict[str, object]] = []
+    for sound_id, clip in sorted(replacements.items()):
+        record = record_by_id[sound_id]
+        pcm = read_exact_pcm_wav(clip)
+        capacity = int(record["record_capacity_bytes"]) - RECORD_HEADER_SIZE
+        if len(pcm) > capacity:
+            raise ValueError(
+                f"{clip}: {len(pcm)} PCM bytes exceeds slot {sound_id} capacity {capacity}"
+            )
+        if len(pcm) % PCM_BYTES_PER_SAMPLE:
+            raise ValueError(f"{clip}: replacement PCM is not sample-aligned")
+
+        record_offset = int(record["record_offset"])
+        record_capacity = int(record["record_capacity_bytes"])
+        sample_count = len(pcm) // PCM_BYTES_PER_SAMPLE
+        header = (
+            RECORD_FLAGS
+            + struct.pack("<H", PCM_SAMPLE_RATE)
+            + struct.pack("<I", sample_count)
+            + struct.pack("<I", len(pcm))
+            + struct.pack("<I", 0)
+        )
+        replacement_record = header + pcm + bytes(record_capacity - len(header) - len(pcm))
+        output[record_offset:record_offset + record_capacity] = replacement_record
+        changes.append({
+            "sound_id": sound_id,
+            "source_wav": str(clip),
+            "sample_count": sample_count,
+            "pcm_byte_count": len(pcm),
+            "duration_seconds": round(sample_count / PCM_SAMPLE_RATE, 6),
+            "pcm_sha256": sha256(pcm),
+            "record_capacity_bytes": record_capacity,
+            "zero_padding_bytes": record_capacity - RECORD_HEADER_SIZE - len(pcm),
+        })
+
+    if len(output) != len(original):
+        raise ValueError("internal error: built image size changed")
+    if len(output) != bank.file_size:
+        raise ValueError("internal error: built image differs from source size")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(output)
+    built = bytes(output)
+    return {
+        "source": str(source),
+        "destination": str(destination),
+        "file_size": len(built),
+        "page_count": len(built) // PAGE_SIZE,
+        "sha256": sha256(built),
+        "transport_additive_checksum_hex": f"0x{(sum(built) & 0xFFFFFFFF):08x}",
+        "replaced_sound_ids": [change["sound_id"] for change in changes],
+        "changes": changes,
+        "preserved_sound_ids": [
+            int(record["sound_id"]) for record in records
+            if int(record["sound_id"]) not in replacements
+        ],
+    }
+
+
+def synthesize_bmo_wavs(destination: Path) -> dict[str, object]:
+    """Create original BMO-inspired chiptune bleeps, not sampled show audio."""
+    destination.mkdir(parents=True, exist_ok=True)
+    specs = {
+        0: {"name": "hello_prompt", "notes": (660, 880, 990, 1320), "duration": 0.72},
+        1: {"name": "button_chirp", "notes": (1175, 1568), "duration": 0.28},
+        2: {"name": "happy_confirm", "notes": (784, 988, 1175, 1568), "duration": 0.92},
+        3: {"name": "concern_alert", "notes": (988, 740, 622), "duration": 0.76},
+        19: {"name": "attention_ping", "notes": (1319, 1047, 1319), "duration": 0.46},
+    }
+    files: list[dict[str, object]] = []
+    for sound_id, spec in specs.items():
+        pcm = bytearray()
+        notes = tuple(spec["notes"])
+        total_samples = int(float(spec["duration"]) * PCM_SAMPLE_RATE)
+        note_samples = max(1, total_samples // len(notes))
+        for note_index, frequency in enumerate(notes):
+            for sample_index in range(note_samples):
+                t = sample_index / PCM_SAMPLE_RATE
+                # Soft ADSR envelope keeps the clips click-free and toy-like.
+                local = sample_index / note_samples
+                attack = min(1.0, local / 0.08)
+                release = min(1.0, (1.0 - local) / 0.18)
+                envelope = max(0.0, min(attack, release))
+                wobble = 0.018 * math.sin(2 * math.pi * 7.0 * t + note_index)
+                phase = 2 * math.pi * frequency * (1.0 + wobble) * t
+                # Square-ish but band-limited enough for the stock 22.05 kHz path.
+                sample = (
+                    0.70 * math.sin(phase)
+                    + 0.20 * math.sin(3 * phase)
+                    + 0.08 * math.sin(5 * phase)
+                )
+                value = int(max(-1.0, min(1.0, sample * envelope * 0.38)) * 32767)
+                pcm.extend(struct.pack("<h", value))
+            gap_samples = int(0.025 * PCM_SAMPLE_RATE)
+            pcm.extend(b"\x00\x00" * gap_samples)
+        output = destination / f"slot-{sound_id:02d}-{spec['name']}.wav"
+        with wave.open(str(output), "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(PCM_BYTES_PER_SAMPLE)
+            wav.setframerate(PCM_SAMPLE_RATE)
+            wav.writeframes(bytes(pcm))
+        files.append({
+            "sound_id": sound_id,
+            "name": spec["name"],
+            "path": str(output),
+            "provenance": "locally synthesized original chiptune/BMO-inspired tone; no external samples",
+            "duration_seconds": round((len(pcm) // PCM_BYTES_PER_SAMPLE) / PCM_SAMPLE_RATE, 6),
+            "pcm_sha256": sha256(bytes(pcm)),
+            "wav_sha256": sha256(output.read_bytes()),
+        })
+    return {"generated_wavs": files}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     actions = parser.add_subparsers(dest="action", required=True)
@@ -216,6 +448,25 @@ def build_parser() -> argparse.ArgumentParser:
     wavs_parser.add_argument("image", type=Path)
     wavs_parser.add_argument("destination", type=Path)
     wavs_parser.add_argument("--output", type=Path)
+
+    records_parser = actions.add_parser("record-ranges")
+    records_parser.add_argument("image", type=Path)
+    records_parser.add_argument("--output", type=Path)
+
+    record_wavs_parser = actions.add_parser("export-record-wavs")
+    record_wavs_parser.add_argument("image", type=Path)
+    record_wavs_parser.add_argument("destination", type=Path)
+    record_wavs_parser.add_argument("--output", type=Path)
+
+    build_parser_ = actions.add_parser("build-from-wavs")
+    build_parser_.add_argument("image", type=Path)
+    build_parser_.add_argument("manifest", type=Path)
+    build_parser_.add_argument("destination", type=Path)
+    build_parser_.add_argument("--output", type=Path)
+
+    synth_parser = actions.add_parser("synthesize-bmo-wavs")
+    synth_parser.add_argument("destination", type=Path)
+    synth_parser.add_argument("--output", type=Path)
     return parser
 
 
@@ -229,8 +480,23 @@ def main(argv: Iterable[str] | None = None) -> int:
         emit(extract_pcm(args.image, args.destination), args.output)
     elif args.action == "candidate-boundaries":
         emit(candidate_boundaries(args.image), args.output)
-    else:
+    elif args.action == "export-candidate-wavs":
         emit(export_candidate_wavs(args.image, args.destination), args.output)
+    elif args.action == "record-ranges":
+        emit(record_ranges(args.image), args.output)
+    elif args.action == "export-record-wavs":
+        emit(export_record_wavs(args.image, args.destination), args.output)
+    elif args.action == "build-from-wavs":
+        emit(
+            build_from_wavs(
+                args.image,
+                load_replacement_manifest(args.manifest),
+                args.destination,
+            ),
+            args.output,
+        )
+    else:
+        emit(synthesize_bmo_wavs(args.destination), args.output)
     return 0
 
 

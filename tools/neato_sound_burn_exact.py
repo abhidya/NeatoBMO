@@ -13,7 +13,10 @@ import time
 import serial
 
 
-EXPECTED_SHA256 = "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a"
+ALLOWED_SHA256 = {
+    "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a": "vendor-default",
+    "c17d42ec605efde8affd3d184ce41a2fd08aae80795633c4d6fe6b3e6750900f": "validated-bmo",
+}
 EXPECTED_BYTES = 770_048
 COMMAND = "Upload sound"
 ENQ = b"\x05"
@@ -77,7 +80,7 @@ def main() -> int:
     with open(args.bank, "rb") as source:
         bank = source.read()
     digest = hashlib.sha256(bank).hexdigest()
-    if len(bank) != EXPECTED_BYTES or digest != EXPECTED_SHA256:
+    if len(bank) != EXPECTED_BYTES or digest not in ALLOWED_SHA256:
         raise SystemExit(f"refusing unexpected image: bytes={len(bank)} sha256={digest}")
 
     ser, port, version_before, attempts = find_healthy_robot(15.0)
@@ -88,6 +91,7 @@ def main() -> int:
         "command": COMMAND,
         "image_bytes": len(bank),
         "image_sha256": digest,
+        "image_profile": ALLOWED_SHA256[digest],
         "port_before": port,
         "version_before_ok": matching_version(version_before),
     }

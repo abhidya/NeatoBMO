@@ -176,6 +176,16 @@ PAGE = """<!doctype html>
        border-radius:14px;line-height:1.6}
  a{color:#2fbf9b}
  input[type=file]{color:#e8f6ef}
+ #facepanel{display:none;position:fixed;top:12px;right:12px;z-index:50;width:min(320px,90vw);
+       padding:14px;background:#0a2a26;border:1px solid #2c6b5f;border-radius:14px}
+ #facepanel.on{display:block}
+ #fphead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+ #lcd{display:block;width:100%;max-width:none;flex:none;image-rendering:pixelated;
+      background:#cdd5c0;border-radius:6px}
+ #egrid{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
+ #erow{display:flex;gap:6px}
+ #etxt{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid #2c6b5f;
+       background:#0a2a26;color:#e8f6ef;font-size:16px}
 </style>
 <div id="tabs">
  <div class="tab on" data-p="chat" onclick="show('chat')">Chat</div>
@@ -189,8 +199,13 @@ PAGE = """<!doctype html>
 <div id="log"></div>
 <div id="bar">
   <button id="mic" title="hold to talk">🎤</button>
+  <select id="voice" class="mini" title="where BMO's voice plays">
+   <option value="off">🔇 muted</option>
+   <option value="local">🔊 this device</option>
+   <option value="robot" title="needs the ESP32 body board + voice firmware patch">🤖 robot</option>
+  </select>
   <input id="txt" placeholder="say something to BMO…">
-  <button onclick="sendTxt()">➤</button>
+  <button id="sendbtn" onclick="sendTxt()">➤</button>
 </div>
 </div>
 <div class="pane" id="p-console">
@@ -203,7 +218,7 @@ PAGE = """<!doctype html>
  <button class="mini" onclick="cmd('GetDigitalSensors')">Digital</button>
  <button class="mini" onclick="cmd('PlaySound 1')">Beep</button>
  <button class="mini" onclick="cmd('Help')">Help</button>
- <button class="mini" onclick="fetch('/emote',{method:'POST',body:'😍🎉'})">Faces 😍🎉</button>
+ <button class="mini" onclick="toggleFaces()">Faces 🙂</button>
 </div>
 <div id="clog"></div>
 <div id="drive">
@@ -233,22 +248,65 @@ PAGE = """<!doctype html>
  <button class="mini" onclick="ota()">Upload</button>
  <div id="otamsg" style="opacity:.8;font-size:13px;margin-top:6px"></div></div>
 </div>
+<div id="facepanel">
+ <div id="fphead"><b>Faces</b><button class="mini" onclick="toggleFaces()">✕</button></div>
+ <canvas id="lcd" width="128" height="64"></canvas>
+ <div id="egrid"></div>
+ <div id="erow">
+  <input id="etxt" placeholder="😊😢🎉 or any text…">
+  <button class="mini" onclick="playEmoteInput()">▶ play</button>
+ </div>
+</div>
 <script>
 function show(p){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.p===p));
  document.querySelectorAll('.pane').forEach(d=>d.classList.toggle('on',d.id==='p-'+p));}
 const log=document.getElementById('log'),face=document.getElementById('face');
 function add(cls,text){const d=document.createElement('div');d.className='msg '+cls;
  d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;}
+const STATUS_DEFAULT='BMO · TTS: Colibri · voice: ESP32 USB → PlaySound File';
+// voice output selector (persisted)
+const voiceSel=document.getElementById('voice');
+try{voiceSel.value=localStorage.getItem('bmoVoice')||'local';}catch(e){voiceSel.value='local';}
+if(!voiceSel.value)voiceSel.value='local';
+voiceSel.onchange=()=>{try{localStorage.setItem('bmoVoice',voiceSel.value);}catch(e){}};
+async function speakLocal(text){
+ try{
+  const r=await fetch('/tts',{method:'POST',body:JSON.stringify({text})});
+  if(!r.ok||!(r.headers.get('Content-Type')||'').includes('audio'))throw new Error('tts failed');
+  const a=new Audio(URL.createObjectURL(await r.blob()));
+  await a.play();
+ }catch(e){
+  try{speechSynthesis.speak(new SpeechSynthesisUtterance(text));}catch(e2){}
+ }
+}
+let pending=false;
 async function send(text){
+ if(pending)return;
+ pending=true;
+ const st=document.getElementById('status'),txtEl=document.getElementById('txt'),
+       btn=document.getElementById('sendbtn'),t0=Date.now();
+ txtEl.disabled=true;btn.disabled=true;
+ st.textContent='thinking… 0s';
+ const tick=setInterval(()=>{st.textContent='thinking… '+Math.floor((Date.now()-t0)/1000)+'s';},1000);
  add('you',text);face.textContent='🤔';
  try{
   const r=await fetch('/chat',{method:'POST',body:JSON.stringify({text})});
   const j=await r.json();
+  clearInterval(tick);
   face.textContent='😊';add('bmo',j.reply);
-  document.getElementById('status').textContent=j.voice_error
+  st.textContent=j.voice_error
    ? 'BMO · voice firmware patch still needed: '+j.voice_error
-   : 'BMO · TTS: Colibri · voice: ESP32 USB → PlaySound File';
- }catch(e){face.textContent='😵';add('bmo','(brain unreachable)');}
+   : STATUS_DEFAULT;
+  try{if(facesOpen())previewOnly(j.reply);}catch(e){}
+  if(voiceSel.value==='local')speakLocal(j.reply);
+ }catch(e){
+  clearInterval(tick);
+  face.textContent='😵';add('bmo','(brain unreachable)');
+  st.textContent=STATUS_DEFAULT;
+ }finally{
+  clearInterval(tick);pending=false;
+  txtEl.disabled=false;btn.disabled=false;txtEl.focus();
+ }
  setTimeout(()=>face.textContent='🤖',3000);
 }
 function sendTxt(){const t=document.getElementById('txt');if(t.value.trim()){send(t.value.trim());t.value='';}}
@@ -308,6 +366,81 @@ async function ota(){const f=document.getElementById('fw').files[0],m=document.g
  try{const r=await fetch('/ota',{method:'POST',body:await f.arrayBuffer()});
   const j=await r.json();m.textContent=j.error?('failed: '+j.error):('ESP32 said: '+j.out);}
  catch(e){m.textContent='upload failed: '+e;}}
+// ---- faces panel + LCD emulator ----
+const LCD_BG='#cdd5c0',LCD_PX='#1a2216';
+const lcd=document.getElementById('lcd'),lctx=lcd.getContext('2d');
+let facesData=null,facesLoading=null,emoteGen=0;
+const zzzSleep=ms=>new Promise(res=>setTimeout(res,ms));
+function lcdClear(){lctx.fillStyle=LCD_BG;lctx.fillRect(0,0,128,64);}
+lcdClear();
+function lcdRects(rects,color){lctx.fillStyle=color;
+ for(const[x0,y0,x1,y1]of rects)lctx.fillRect(x0,y0,x1-x0+1,y1-y0+1);}
+function lcdFace(name){lcdClear();
+ const r=facesData&&facesData.faces[name];if(r)lcdRects(r,LCD_PX);}
+function facesOpen(){return document.getElementById('facepanel').classList.contains('on');}
+function loadFaces(){
+ if(facesData)return Promise.resolve(facesData);
+ if(facesLoading)return facesLoading;
+ facesLoading=fetch('/faces').then(r=>r.json()).then(j=>{
+  facesData=j;
+  const grid=document.getElementById('egrid');grid.innerHTML='';
+  for(const[emo,name]of Object.entries(j.emoji||{})){
+   const b=document.createElement('button');b.className='mini';
+   b.textContent=emo;b.title=name;b.onclick=()=>playEmote(emo);
+   grid.appendChild(b);}
+  return j;
+ }).catch(e=>{facesLoading=null;return null;});
+ return facesLoading;}
+function toggleFaces(){const p=document.getElementById('facepanel');
+ p.classList.toggle('on');
+ if(p.classList.contains('on'))loadFaces();}
+function parseEmojis(text){
+ const map=facesData.emoji||{},keys=Object.keys(map).sort((a,b)=>b.length-a.length);
+ const out=[];let i=0;
+ while(i<text.length&&out.length<8){
+  let hit=null;
+  for(const k of keys){if(text.startsWith(k,i)){hit=k;break;}}
+  if(hit){out.push(map[hit]);i+=hit.length;}else i++;}
+ return out.length?out:['happy'];}
+function heartRects(x,y){return[[x+1,y,x+3,y+1],[x+6,y,x+8,y+1],
+ [x,y+2,x+9,y+4],[x+2,y+5,x+7,y+6],[x+4,y+7,x+5,y+7]];}
+async function runAnim(name,g){
+ if(name==='hearts'){
+  for(let s=0;s<14;s++){const y=40-s*3,r=heartRects(52,y);
+   lcdRects(r,LCD_PX);await zzzSleep(60);if(g!==emoteGen)return;
+   if(y>4)lcdRects(r,LCD_BG);}
+ }else if(name==='tear'){
+  for(let s=0;s<8;s++){const r=[[88,30+s*3,89,33+s*3]];
+   lcdRects(r,LCD_PX);await zzzSleep(80);if(g!==emoteGen)return;
+   lcdRects(r,LCD_BG);}
+ }else if(name==='zzz'){
+  for(let s=0;s<10;s++){const y=34-s*3;if(y<4)break;
+   const r=[[104,y,111,y],[108,y+2,110,y+2],[104,y+4,111,y+4]];
+   lcdRects(r,LCD_PX);await zzzSleep(120);if(g!==emoteGen)return;
+   lcdRects(r,LCD_BG);}
+ }else if(name==='confetti'){
+  for(let s=0;s<10;s++){
+   const ax=10+(s*37)%100,ay=2+(s*13)%12,bx=20+(s*53)%90,by=2+(s*29)%12;
+   const r=[[ax,ay,ax+1,ay+1],[bx,by,bx+1,by+1]];
+   lcdRects(r,LCD_PX);await zzzSleep(90);if(g!==emoteGen)return;
+   lcdRects(r,LCD_BG);}}}
+async function runCascade(text){
+ try{
+  if(!(await loadFaces()))return;
+  const g=++emoteGen,names=parseEmojis(text);
+  for(let i=0;i<names.length;i++){
+   if(i>0){lcdFace('blink');await zzzSleep(120);if(g!==emoteGen)return;}
+   lcdFace(names[i]);await zzzSleep(650);if(g!==emoteGen)return;}
+  const anim=(facesData.anims||{})[names[names.length-1]];
+  if(anim)await runAnim(anim,g);
+ }catch(e){}}
+function previewOnly(text){runCascade(text);}
+function playEmote(text){
+ text=(text&&text.trim())?text:'😊';
+ try{fetch('/emote',{method:'POST',body:text}).catch(()=>{});}catch(e){}
+ previewOnly(text);}
+function playEmoteInput(){playEmote(document.getElementById('etxt').value);}
+document.getElementById('etxt').addEventListener('keydown',e=>{if(e.key==='Enter')playEmoteInput();});
 </script>
 """
 
@@ -327,6 +460,12 @@ class Handler(BaseHTTPRequestHandler):
         self._reply(json.dumps(obj).encode())
 
     def do_GET(self):
+        if self.path == "/faces":
+            anims = {f: fn.__name__.replace("_anim_", "")
+                     for f, fn in emote.ANIMS.items()}
+            return self._json({"faces": emote.FACES,
+                               "emoji": emote.EMOJI_FACES,
+                               "anims": anims})
         if self.path == "/scan":
             if robot is None:
                 return self._json({"error": "body not attached"})
@@ -367,6 +506,14 @@ class Handler(BaseHTTPRequestHandler):
                 with rlock:
                     robot.lidar(raw == b"1")
                 return self._json({"ok": True})
+            except Exception as e:
+                return self._json({"error": str(e)})
+        if self.path == "/tts":
+            try:
+                text = json.loads(raw).get("text", "").strip()
+                if not text:
+                    return self._json({"error": "empty text"})
+                return self._reply(colibri_tts(text), "audio/wav")
             except Exception as e:
                 return self._json({"error": str(e)})
         if self.path == "/emote":

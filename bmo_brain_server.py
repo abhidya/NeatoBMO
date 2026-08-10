@@ -16,11 +16,16 @@ import io
 import json
 import os
 import subprocess
+import sys
 import threading
 import time
 import uuid
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+# Line-buffer stdout so log lines appear immediately even when piped
+# (e.g. under a process supervisor); block buffering otherwise hides them.
+sys.stdout.reconfigure(line_buffering=True)
 
 ARGS = None
 LOCK = threading.Lock()
@@ -58,13 +63,18 @@ def read_until_prompt(timeout=600):
 
 def ask(prompt):
     """One-shot: reset context, send flattened prompt, return reply."""
-    with LOCK:
+    if not LOCK.acquire(blocking=False):
+        print("chat: queued behind a running generation")
+        LOCK.acquire()
+    try:
         PROC.stdin.write("/reset\n")
         PROC.stdin.flush()
         read_until_prompt(30)
         PROC.stdin.write(prompt.replace("\n", " ").strip() + "\n")
         PROC.stdin.flush()
         return read_until_prompt()
+    finally:
+        LOCK.release()
 
 
 def synthesize_speech(text, voice=None):
@@ -158,18 +168,28 @@ class Handler(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", 0))
             try:
                 req = json.loads(self.rfile.read(n))
-                wav = synthesize_speech(req.get("input", ""), req.get("voice"))
+                text = req.get("input", "")
+                print(f"speech: start ({len(text)} chars)")
+                t0 = time.time()
+                wav = synthesize_speech(text, req.get("voice"))
             except Exception as e:
                 return self._json({"error": str(e)}, 500)
+            print(f"speech: done in {time.time() - t0:.1f}s")
             return self._bytes(wav, "audio/wav")
         if self.path != "/v1/chat/completions":
             return self._json({"error": "not found"}, 404)
         n = int(self.headers.get("Content-Length", 0))
         req = json.loads(self.rfile.read(n))
+        messages = req.get("messages", [])
+        last_user = next((m.get("content") or "" for m in reversed(messages)
+                          if m.get("role") == "user"), "")
+        print(f"chat: start ({last_user[:60]!r})")
+        t0 = time.time()
         try:
-            reply = ask(flatten(req.get("messages", [])))
+            reply = ask(flatten(messages))
         except Exception as e:
             return self._json({"error": str(e)}, 500)
+        print(f"chat: done in {time.time() - t0:.1f}s ({len(reply)} chars)")
         self._json({
             "id": "chatcmpl-" + uuid.uuid4().hex[:12],
             "object": "chat.completion",
