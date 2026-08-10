@@ -191,6 +191,73 @@ esp_err_t speak_post(httpd_req_t *req)
     return httpd_resp_sendstr(req, "OK\n");
 }
 
+/* Streaming relay for boards that cannot stage the whole bank in RAM.
+ * First 2 bytes are checked for the KT marker; SHA-256 accumulates as
+ * pages stream through to the robot.  Any anomaly poisons the transport
+ * checksum so the receiver rejects the transfer. */
+static esp_err_t soundbank_stream(httpd_req_t *req, size_t len,
+                                  const char *expected_sha)
+{
+    static uint8_t page[2048];
+    mbedtls_sha256_context sha;
+    mbedtls_sha256_init(&sha);
+    mbedtls_sha256_starts(&sha, 0);
+
+    esp_err_t err = neato_binary_begin("Upload sound", len, 60000);
+    if (err != ESP_OK) {
+        mbedtls_sha256_free(&sha);
+        return err;
+    }
+
+    bool poison = false;
+    bool first = true;
+    size_t received = 0;
+    while (received < len) {
+        size_t want = len - received;
+        if (want > sizeof(page)) want = sizeof(page);
+        int got = httpd_req_recv(req, (char *)page, want);
+        if (got == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (got <= 0) { poison = true; break; }
+        if (first) {
+            first = false;
+            if (page[0] != 'K' || page[1] != 'T') { poison = true; break; }
+        }
+        mbedtls_sha256_update(&sha, page, (size_t)got);
+        err = neato_binary_write(page, (size_t)got, 60000);
+        if (err != ESP_OK) { poison = true; break; }
+        received += (size_t)got;
+    }
+
+    if (!poison && received == len) {
+        uint8_t digest[32];
+        char actual_sha[65];
+        mbedtls_sha256_finish(&sha, digest);
+        for (int i = 0; i < 32; i++)
+            snprintf(actual_sha + i * 2, 3, "%02x", digest[i]);
+        if (strcasecmp(actual_sha, expected_sha) != 0) poison = true;
+    } else {
+        poison = true;
+    }
+    mbedtls_sha256_free(&sha);
+
+    /* Pad out the declared length so the receiver reaches its checksum
+     * check even when the HTTP body ended short. */
+    if (received < len) {
+        memset(page, 0, sizeof(page));
+        while (received < len) {
+            size_t pad = len - received;
+            if (pad > sizeof(page)) pad = sizeof(page);
+            if (neato_binary_write(page, pad, 60000) != ESP_OK) break;
+            received += pad;
+        }
+    }
+    err = neato_binary_end(poison, 60000);
+    if (poison && err == ESP_OK) err = ESP_ERR_INVALID_CRC;
+    ESP_LOGI(TAG, "soundbank stream: %u/%u bytes, %s", (unsigned)received,
+             (unsigned)len, poison ? "poisoned (rejected)" : "clean");
+    return err;
+}
+
 /* Relay one complete sound-bank image to the robot ("Upload sound").
  *
  * The host validates the bank byte-exactly before posting; the firmware
@@ -213,24 +280,26 @@ esp_err_t soundbank_post(httpd_req_t *req)
 
     size_t len = (size_t)req->content_len;
     uint8_t *bank = heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!bank) bank = heap_caps_malloc(len, MALLOC_CAP_8BIT);
-    if (!bank)
-        return error_reply(req, "503 Service Unavailable",
-                           "not enough staging memory\n");
-
-    size_t received = 0;
-    while (received < len) {
-        int got = httpd_req_recv(req, (char *)bank + received, len - received);
-        if (got == HTTPD_SOCK_ERR_TIMEOUT) continue;
-        if (got <= 0) {
-            free(bank);
-            return error_reply(req, "400 Bad Request", "incomplete bank upload\n");
+    esp_err_t err;
+    if (bank) {
+        size_t received = 0;
+        while (received < len) {
+            int got = httpd_req_recv(req, (char *)bank + received, len - received);
+            if (got == HTTPD_SOCK_ERR_TIMEOUT) continue;
+            if (got <= 0) {
+                free(bank);
+                return error_reply(req, "400 Bad Request", "incomplete bank upload\n");
+            }
+            received += (size_t)got;
         }
-        received += (size_t)got;
+        err = neato_install_soundbank(bank, len, expected_sha);
+        free(bank);
+    } else {
+        /* No PSRAM: stream HTTP -> USB while hashing.  If the body ends
+         * short or the SHA doesn't match, poison the trailing transport
+         * checksum so the robot NAKs and discards the transfer. */
+        err = soundbank_stream(req, len, expected_sha);
     }
-
-    esp_err_t err = neato_install_soundbank(bank, len, expected_sha);
-    free(bank);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Upload sound failed: %s", esp_err_to_name(err));
         if (err == ESP_ERR_INVALID_ARG)

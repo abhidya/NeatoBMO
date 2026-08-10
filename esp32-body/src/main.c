@@ -18,6 +18,7 @@
 #include "remote_soundboard.h"
 #include "neato_usb.h"
 #include "wifi_log.h"
+#include "coli_mcu.h"
 
 void net_log_raw(const uint8_t *data, size_t len);
 void net_cmd_reply(const uint8_t *data, size_t len);
@@ -121,24 +122,27 @@ static esp_err_t wait_binary_event(uint8_t expected, uint32_t timeout_ms)
     return event == expected ? ESP_OK : ESP_ERR_INVALID_RESPONSE;
 }
 
-esp_err_t neato_send_binary(const char *cmd, const uint8_t *payload,
-                            size_t payload_len, uint32_t timeout_ms)
+static uint32_t s_stream_checksum;
+static bool s_stream_open;
+
+esp_err_t neato_binary_begin(const char *cmd, size_t payload_len,
+                             uint32_t timeout_ms)
 {
-    if (!cmd || !payload || payload_len == 0 || payload_len > NEATO_MAX_BINARY_BYTES)
+    if (!cmd || payload_len == 0 || payload_len > NEATO_MAX_BINARY_BYTES)
         return ESP_ERR_INVALID_ARG;
     if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(2000)) != pdTRUE)
         return ESP_ERR_TIMEOUT;
 
     esp_err_t result = ESP_ERR_INVALID_STATE;
     cdc_acm_dev_hdl_t dev = s_dev;
-    if (!dev) goto done;
+    if (!dev) goto fail;
 
     char header[80];
     int header_len = snprintf(header, sizeof(header), "%s Size %u\r", cmd,
                               (unsigned)(payload_len + 4));
     if (header_len <= 0 || header_len >= (int)sizeof(header)) {
         result = ESP_ERR_INVALID_ARG;
-        goto done;
+        goto fail;
     }
 
     xQueueReset(s_binary_events);
@@ -146,35 +150,78 @@ esp_err_t neato_send_binary(const char *cmd, const uint8_t *payload,
     result = cdc_acm_host_data_tx_blocking(
         dev, (const uint8_t *)header, header_len, timeout_ms
     );
-    if (result != ESP_OK) goto done;
+    if (result != ESP_OK) goto fail;
     result = wait_binary_event(BINARY_ENQ, timeout_ms);
-    if (result != ESP_OK) goto done;
+    if (result != ESP_OK) goto fail;
 
-    uint32_t checksum = 0;
-    for (size_t offset = 0; offset < payload_len; offset += 512) {
-        size_t chunk_len = payload_len - offset;
-        if (chunk_len > 512) chunk_len = 512;
-        for (size_t i = 0; i < chunk_len; i++) checksum += payload[offset + i];
-        result = cdc_acm_host_data_tx_blocking(
-            dev, payload + offset, chunk_len, timeout_ms
-        );
-        if (result != ESP_OK) goto done;
-    }
+    s_stream_checksum = 0;
+    s_stream_open = true;
+    return ESP_OK;
 
-    uint8_t checksum_le[4] = {
-        checksum & 0xff, (checksum >> 8) & 0xff,
-        (checksum >> 16) & 0xff, (checksum >> 24) & 0xff,
-    };
-    result = cdc_acm_host_data_tx_blocking(
-        dev, checksum_le, sizeof(checksum_le), timeout_ms
-    );
-    if (result == ESP_OK) result = wait_binary_event(BINARY_ACK, timeout_ms);
-
-done:
+fail:
     s_binary_active = false;
     xQueueReset(s_binary_events);
     xSemaphoreGive(s_tx_mutex);
     return result;
+}
+
+esp_err_t neato_binary_write(const uint8_t *data, size_t len,
+                             uint32_t timeout_ms)
+{
+    if (!s_stream_open) return ESP_ERR_INVALID_STATE;
+    cdc_acm_dev_hdl_t dev = s_dev;
+    if (!dev) return ESP_ERR_INVALID_STATE;
+    for (size_t offset = 0; offset < len; offset += 512) {
+        size_t chunk_len = len - offset;
+        if (chunk_len > 512) chunk_len = 512;
+        for (size_t i = 0; i < chunk_len; i++)
+            s_stream_checksum += data[offset + i];
+        esp_err_t result = cdc_acm_host_data_tx_blocking(
+            dev, data + offset, chunk_len, timeout_ms
+        );
+        if (result != ESP_OK) return result;
+    }
+    return ESP_OK;
+}
+
+esp_err_t neato_binary_end(bool poison_checksum, uint32_t timeout_ms)
+{
+    if (!s_stream_open) return ESP_ERR_INVALID_STATE;
+    esp_err_t result = ESP_ERR_INVALID_STATE;
+    cdc_acm_dev_hdl_t dev = s_dev;
+    uint32_t checksum = s_stream_checksum + (poison_checksum ? 1 : 0);
+    if (dev) {
+        uint8_t checksum_le[4] = {
+            checksum & 0xff, (checksum >> 8) & 0xff,
+            (checksum >> 16) & 0xff, (checksum >> 24) & 0xff,
+        };
+        result = cdc_acm_host_data_tx_blocking(
+            dev, checksum_le, sizeof(checksum_le), timeout_ms
+        );
+        if (result == ESP_OK)
+            result = wait_binary_event(BINARY_ACK, timeout_ms);
+        if (result == ESP_OK && poison_checksum)
+            result = ESP_ERR_INVALID_CRC; /* receiver ACKed a poisoned sum?! */
+    }
+    s_stream_open = false;
+    s_binary_active = false;
+    xQueueReset(s_binary_events);
+    xSemaphoreGive(s_tx_mutex);
+    return result;
+}
+
+esp_err_t neato_send_binary(const char *cmd, const uint8_t *payload,
+                            size_t payload_len, uint32_t timeout_ms)
+{
+    if (!payload) return ESP_ERR_INVALID_ARG;
+    esp_err_t result = neato_binary_begin(cmd, payload_len, timeout_ms);
+    if (result != ESP_OK) return result;
+    result = neato_binary_write(payload, payload_len, timeout_ms);
+    if (result != ESP_OK) {
+        neato_binary_end(true, timeout_ms); /* poison: abort cleanly */
+        return result;
+    }
+    return neato_binary_end(false, timeout_ms);
 }
 
 void app_main(void)
@@ -196,6 +243,8 @@ void app_main(void)
     xTaskCreate(usb_lib_task, "usb_lib", 4096, NULL, 10, NULL);
 
     ESP_ERROR_CHECK(cdc_acm_host_install(NULL));
+    /* MSC is a peer USB class client. coli_mcu never installs a second host. */
+    ESP_ERROR_CHECK(coli_mcu_start());
 
     const cdc_acm_host_device_config_t dev_config = {
         .connection_timeout_ms = 0,      /* wait forever for the robot */
