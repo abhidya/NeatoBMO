@@ -4,6 +4,12 @@ Sends a tiny labeled sequence, printing each command's reply time so we can
 see which command (if any) stalls or never ACKs. Pauses between checkpoints
 so the screen can be photographed/verified.
 
+Verified results (2026-08-09/10, fw 2.4.15667): HLine/VLine take one number
+and draw full-span 1px black lines; FGWhite is a complete no-op (ACKs, never
+draws or erases) — there is no selective erase, only BGWhite/BGBlack fills;
+any extra trailing number is parsed as a Contrast value and written to NAND,
+so never send segment-style args; the fw drains SetLCD on a 10 Hz tick.
+
 Run:  python3 tools/lcd_probe.py
 """
 import sys
@@ -16,9 +22,9 @@ CHECKPOINTS = [
     ("contrast + clear", ["Contrast 45", "BGWhite", "FGBlack"]),
     ("one black HLine at row 30 (expect full-width dark band)", ["HLine 30"]),
     ("one black VLine at col 40 (expect full-height dark column)", ["VLine 40"]),
-    ("white HLine at row 30 (expect the band to VANISH, column keeps a gap?)",
+    ("white HLine at row 30 (expect NO change — FGWhite is a verified no-op)",
      ["FGWhite", "HLine 30", "FGBlack"]),
-    ("white VLine at col 40 (expect the column to vanish)",
+    ("white VLine at col 40 (expect NO change — FGWhite is a verified no-op)",
      ["FGWhite", "VLine 40", "FGBlack"]),
     ("high column VLine 96 (right-eye range)", ["VLine 96"]),
     ("high row HLine 120 (bottom range)", ["HLine 120"]),
