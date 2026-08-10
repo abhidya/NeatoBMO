@@ -347,6 +347,20 @@ class SanitizeSpeechTextTests(unittest.TestCase):
     def test_emoji_only_text_becomes_empty(self):
         self.assertEqual(tts_bank.sanitize_speech_text("\U0001F916\U0001F4A5"), "")
 
+    def test_bmo_is_respelled_beemo(self):
+        # espeak spells the all-caps token out as "B M O"
+        self.assertEqual(tts_bank.sanitize_speech_text("I am BMO! bmo rules"),
+                         "I am Beemo! Beemo rules")
+
+    def test_respell_is_word_bounded(self):
+        # no substitution inside other words
+        self.assertEqual(tts_bank.sanitize_speech_text("submarine combmo"),
+                         "submarine combmo")
+
+    def test_respell_is_idempotent(self):
+        once = tts_bank.sanitize_speech_text("Hey BMO!")
+        self.assertEqual(tts_bank.sanitize_speech_text(once), once)
+
 
 class WebGuardWiringTests(unittest.TestCase):
     """The web layer keeps the internal gates while staying automatic."""

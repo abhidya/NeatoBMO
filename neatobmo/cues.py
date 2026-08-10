@@ -61,6 +61,20 @@ SOUND_CUES = {
     "beep": "short_reaction",
 }
 
+# sound-namespace inventions -> real slots. The model freely makes up sound
+# names; every one observed by tools/cue_profile.py maps to the closest
+# installed clip (json_bmon IS the surprised reaction, yeah covers cheers).
+SOUND_ALIASES = {
+    "welcome": "hello", "greeting": "hello",
+    "love": "homeboys", "friend": "homeboys",
+    "party": "yeah", "cheer": "yeah", "laughter": "yeah", "laugh": "yeah",
+    "happy": "yeah", "excited": "yeah",
+    "music": "videogames", "song": "videogames", "sing": "videogames",
+    "game": "videogames", "dance": "bmotime",
+    "surprise": "json", "surprised": "json", "wow": "json",
+    "spin": "beep", "alert": "beep", "sad": "beep", "scared": "beep",
+}
+
 # sloppy synonyms a small model actually emits -> canonical bare cue
 ALIASES = {
     "laughs": "laugh", "laughing": "laugh", "giggle": "laugh", "giggles": "laugh",
@@ -68,6 +82,7 @@ ALIASES = {
     "heart": "love", "hearts": "love", "hugs": "love", "hug": "love",
     "cry": "sad", "cries": "sad", "crying": "sad", "tear": "sad",
     "wow": "surprised", "gasp": "surprised", "shocked": "surprised",
+    "startled": "surprised",
     "mad": "angry", "grr": "angry",
     "tired": "sleepy", "yawn": "sleepy", "zzz": "sleepy",
     "celebrate": "party", "confetti": "party",
@@ -143,7 +158,7 @@ def _resolve(inner, stagey=False):
             ns = _NAMESPACES.get(ns.strip())
             name = _norm(name)
             if ns == "sound":
-                name = ALIASES.get(name, name)
+                name = SOUND_ALIASES.get(name, ALIASES.get(name, name))
                 if name not in SOUND_CUES:
                     hit = difflib.get_close_matches(name, SOUND_CUES, 1, cutoff=0.7)
                     name = hit[0] if hit else None

@@ -69,6 +69,16 @@ class TestSloppyModelOutput(unittest.TestCase):
         p = cues.parse("[sound:video games] [sound:bmo time]")
         self.assertEqual(p.steps, [("sound", "videogames"), ("sound", "bmotime")])
 
+    def test_invented_sound_names_map_to_real_slots(self):
+        # every invention observed in the live profiling run must now land
+        p = cues.parse("[sound:welcome] [sound:party] [sound:music] "
+                       "[sound:surprise] [startled]")
+        self.assertEqual(p.steps[:3], [("sound", "hello"), ("sound", "yeah"),
+                                       ("sound", "videogames")])
+        self.assertIn(("face", "surprised"), p.steps)
+        for name, target in cues.SOUND_ALIASES.items():
+            self.assertIn(target, cues.SOUND_CUES, name)
+
 
 class TestFallbacksAndCaps(unittest.TestCase):
     def test_emoji_fallback_when_no_face_cues(self):

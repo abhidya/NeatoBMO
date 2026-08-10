@@ -476,9 +476,25 @@ _SENTENCE_END = re.compile(r"(?<=[.!?;:])\s+")
 _UNSPEAKABLE = re.compile("[^\\x20-\\x7e\\u00c0-\\u024f]+")
 
 
+# Names espeak misreads, respelled the way they are said aloud. "BMO" is
+# pronounced Beemo; espeak spells out the all-caps token letter by letter.
+PHONETIC_RESPELLINGS = {
+    "bmo": "Beemo",
+    "b.m.o": "Beemo",
+    "b.m.o.": "Beemo",
+    "neato": "Neeto",
+}
+_PHONETIC = re.compile(
+    r"\b(" + "|".join(re.escape(k) for k in sorted(PHONETIC_RESPELLINGS,
+                                                   key=len, reverse=True))
+    + r")\b", re.IGNORECASE)
+
+
 def sanitize_speech_text(text: str) -> str:
-    """Drop emoji/symbols and collapse the whitespace they leave behind."""
-    cleaned = _UNSPEAKABLE.sub(" ", text)
+    """Drop emoji/symbols, respell tricky names, collapse leftover space."""
+    cleaned = _PHONETIC.sub(lambda m: PHONETIC_RESPELLINGS[m.group(1).lower()],
+                            text)
+    cleaned = _UNSPEAKABLE.sub(" ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned)
     cleaned = re.sub(r"\s+([.,!?;:])", r"\1", cleaned)
     return cleaned.strip()

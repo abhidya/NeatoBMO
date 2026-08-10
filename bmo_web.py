@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from neatobmo import Robot
 from neatobmo import cues
 from neatobmo import emote
+from neatobmo import routines
 from neatobmo import faces
 from neatobmo import tts_bank
 from neatobmo.sounds import BMO_BANK, BMO_SEQUENCES, BMO_SOUND_SLOTS, LIVE_SOUND_IDS
@@ -56,6 +57,7 @@ robot = None
 body_via = None  # "usb" | "bridge" | None, set at startup for the UI status pill
 rlock = threading.Lock()
 history = [{"role": "system", "content": PERSONA}]
+convo_state = routines.ConvoState()   # multi-turn follow-ups (single-user UI)
 
 REPO_ROOT = Path(__file__).resolve().parent
 SOUND_BANK_PROFILES = {
@@ -95,6 +97,23 @@ TTS_LOG_PATH = REPO_ROOT / "logs" / "tts-bank-operations.jsonl"
 tts_job = None
 tts_job_lock = threading.Lock()
 
+# Precached WAVs for the routine layer's canned replies, keyed by
+# (sanitized speech text, voice): instant answers should not wait on
+# espeak/Colibri either. Filled by a background thread at startup.
+_tts_cache = {}
+
+
+def precache_routine_tts(voice="en+f4"):
+    for canned in routines.canned_texts():
+        speech = tts_bank.sanitize_speech_text(cues.parse(canned).speech)
+        if not speech or (speech, voice) in _tts_cache:
+            continue
+        try:
+            _tts_cache[(speech, voice)] = synthesize_tts(speech, voice)
+        except Exception:
+            return    # no TTS engine available; cache stays partial
+    print(f"tts: precached {len(_tts_cache)} routine replies")
+
 
 def synthesize_tts(text, voice="en+f4"):
     """Colibri when it answers; otherwise the same engine run locally.
@@ -102,6 +121,9 @@ def synthesize_tts(text, voice="en+f4"):
     Both paths are espeak-ng with identical voice/speed/pitch, so BMO sounds
     the same regardless of which one produced the WAV.
     """
+    text = tts_bank.sanitize_speech_text(text) or text
+    if (cached := _tts_cache.get((text, voice))) is not None:
+        return cached
     try:
         return colibri_tts(text, voice)
     except (urllib.error.URLError, OSError, RuntimeError):
@@ -485,6 +507,9 @@ PAGE = """<!doctype html>
  #voice{background:var(--blue);color:#fff;border:3px solid var(--bezel);border-radius:12px;
         box-shadow:0 3px 0 var(--bezel);font-weight:600}
  #mic.listening{animation:pulse 1.2s infinite}
+ #wake{background:var(--yellow);color:var(--ink);border-radius:50%;width:50px;height:50px;
+       padding:0;flex:none;opacity:.65}
+ #wake.on{opacity:1;animation:pulse 2.2s infinite}
  @keyframes pulse{50%{box-shadow:0 4px 0 var(--bezel),0 0 0 9px rgba(242,99,90,.28)}}
  .mini{padding:6px 12px;font-size:13px;background:var(--cream);color:var(--ink);
        border-radius:12px;box-shadow:0 3px 0 var(--bezel)}
@@ -567,6 +592,7 @@ PAGE = """<!doctype html>
 <div class="slot" title="insert game cartridge"></div>
 <div id="bar">
   <button id="mic" title="hold to talk">🎤</button>
+  <button id="wake" title="wake word: say 'hey BMO'">👂</button>
   <select id="voice" class="mini" title="where BMO's voice plays">
    <option value="off">🔇 muted</option>
    <option value="local">🔊 this device</option>
@@ -730,15 +756,42 @@ async function send(text){
 }
 function sendTxt(){const t=document.getElementById('txt');if(t.value.trim()){send(t.value.trim());t.value='';}}
 document.getElementById('txt').addEventListener('keydown',e=>{if(e.key==='Enter')sendTxt();});
-// speech input (Chrome/Edge)
+// speech input (Chrome/Edge) + "hey BMO" wake word
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-const mic=document.getElementById('mic');
+const mic=document.getElementById('mic'),wakeBtn=document.getElementById('wake');
 if(SR){const rec=new SR();rec.lang='en-US';rec.interimResults=false;
  rec.onresult=e=>{send(e.results[0][0].transcript);};
- rec.onend=()=>mic.classList.remove('listening');
+ rec.onend=()=>{mic.classList.remove('listening');wakeResume();};
  mic.onclick=()=>{if(mic.classList.contains('listening')){rec.stop();}
-  else{mic.classList.add('listening');rec.start();}};
-}else{mic.onclick=()=>add('bmo','(speech input needs Chrome or Edge)');}
+  else{wakePause();mic.classList.add('listening');rec.start();}};
+ // wake word: continuous background recognition; "hey BMO" (or beemo/bee mo)
+ // alone chirps + opens the mic, "hey BMO <command>" sends straight away
+ const WAKE=/\\b(?:hey|okay|ok|yo)?[,!.\\s]*(?:b[e]{1,2}[\\s-]?mo|bmo)\\b/i;
+ let wakeOn=false;const wrec=new SR();
+ wrec.lang='en-US';wrec.continuous=true;wrec.interimResults=false;
+ wrec.onresult=e=>{
+  const t=e.results[e.results.length-1][0].transcript.trim();
+  const m=t.match(WAKE);if(!m)return;
+  const cmd=t.slice(m.index+m[0].length).replace(/^[,!.\\s]+/,'').trim();
+  try{wrec.stop();}catch(_){}
+  if(cmd){send(cmd);}
+  else{ // chirp on the robot + open the mic for the command
+   try{fetch('/emote',{method:'POST',body:'[beep] [surprised]'}).catch(()=>{});}catch(_){}
+   document.getElementById('status').textContent='BMO is listening…';
+   mic.classList.add('listening');try{rec.start();}catch(_){}
+  }};
+ wrec.onend=()=>{const tryStart=()=>{if(!wakeOn)return;
+   if(pending||mic.classList.contains('listening')){setTimeout(tryStart,500);return;}
+   try{wrec.start();}catch(_){}};
+  setTimeout(tryStart,300);};
+ function wakePause(){try{wrec.stop();}catch(_){}}
+ function wakeResume(){if(wakeOn&&!pending)setTimeout(()=>{try{wrec.start();}catch(_){}},400);}
+ wakeBtn.onclick=()=>{wakeOn=!wakeOn;wakeBtn.classList.toggle('on',wakeOn);
+  if(wakeOn){try{wrec.start();}catch(_){}}else{wakePause();}
+  try{localStorage.setItem('bmoWake',wakeOn?'1':'');}catch(_){}};
+ try{if(localStorage.getItem('bmoWake')==='1')wakeBtn.onclick();}catch(_){}
+}else{mic.onclick=()=>add('bmo','(speech input needs Chrome or Edge)');
+ wakeBtn.onclick=()=>add('bmo','(wake word needs Chrome or Edge)');}
 // console
 const clog=document.getElementById('clog');
 function clogAdd(t){clog.textContent+=t.replace(/\\s+$/,'')+'\\n';clog.scrollTop=clog.scrollHeight;}
@@ -1259,12 +1312,25 @@ class Handler(BaseHTTPRequestHandler):
         chat_request = json.loads(raw)
         text = chat_request.get("text", "")
         speak_on_robot = bool(chat_request.get("speak"))
-        body(lambda: (robot.led("amber"), faces.scanline(robot, range(20, 110, 30), 0.08)))
-        try:
-            reply = brain_chat(text)
-        except Exception as e:
-            reply = None
-            err = str(e)
+        # instant routine layer first (Siri-style): pattern-matched canned
+        # answers with choreography skip the tens-of-seconds LLM round-trip;
+        # anything unmatched falls through to the brain.
+        routine = None
+        hit = routines.match(text, convo_state, {"robot": robot})
+        if hit:
+            reply, routine = hit.reply, hit.routine
+            # keep the LLM's memory coherent: routine turns enter history
+            # exactly as if the brain had said them
+            history.append({"role": "user", "content": text})
+            history.append({"role": "assistant", "content": reply})
+        else:
+            body(lambda: (robot.led("amber"),
+                          faces.scanline(robot, range(20, 110, 30), 0.08)))
+            try:
+                reply = brain_chat(text)
+            except Exception as e:
+                reply = None
+                err = str(e)
         if reply:
             # the reply is a little performance: cues out of the text, faces
             # to the cascade (as emojis), sounds/moves to the body, clean
@@ -1286,6 +1352,8 @@ class Handler(BaseHTTPRequestHandler):
                               faces.blink(robot, 2, 0.1)))
             out = {"reply": plan.display, "cues": plan.steps,
                    "spoke": speak_on_robot and voice_error is None}
+            if routine:
+                out["routine"] = routine
             if voice_error:
                 out["voice_error"] = voice_error
         else:
@@ -1319,5 +1387,6 @@ if __name__ == "__main__":
             robot = None
             print("body: not attached — usb:", usb_error, "| bridge:", bridge_error)
     ensure_brain()
+    threading.Thread(target=precache_routine_tts, daemon=True).start()
     print(f"BMO voice console: http://localhost:{PORT}")
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

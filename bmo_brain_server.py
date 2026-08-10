@@ -81,6 +81,10 @@ def synthesize_speech(text, voice=None):
     """Return a mono PCM WAV produced by the server-side TTS engine."""
     if not text or not text.strip():
         raise ValueError("input is required")
+    # same respellings the web console applies, so "BMO" is Beemo on
+    # every path (espeak spells the all-caps token out letter by letter)
+    from neatobmo.tts_bank import sanitize_speech_text
+    text = sanitize_speech_text(text) or text
     if len(text) > 1000:
         raise ValueError("input is limited to 1000 characters")
     cmd = [ARGS.tts_engine, "-v", voice or ARGS.tts_voice,
