@@ -12,6 +12,10 @@ Current evidence for understanding the XV-12 without further flash writes:
   SAM-BA, and JTAG options with non-erasing boundaries.
 - [CFW session handoff 2026-08-10](NEATO_CFW_SESSION_HANDOFF_2026-08-10.md):
   the latest readback/custom-firmware session record.
+- [Envelope crypto analysis](neato-envelope-crypto.md): the `.enc` format is
+  AES-CBC with a fixed key+IV starting at off 512; brute force and every
+  weak-setup shortcut ruled out; CPU = Atmel AT91SAM9XE128; no public break;
+  only route is on-chip key extraction (SAM-BA probe / GPNVM glitch).
 - [Vorwerk VR100 cross-flash](neato-vorwerk-vr100-crossflash.md): archived
   community path to flash VR100/Neato images on Rev113 via the offline
   updater. Rev113 firmware = 3 parts (app/LDS/sound + Config.ini); oldest

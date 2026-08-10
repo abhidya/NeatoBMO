@@ -62,20 +62,56 @@ Known state:
   CBC+CTR with the header IV — every decryption stayed full-entropy). The
   per-image payload (off 2080→end, entropy 7.95) is encrypted correctly;
   there is no search-space shortcut in it.
-- **But the image has a fixed, IV-independent crypto block worth chasing.**
-  Layout: `0–31` header, `32–511` zero, **`512–~2080` (~1568 B) a block
-  that is identical across builds within an era** — 2.5 == 2.7 (100 %),
-  3.1 ≈ 3.2 (97 %), cross-era only 7 % (random) — with a sub-block near
-  off 544 identical across **all** builds. It is independent of the
-  per-image IV, so it is not payload; its size/epoch-versioning fit a
-  **key-wrap or RSA signature**. If key-wrap, the per-image content key
-  sits here under a device master key (~2 master keys span all four
-  builds → recovering one unlocks a whole era); if a signature, firmware
-  is signed and a decrypt alone would not permit code injection. Either
-  way the lead is **on-chip master/signing-key extraction**, not
-  cryptanalysis — still gated by the no-readback state — and a next step
-  is fingerprinting the `512–2080` block against known RSA moduli / leaked
-  2011–2013 Neato/Vorwerk keys.
+- **The whole image is one AES-CBC stream with a FIXED key and FIXED IV**
+  (block-fingerprint deep-dive, 2026-08-10). Layout: `0–511` plaintext
+  header (magic + per-image 16 B field + zero pad); **encryption starts at
+  offset 512** and runs to EOF as a single CBC stream. Proof: every
+  cross-build first-divergence is exactly 16-byte-aligned and avalanches to
+  EOF (textbook CBC), with no intra-image 16 B block repeats (not ECB). The
+  leading blocks are identical across builds because the firmware's head
+  (bootloader/vector table/config) is identical plaintext, and a constant
+  key+IV encrypt identical plaintext to identical ciphertext. Exact
+  divergence offsets: 2.5-vs-3.1 = 624, 3.1-vs-3.2 = 2032, 2.5-vs-2.7 =
+  2080; the all-four-identical prefix is **512–624** (112 B = 7 CBC
+  blocks). This **kills the earlier "signature / key-wrap" reading of the
+  512–2080 region** — a per-era-identical block cannot be a signature over
+  a per-image-varying payload. Ruled out by tells: no RSA (`0x010001`
+  appears 0× in any file; no `30 82` DER; `openssl asn1parse` fails), no
+  AES-KW (no `A6A6A6A6A6A6A6A6`), no cert/PEM/OID/strings anywhere.
+  **Fixed-IV CBC is a real misstep but does not reduce the key search** —
+  it only leaks shared plaintext prefixes (exactly what we see); the AES
+  key is still 2^128. The header `off 16–31` field is **not** the CBC IV
+  (block 0 @512 is identical across all images, so the IV is constant); it
+  is a per-image nonce/MAC of unresolved purpose.
+- **CPU / key location (OSINT, 2026-08-10).** Cruz Rev113 main MCU =
+  **Atmel AT91SAM9XE128-QU** (ARM926, per the RECESSIM XV-11 teardown);
+  Binky Rev64 = NXP LPC3143 + STM32F100. The AES key is **fused into the
+  MCU at the factory** and the decrypt happens on-chip — `NeatoUpgrader.exe`
+  and NeatoControl only pass the `.enc` through, so **the key is in no host
+  binary**. JTAG is software-disabled and SAM-BA is gated by the GPNVM
+  security bit; no public flash dump of this chip exists.
+- **No public break exists** (high confidence). No published key,
+  decryptor, repacker, or plaintext XV/VR100 image. Firmware is RSA-SHA256
+  signed (`Signing.crt`; confirmed on the sibling Botvac line, where the
+  robot notably does **not** validate the cert chain — self-signed images
+  are accepted); the signing private key never leaked. The only documented
+  full-memory extraction of any Neato is **CVE-2018-20785** (Classen,
+  Botvac Connected) — a **different CPU (TI AM335x)** serial-bootloader
+  bypass that does **not** transfer to the Atmel Cruz. Aside: the Vorwerk
+  update ZIPs' password is `VORVR100!%` — a wrapper over the already-`.enc`
+  files, not the firmware key (matches the 2012 Mikrocontroller.net crack).
+- **Only realistic route = on-chip key extraction from the AT91SAM9XE.**
+  Ranked by effort/risk: (1) probe the SAM-BA ROM over the **P6 serial
+  header** for a pre-lock window (cheap, try first); (2) analysis-only —
+  diff many `.enc` builds (done, above); (3) **voltage-glitch the GPNVM
+  security bit** to re-enable JTAG and dump flash (hard — Atmel debounced
+  the ERASE line specifically to resist this; ATSAM4C32 is the nearest
+  public precedent). **Avoid the J3/ERASE jumper — documented as an
+  unrecoverable brick.** Once flash is out, offset-512 plaintext (word 0 =
+  SP `0x2000xxxx`, word 1 = odd Thumb reset handler) will confirm the head
+  is an ARM vector table. See
+  [neato-envelope-crypto.md](docs/neato-envelope-crypto.md) for the full
+  analysis and source list.
 - Pairwise comparison of the same 2.5 build for B/D/M/P hardware matches the
   random 1/256 byte-equality baseline, ruling out a reused aligned keystream
   that could be attacked by simple ciphertext differencing.
