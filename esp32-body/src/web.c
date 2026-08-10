@@ -20,9 +20,11 @@
 #include "esp_http_server.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
+#include "faces.h"
 #include "neato_audio.h"
 #include "neato_usb.h"
 #include "remote_soundboard.h"
+#include "web.h"
 #include "wifi_mgr.h"
 
 static const char *TAG = "web";
@@ -34,9 +36,8 @@ extern const char index_html_end[] asm("_binary_index_html_end");
 extern const char wifi_html_start[] asm("_binary_wifi_html_start");
 extern const char wifi_html_end[] asm("_binary_wifi_html_end");
 
-esp_err_t emote_post(httpd_req_t *req); /* faces.c */
-
-/* ---- push Neato bytes to the websocket client (called from USB rx task) */
+/* ---- push Neato bytes to the websocket client (rx subscriber, called
+ * from the USB rx task) */
 typedef struct {
     size_t len;
     uint8_t data[];
@@ -58,7 +59,7 @@ static void ws_async_send(void *arg)
     free(msg);
 }
 
-void net_ws_push(const uint8_t *data, size_t len)
+static void net_ws_push(const uint8_t *data, size_t len)
 {
     if (s_ws_fd < 0 || !s_server) return;
     ws_msg_t *msg = malloc(sizeof(ws_msg_t) + len);
@@ -180,10 +181,20 @@ static void form_value(const char *body, const char *key, char *out, size_t cap)
 static esp_err_t wifi_save_post(httpd_req_t *req)
 {
     char body[384];
-    int len = req->content_len < (int)sizeof(body) - 1 ? req->content_len : (int)sizeof(body) - 1;
-    int got = httpd_req_recv(req, body, len);
-    if (got <= 0) return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "recv fail");
-    body[got] = 0;
+    if (req->content_len >= (int)sizeof(body)) {
+        httpd_resp_set_status(req, "413 Payload Too Large");
+        return httpd_resp_sendstr(req, "form body over 383 bytes\n");
+    }
+    int len = req->content_len;
+    int received = 0;
+    while (received < len) {
+        int got = httpd_req_recv(req, body + received, len - received);
+        if (got == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (got <= 0)
+            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "recv fail");
+        received += got;
+    }
+    body[received] = 0;
     char ssid[33], pass[65];
     form_value(body, "ssid", ssid, sizeof(ssid));
     form_value(body, "pass", pass, sizeof(pass));
@@ -213,6 +224,7 @@ static esp_err_t captive_404_handler(httpd_req_t *req, httpd_err_code_t err)
 
 void web_start(void)
 {
+    neato_rx_subscribe(net_ws_push);
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.lru_purge_enable = true;
     cfg.max_uri_handlers = 15;

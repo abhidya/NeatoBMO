@@ -1,85 +1,40 @@
 # coli_mcu host checks
 
-Run the portable BMOQ parser and tiled-read test from `esp32-body`:
+Build every host test harness with the Makefile (binaries land in
+`tools/build/`), or run them all in one shot; each generates its own
+deterministic fixture and needs no arguments:
 
 ```sh
-cc -std=c11 -D_FILE_OFFSET_BITS=64 -Wall -Wextra -Werror \
-  -Icomponents/coli_mcu/include \
-  components/coli_mcu/model_format.c components/coli_mcu/store_file.c \
-  tools/test_bmoq.c -o /tmp/test_bmoq && /tmp/test_bmoq
+make -C tools        # build all six with -Wall -Wextra -Werror
+make -C tools test   # build and run them
 ```
 
-The fixture contains a deterministic 16 MiB tensor and the test reads only
-small tiles at distant offsets, including a tile crossing a 4 KiB boundary.
+What each test proves:
 
-Run the streamed Q4 golden test:
-
-```sh
-cc -std=c11 -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L \
-  -Wall -Wextra -Werror -Icomponents/coli_mcu/include \
-  components/coli_mcu/model_format.c components/coli_mcu/store_file.c \
-  components/coli_mcu/q4_matvec.c tools/test_q4_matvec.c -lm \
-  -o /tmp/test_q4_matvec && /tmp/test_q4_matvec
-```
-
-It streams a deterministic Q4 matrix whose packed weights exceed 8 MiB,
-compares all 40,000 output rows with an independent formula reference, and
-asserts a 257-byte caller workspace plus cross-4-KiB reads. To retain a fixture
-for device testing, run `python3 tools/export_bmoq_q4_fixture.py model.bmoq`.
-
-Run the portable transformer primitive checks:
-
-```sh
-cc -std=c11 -Wall -Wextra -Werror -Icomponents/coli_mcu/include \
-  components/coli_mcu/ops.c tools/test_coli_ops.c -lm \
-  -o /tmp/test_coli_ops && /tmp/test_coli_ops
-```
-
-This covers heap-free caller-buffer RMSNorm, RoPE, single-token causal
-attention decode, residual add, SiLU/gated multiply, and bounded KV-cache
-layout math for OLMoE hidden=2048, 16-head attention.
-
-Run the single-layer OLMoE decode check:
-
-```sh
-cc -std=c11 -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L \
-  -Wall -Wextra -Werror -Icomponents/coli_mcu/include \
-  components/coli_mcu/model_format.c components/coli_mcu/store_file.c \
-  components/coli_mcu/q4_matvec.c components/coli_mcu/ops.c \
-  components/coli_mcu/moe.c components/coli_mcu/olmoe.c \
-  tools/test_coli_olmoe_layer.c -lm -o /tmp/test_coli_olmoe_layer && \
-  /tmp/test_coli_olmoe_layer
-```
-
-It connects dense RMSNorm tensors, streamed Q/K/V/O Q4 projections, RoPE,
-KV-cache writes, causal single-token attention, residuals, streamed MoE,
-embedding row dequantization, final norm, and streamed LM-head argmax against
-an independent identity-weight reference, then runs a bounded greedy token-id
-generation loop over the same local model.
-
-Run the streamed MoE golden test:
-
-```sh
-cc -std=c11 -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L \
-  -Wall -Wextra -Werror -Icomponents/coli_mcu/include \
-  components/coli_mcu/model_format.c components/coli_mcu/store_file.c \
-  components/coli_mcu/q4_matvec.c components/coli_mcu/moe.c \
-  tools/test_coli_moe.c -lm -o /tmp/test_coli_moe && /tmp/test_coli_moe
-```
-
-It runs a deterministic router, verifies top-8 tie-breaking and unnormalized
-softmax routing weights, executes selected gate/up/down experts serially, and
-compares the final hidden vector with an independent dense reference.
-
-Run the CTOK tokenizer substrate check:
-
-```sh
-cc -std=c11 -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L \
-  -Wall -Wextra -Werror -Icomponents/coli_mcu/include \
-  components/coli_mcu/store_file.c components/coli_mcu/tokenizer.c \
-  tools/test_coli_tokenizer.c -o /tmp/test_coli_tokenizer && \
-  /tmp/test_coli_tokenizer
-```
+- `test_bmoq` — BMOQ parser plus tiled reads: a deterministic 16 MiB tensor
+  read only in small tiles at distant offsets, including a tile crossing a
+  4 KiB boundary.
+- `test_q4_matvec` — streamed Q4 golden test: a deterministic Q4 matrix whose
+  packed weights exceed 8 MiB, all 40,000 output rows compared with an
+  independent formula reference, plus a 257-byte caller workspace and
+  cross-4-KiB reads. To retain a fixture for device testing, run
+  `python3 tools/export_bmoq_q4_fixture.py model.bmoq`.
+- `test_coli_ops` — heap-free caller-buffer RMSNorm, RoPE, single-token causal
+  attention decode, residual add, SiLU/gated multiply, and bounded KV-cache
+  layout math for OLMoE hidden=2048, 16-head attention.
+- `test_coli_olmoe_layer` — single-layer OLMoE decode: dense RMSNorm tensors,
+  streamed Q/K/V/O Q4 projections, RoPE, KV-cache writes, causal single-token
+  attention, residuals, streamed MoE, embedding row dequantization, final
+  norm, and streamed LM-head argmax against an independent identity-weight
+  reference, then a bounded greedy token-id generation loop.
+- `test_coli_moe` — streamed MoE golden test: deterministic router, top-8
+  tie-breaking, unnormalized softmax routing weights, serial gate/up/down
+  experts, final hidden vector against an independent dense reference.
+- `test_coli_tokenizer` — CTOK tokenizer substrate check.
+- `test_coli_gemma` — single-layer Gemma 3 decode: Gemma-specific RMSNorm
+  weights, Q/K head norms, GQA attention, post-attention/post-FFN norms, gated
+  dense FFN, tied/untied lm-head fallback, and greedy token-id generation over
+  a tiny BMOQ fixture.
 
 CTOK is a compact preconverted GPT-NeoX/OLMo byte-level BPE format for firmware:
 128-byte little-endian header, a dense 24-byte token directory indexed by token
@@ -104,3 +59,20 @@ weights. It validates the official `allenai/OLMoE-1B-7B-0924` shape by default,
 streams tensors row-by-row, writes grouped symmetric Q4 weights plus float32
 scale tensors, and embeds an OLMoE manifest/config block for firmware loading.
 Use `--allow-nonstandard` only for synthetic fixtures or deliberate forks.
+
+Inspect or export a local Gemma 3 GGUF (the matching host check is
+`test_coli_gemma`, built and run by the Makefile above):
+
+```sh
+python3 tools/export_gemma_gguf_bmoq.py \
+  /Volumes/2TB/neatobmo-models/gemma-3-270m-q8_0/gemma-3-270m-Q8_0.gguf \
+  --inspect-only
+
+python3 tools/export_gemma_gguf_bmoq.py \
+  /Volumes/2TB/neatobmo-models/gemma-3-270m-q8_0/gemma-3-270m-Q8_0.gguf \
+  /Volumes/2TB/neatobmo-models/gemma-3-270m-q4.bmoq
+```
+
+The exporter supports GGUF v3 `general.architecture=gemma3` with F32 norm
+tensors and Q8_0 matrices. It records Gemma metadata in the BMOQ manifest and
+streams Q8_0 rows into grouped symmetric Q4 without loading the whole model.

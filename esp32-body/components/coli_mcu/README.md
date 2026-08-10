@@ -43,3 +43,14 @@ routing) still requires attention, routing, expert scheduling, KV state, and
 the remaining kernels. Its roughly 1.3B active parameters per token make
 bytes-touched scheduling the next system constraint; this primitive only proves
 that one quantized matrix can be evaluated without fitting in PSRAM.
+
+## Gemma 3 path
+
+`coli_gemma_*` is a separate dense Gemma 3 decode path. It uses the shared BMOQ
+reader and streamed Q4 kernels, but does not assume OLMoE tensor names or MoE
+routing. The current Gemma converter targets the local
+`gemma-3-270m-Q8_0.gguf` shape: hidden 640, 18 layers, 4 query heads, 1 KV head,
+256-wide Q/K/V heads, 2048 FFN width, 262144 tokens, and tied embeddings. The
+runtime applies Gemma's `(1 + weight)` RMSNorm convention, Q/K head norms, RoPE,
+GQA decode attention, post-attention/post-FFN norms, gated FFN, and streamed
+output argmax.

@@ -1,4 +1,3 @@
-#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
@@ -6,15 +5,13 @@
 #include "freertos/queue.h"
 #include "esp_log.h"
 #include "faces.h"
-
-void neato_send(const char *cmd); /* main.c */
+#include "neato_protocol.h"
 
 static const char *TAG = "faces";
 
 #define CMD_GAP_MS 25   /* gap between SetLCD commands; fw drains them on a
                            fixed 10 Hz tick regardless of send rate (queued,
                            zero drops), so this only bounds our send burst */
-#define MAX_CASCADE 8
 #define CONTRAST_DEF 45
 
 /* Hardware-verified SetLCD reality (probed 2026-08-09 on the live robot):
@@ -25,32 +22,12 @@ static const char *TAG = "faces";
  * (~20-40 cmds, ~2-4 s at the fw's 10 Hz SetLCD tick). Expression =
  * pillar width + band thickness/position. */
 
-typedef enum {
-    F_NEUTRAL, F_HAPPY, F_LAUGH, F_LOVE, F_SAD, F_SURPRISED,
-    F_WINK, F_SLEEPY, F_ANGRY, F_PARTY, F_BLINK,
-} face_t;
+/* face_t, GEO[], EMAP[] are generated from neatobmo/faces.py — the single
+ * source of truth shared with the Python cascade player and the web
+ * preview. Edit faces.py and run tools/gen_faces_table.py. */
+#include "faces_table.h"
 
-/* Column spans for the two eye pillars + up to two row bands for the
- * mouth ([lo,hi] inclusive; second band unused when b2hi == 0). */
-typedef struct {
-    uint8_t l0, l1, r0, r1;     /* left / right pillar columns */
-    uint8_t b1lo, b1hi;         /* mouth band 1 rows */
-    uint8_t b2lo, b2hi;         /* mouth band 2 rows (0,0 = none) */
-} geo_t;
-
-static const geo_t GEO[] = {
-    [F_NEUTRAL]   = { 34, 42, 86, 94, 44, 46, 0, 0 },
-    [F_HAPPY]     = { 34, 42, 86, 94, 42, 50, 0, 0 },
-    [F_LAUGH]     = { 32, 44, 84, 96, 40, 52, 0, 0 },
-    [F_LOVE]      = { 32, 44, 84, 96, 42, 50, 0, 0 },
-    [F_SAD]       = { 34, 42, 86, 94, 52, 54, 0, 0 },
-    [F_SURPRISED] = { 30, 46, 82, 98, 36, 55, 0, 0 },
-    [F_WINK]      = { 32, 44, 89, 91, 42, 50, 0, 0 },
-    [F_SLEEPY]    = { 37, 39, 89, 91, 48, 50, 0, 0 },
-    [F_ANGRY]     = { 32, 44, 84, 96, 48, 50, 54, 56 },
-    [F_PARTY]     = { 30, 46, 82, 98, 40, 42, 46, 52 },
-    [F_BLINK]     = { 37, 39, 89, 91, 44, 46, 0, 0 },
-};
+#define MAX_CASCADE FACES_MAX_CASCADE
 
 typedef struct {
     uint8_t n;
@@ -59,30 +36,27 @@ typedef struct {
 
 static QueueHandle_t s_q;
 static face_t s_cur = F_NEUTRAL;
+static uint32_t s_send_fails;   /* cumulative failed sends; /emote reports it */
 
 /* ---- serial drawing primitives ----------------------------------------- */
 
-static void cmdf(const char *fmt, ...)
+/* Count the send result, then pace the burst (fw drains at 10 Hz). */
+static void paced(esp_err_t err)
 {
-    char buf[48];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
-    neato_send(buf);
+    if (err != ESP_OK) s_send_fails++;
     vTaskDelay(pdMS_TO_TICKS(CMD_GAP_MS));
 }
 
 static void draw_face(face_t f)
 {
     const geo_t *g = &GEO[f];
-    cmdf("SetLCD BGWhite");
-    cmdf("SetLCD FGBlack");
-    for (int c = g->l0; c <= g->l1; c++) cmdf("SetLCD VLine %d", c);
-    for (int c = g->r0; c <= g->r1; c++) cmdf("SetLCD VLine %d", c);
-    for (int r = g->b1lo; r <= g->b1hi; r++) cmdf("SetLCD HLine %d", r);
+    paced(neato_lcd_op("BGWhite"));
+    paced(neato_lcd_op("FGBlack"));
+    for (int c = g->l0; c <= g->l1; c++) paced(neato_lcd_vline(c));
+    for (int c = g->r0; c <= g->r1; c++) paced(neato_lcd_vline(c));
+    for (int r = g->b1lo; r <= g->b1hi; r++) paced(neato_lcd_hline(r));
     if (g->b2hi)
-        for (int r = g->b2lo; r <= g->b2hi; r++) cmdf("SetLCD HLine %d", r);
+        for (int r = g->b2lo; r <= g->b2hi; r++) paced(neato_lcd_hline(r));
     s_cur = f;
 }
 
@@ -97,9 +71,9 @@ static bool interrupted(void)
 static void anim_pulse(void)            /* love: heartbeat contrast throb */
 {
     for (int i = 0; i < 4 && !interrupted(); i++) {
-        cmdf("SetLCD Contrast 60");
+        paced(neato_lcd_contrast(60));
         vTaskDelay(pdMS_TO_TICKS(180));
-        cmdf("SetLCD Contrast %d", CONTRAST_DEF);
+        paced(neato_lcd_contrast(CONTRAST_DEF));
         vTaskDelay(pdMS_TO_TICKS(420));
     }
 }
@@ -107,34 +81,34 @@ static void anim_pulse(void)            /* love: heartbeat contrast throb */
 static void anim_dim(void)              /* sad: world slowly fades */
 {
     for (int c = CONTRAST_DEF; c >= 20 && !interrupted(); c -= 5) {
-        cmdf("SetLCD Contrast %d", c);
+        paced(neato_lcd_contrast(c));
         vTaskDelay(pdMS_TO_TICKS(150));
     }
     vTaskDelay(pdMS_TO_TICKS(600));
-    cmdf("SetLCD Contrast %d", CONTRAST_DEF);
+    paced(neato_lcd_contrast(CONTRAST_DEF));
 }
 
 static void anim_drowse(void)           /* sleepy: breathing fade + lights out */
 {
     for (int i = 0; i < 2 && !interrupted(); i++) {
         for (int c = CONTRAST_DEF; c >= 15; c -= 5) {
-            cmdf("SetLCD Contrast %d", c);
+            paced(neato_lcd_contrast(c));
             vTaskDelay(pdMS_TO_TICKS(90));
         }
         for (int c = 15; c <= CONTRAST_DEF; c += 5) {
-            cmdf("SetLCD Contrast %d", c);
+            paced(neato_lcd_contrast(c));
             vTaskDelay(pdMS_TO_TICKS(90));
         }
     }
-    if (!interrupted()) cmdf("SetLED BacklightOff");
+    if (!interrupted()) paced(neato_led("BacklightOff"));
 }
 
 static void anim_flicker(void)          /* party/laugh: strobe bars, then face */
 {
     for (int i = 0; i < 6 && !interrupted(); i++) {
-        cmdf("SetLCD BGWhite");
-        cmdf("SetLCD FGBlack");
-        cmdf(i & 1 ? "SetLCD HBars" : "SetLCD VBars");
+        paced(neato_lcd_op("BGWhite"));
+        paced(neato_lcd_op("FGBlack"));
+        paced(neato_lcd_op(i & 1 ? "HBars" : "VBars"));
         vTaskDelay(pdMS_TO_TICKS(220));
     }
     if (!interrupted()) draw_face(s_cur);
@@ -148,17 +122,17 @@ static void faces_task(void *arg)
     while (1) {
         if (xQueueReceive(s_q, &c, portMAX_DELAY) != pdTRUE) continue;
         ESP_LOGI(TAG, "cascade of %d faces", c.n);
-        neato_send("TestMode On");           /* SetLCD is TestMode-only */
+        neato_test_mode(true);               /* SetLCD is TestMode-only */
         vTaskDelay(pdMS_TO_TICKS(100));
-        cmdf("SetLED BacklightOn");
-        cmdf("SetLCD Contrast %d", CONTRAST_DEF);
+        paced(neato_led("BacklightOn"));
+        paced(neato_lcd_contrast(CONTRAST_DEF));
         for (int i = 0; i < c.n && !interrupted(); i++) {
             draw_face(c.seq[i]);
             vTaskDelay(pdMS_TO_TICKS(650));
             if (i < c.n - 1) {               /* eyelid flash between faces */
-                cmdf("SetLED BacklightOff");
+                paced(neato_led("BacklightOff"));
                 vTaskDelay(pdMS_TO_TICKS(120));
-                cmdf("SetLED BacklightOn");
+                paced(neato_led("BacklightOn"));
             }
         }
         if (interrupted()) continue;
@@ -173,38 +147,7 @@ static void faces_task(void *arg)
     }
 }
 
-/* ---- emoji -> face parsing ---------------------------------------------- */
-
-typedef struct { const char *utf8; face_t face; } emap_t;
-
-static const emap_t EMAP[] = {
-    { "\xF0\x9F\x98\x80", F_HAPPY },  /* 😀 */
-    { "\xF0\x9F\x98\x84", F_HAPPY },  /* 😄 */
-    { "\xF0\x9F\x98\x8A", F_HAPPY },  /* 😊 */
-    { "\xF0\x9F\x99\x82", F_HAPPY },  /* 🙂 */
-    { "\xF0\x9F\x98\x82", F_LAUGH },  /* 😂 */
-    { "\xF0\x9F\xA4\xA3", F_LAUGH },  /* 🤣 */
-    { "\xF0\x9F\x98\x8D", F_LOVE },   /* 😍 */
-    { "\xE2\x9D\xA4",     F_LOVE },   /* ❤ (with or without VS16) */
-    { "\xF0\x9F\x92\x96", F_LOVE },   /* 💖 */
-    { "\xF0\x9F\x92\x9A", F_LOVE },   /* 💚 */
-    { "\xF0\x9F\x98\xA2", F_SAD },    /* 😢 */
-    { "\xF0\x9F\x98\xAD", F_SAD },    /* 😭 */
-    { "\xF0\x9F\x98\x9E", F_SAD },    /* 😞 */
-    { "\xE2\x98\xB9",     F_SAD },    /* ☹ */
-    { "\xF0\x9F\x98\xAE", F_SURPRISED }, /* 😮 */
-    { "\xF0\x9F\x98\xB2", F_SURPRISED }, /* 😲 */
-    { "\xF0\x9F\x98\xB1", F_SURPRISED }, /* 😱 */
-    { "\xF0\x9F\x98\x89", F_WINK },   /* 😉 */
-    { "\xF0\x9F\x98\xB4", F_SLEEPY }, /* 😴 */
-    { "\xF0\x9F\x92\xA4", F_SLEEPY }, /* 💤 */
-    { "\xF0\x9F\x98\xA0", F_ANGRY },  /* 😠 */
-    { "\xF0\x9F\x98\xA4", F_ANGRY },  /* 😤 */
-    { "\xF0\x9F\x8E\x89", F_PARTY },  /* 🎉 */
-    { "\xF0\x9F\x8E\xAE", F_PARTY },  /* 🎮 */
-    { "\xE2\x9C\xA8",     F_PARTY },  /* ✨ */
-    { "\xF0\x9F\xA4\x96", F_NEUTRAL },/* 🤖 */
-};
+/* ---- emoji -> face parsing (table generated, see faces_table.h) --------- */
 
 static int parse_emojis(const char *text, face_t *out, int cap)
 {
@@ -230,18 +173,29 @@ static int parse_emojis(const char *text, face_t *out, int cap)
 esp_err_t emote_post(httpd_req_t *req)
 {
     char body[512];
-    int len = req->content_len < (int)sizeof(body) - 1 ? req->content_len : (int)sizeof(body) - 1;
-    int got = httpd_req_recv(req, body, len);
-    if (got <= 0) return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "recv fail");
-    body[got] = 0;
+    if (req->content_len >= (int)sizeof(body)) {
+        httpd_resp_set_status(req, "413 Payload Too Large");
+        return httpd_resp_sendstr(req, "emote body over 511 bytes\n");
+    }
+    int len = req->content_len;
+    int received = 0;
+    while (received < len) {
+        int got = httpd_req_recv(req, body + received, len - received);
+        if (got == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (got <= 0)
+            return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "recv fail");
+        received += got;
+    }
+    body[received] = 0;
 
     cascade_t c;
     c.n = parse_emojis(body, c.seq, MAX_CASCADE);
     if (c.n == 0) { c.n = 1; c.seq[0] = F_HAPPY; }  /* plain text: just smile */
     xQueueOverwrite(s_q, &c);                        /* newest cascade wins */
 
-    char resp[32];
-    snprintf(resp, sizeof(resp), "OK %d faces\n", c.n);
+    char resp[48];
+    snprintf(resp, sizeof(resp), "OK %d faces, %u send errors\n", c.n,
+             (unsigned)s_send_fails);
     return httpd_resp_sendstr(req, resp);
 }
 

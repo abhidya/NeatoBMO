@@ -4,6 +4,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "lwip/sockets.h"
+#include "neato_usb.h"
 #include "wifi_log.h"
 #include "wifi_mgr.h"
 
@@ -24,8 +25,8 @@ static int tee_vprintf(const char *fmt, va_list args)
     return s_orig_vprintf ? s_orig_vprintf(fmt, args) : len;
 }
 
-/* also used by main.c to mirror raw Neato bytes */
-void net_log_raw(const uint8_t *data, size_t len)
+/* rx subscriber: mirrors raw Neato bytes to the log client */
+static void net_log_raw(const uint8_t *data, size_t len)
 {
     if (s_client >= 0) {
         if (send(s_client, data, len, MSG_DONTWAIT) < 0) {
@@ -59,10 +60,10 @@ static void log_server_task(void *arg)
 
 /* Raw command bridge: every line received on TCP 3333 goes to the Neato.
  * Replies come back on this same socket (and the log socket). */
-void neato_send(const char *cmd); /* from main.c */
 static int s_cmd_client = -1;
 
-void net_cmd_reply(const uint8_t *data, size_t len)
+/* rx subscriber: mirrors raw Neato bytes to the command client */
+static void net_cmd_reply(const uint8_t *data, size_t len)
 {
     if (s_cmd_client >= 0) {
         if (send(s_cmd_client, data, len, MSG_DONTWAIT) < 0) {
@@ -114,6 +115,8 @@ void wifi_log_start(void)
     wifi_mgr_start(); /* STA from NVS/secrets, or setup AP -- either way we get an IP */
 
     s_orig_vprintf = esp_log_set_vprintf(tee_vprintf);
+    neato_rx_subscribe(net_log_raw);
+    neato_rx_subscribe(net_cmd_reply);
     xTaskCreate(log_server_task, "log_srv", 4096, NULL, 5, NULL);
     xTaskCreate(cmd_server_task, "cmd_srv", 4096, NULL, 5, NULL);
 }

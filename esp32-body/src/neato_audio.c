@@ -194,7 +194,11 @@ esp_err_t speak_post(httpd_req_t *req)
 /* Streaming relay for boards that cannot stage the whole bank in RAM.
  * First 2 bytes are checked for the KT marker; SHA-256 accumulates as
  * pages stream through to the robot.  Any anomaly poisons the transport
- * checksum so the receiver rejects the transfer. */
+ * checksum so the receiver rejects the transfer.
+ *
+ * Runs under the same sound-operation lock as neato_install_soundbank and
+ * maintains the same module-reuse cache: cleared before flash is touched,
+ * set only after the streamed bytes proved to match the expected SHA. */
 static esp_err_t soundbank_stream(httpd_req_t *req, size_t len,
                                   const char *expected_sha)
 {
@@ -203,9 +207,20 @@ static esp_err_t soundbank_stream(httpd_req_t *req, size_t len,
     mbedtls_sha256_init(&sha);
     mbedtls_sha256_starts(&sha, 0);
 
-    esp_err_t err = neato_binary_begin("Upload sound", len, 60000);
+    esp_err_t err = neato_sound_operation_begin(1000);
     if (err != ESP_OK) {
         mbedtls_sha256_free(&sha);
+        return err;
+    }
+    /* A timeout or rejected transfer may still have altered flash. Never let
+     * the module-reuse cache survive an uncertain write. */
+    s_installed_soundbank_sha256[0] = 0;
+
+    neato_txn_t *txn;
+    err = neato_binary_begin("Upload sound", len, 60000, &txn);
+    if (err != ESP_OK) {
+        mbedtls_sha256_free(&sha);
+        neato_sound_operation_end();
         return err;
     }
 
@@ -223,7 +238,7 @@ static esp_err_t soundbank_stream(httpd_req_t *req, size_t len,
             if (page[0] != 'K' || page[1] != 'T') { poison = true; break; }
         }
         mbedtls_sha256_update(&sha, page, (size_t)got);
-        err = neato_binary_write(page, (size_t)got, 60000);
+        err = neato_binary_write(txn, page, (size_t)got, 60000);
         if (err != ESP_OK) { poison = true; break; }
         received += (size_t)got;
     }
@@ -247,12 +262,16 @@ static esp_err_t soundbank_stream(httpd_req_t *req, size_t len,
         while (received < len) {
             size_t pad = len - received;
             if (pad > sizeof(page)) pad = sizeof(page);
-            if (neato_binary_write(page, pad, 60000) != ESP_OK) break;
+            if (neato_binary_write(txn, page, pad, 60000) != ESP_OK) break;
             received += pad;
         }
     }
-    err = neato_binary_end(poison, 60000);
+    err = neato_binary_end(txn, poison, 60000);
     if (poison && err == ESP_OK) err = ESP_ERR_INVALID_CRC;
+    if (err == ESP_OK)
+        snprintf(s_installed_soundbank_sha256,
+                 sizeof(s_installed_soundbank_sha256), "%s", expected_sha);
+    neato_sound_operation_end();
     ESP_LOGI(TAG, "soundbank stream: %u/%u bytes, %s", (unsigned)received,
              (unsigned)len, poison ? "poisoned (rejected)" : "clean");
     return err;

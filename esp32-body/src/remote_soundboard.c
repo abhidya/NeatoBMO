@@ -25,6 +25,7 @@
 #include "freertos/task.h"
 #include "mbedtls/sha256.h"
 #include "neato_audio.h"
+#include "neato_protocol.h"
 #include "neato_usb.h"
 #include "remote_soundboard.h"
 
@@ -217,9 +218,7 @@ static void sound_task(void *arg)
             s_status.slot_index = i;
             xSemaphoreGive(s_lock);
         }
-        char command[32];
-        snprintf(command, sizeof(command), "PlaySound %d", job->slots[i]);
-        err = neato_send_checked(command);
+        err = neato_play_slot(job->slots[i]);
         if (err != ESP_OK) {
             char message[160];
             snprintf(message, sizeof(message), "PlaySound failed: %s",
