@@ -1,0 +1,28 @@
+{
+  "device": {
+    "model": "XV-12",
+    "serial": "WTD41611DD-0037829-P",
+    "firmware": "2.4.15667",
+    "mainboard": "7.1"
+  },
+  "capture_format": "48 kHz mono signed 16-bit PCM WAV via MacBook Pro microphone",
+  "accepted_sound_ids": [0, 1, 2, 3, 6, 7, 8, 9, 10, 19],
+  "raw_captures": {
+    "group-a.wav": [0, 1, 2],
+    "group-b.wav": [3, 6, 7],
+    "group-c.wav": [8, 9, 10],
+    "group-d.wav": [19]
+  },
+  "reliably_trimmed_clips": {
+    "0": "clips/slot-00-notification.wav",
+    "1": "clips/slot-01-chirp.wav",
+    "2": "clips/slot-02-warble.wav",
+    "3": "clips/slot-03-warble.wav",
+    "6": "clips/slot-06-high-tone.wav",
+    "8": "clips/slot-08-status-tone.wav",
+    "9": "clips/slot-09-status-tone.wav"
+  },
+  "inconclusive_capture_ids": [7, 10, 19],
+  "public_reference_sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+  "device_flash_backup": false
+}

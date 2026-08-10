@@ -1,6 +1,11 @@
-"""Sound vocabulary harvested from the XV-12 (PlaySound 0-20)."""
+"""Sound vocabulary for the attached XV-12.
 
-SOUNDS = {
+The public protocol documents IDs 0--20, but firmware 2.4.15667 on this robot
+only accepts a ten-slot subset.  Keep the documentation map separately so the
+runtime never silently sends a known out-of-range sound command.
+"""
+
+DOCUMENTED_SOUNDS = {
     "waking_up": 0,
     "starting_cleaning": 1,
     "cleaning_completed": 2,
@@ -24,14 +29,22 @@ SOUNDS = {
     "thank_you": 20,
 }
 
+# Verified by direct USB sweep on WTD41611DD-0037829-P, 2026-08-10.
+LIVE_SOUND_IDS = frozenset({0, 1, 2, 3, 6, 7, 8, 9, 10, 19})
+SOUNDS = {
+    name: sound_id
+    for name, sound_id in DOCUMENTED_SOUNDS.items()
+    if sound_id in LIVE_SOUND_IDS
+}
+
 # emotional aliases for the buddy persona
 MOODS = {
     "happy": "cleaning_completed",
     "hello": "waking_up",
-    "curious": "exploring",
-    "scared": "picked_up",
-    "sad": "going_to_sleep",
-    "grateful": "thank_you",
+    "curious": "test1",
+    "scared": "attention_needed",
+    "sad": "attention_needed",
+    "grateful": "cleaning_completed",
     "alarm": "alert",
-    "protest": "user_canceled",
+    "protest": "attention_needed",
 }

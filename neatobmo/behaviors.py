@@ -61,7 +61,7 @@ def dance(r):
     r.move(-50, -50, 60)   # slow reverse "bow"
     time.sleep(1.2)
     r.move(50, 50, 120)
-    r.play("thank_you")
+    r.play("grateful")
     r.led("green_dim")
 
 

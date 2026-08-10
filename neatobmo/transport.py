@@ -41,7 +41,7 @@ class SerialTransport:
                     break
         return buf.split(TERM)[0].decode(errors="replace")
 
-    def send_binary(self, cmd, payload, timeout=15.0):
+    def send_binary(self, cmd, payload, timeout=15.0, allow_terminator=False):
         """Send a Neato-style binary transaction.
 
         Patched XV firmware uses the updater's existing framing:
@@ -71,9 +71,15 @@ class SerialTransport:
         self.ser.flush()
 
         reply = self._read_until({ACK, NAK, TERM}, timeout)
+        if allow_terminator and TERM in reply and NAK not in reply:
+            return reply
         if ACK not in reply:
             reason = "NAK" if NAK in reply else "transfer ended without ACK"
+            detail = reply.replace(TERM, b"").decode(errors="replace").strip()
+            if detail:
+                reason = f"{reason}: {detail}"
             raise BinaryTransferError(f"robot rejected {cmd!r}: {reason}")
+        return reply
 
     def _read_until(self, markers, timeout):
         buf = bytearray()

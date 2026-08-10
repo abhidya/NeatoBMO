@@ -8,6 +8,7 @@ from unittest import mock
 import bmo_brain_server
 import bmo_web
 from neatobmo.robot import Robot
+from neatobmo.sounds import LIVE_SOUND_IDS, SOUNDS
 from neatobmo.transport import BinaryTransferError, SerialTransport
 
 
@@ -66,8 +67,27 @@ class BinaryTransferTests(unittest.TestCase):
         with self.assertRaisesRegex(BinaryTransferError, "NAK"):
             transport.send_binary("PlaySound File", b"payload", timeout=0.1)
 
+    def test_binary_error_preserves_terminal_text(self):
+        transport = self.transport([b"\x05", b"Bad sound module\r\n\x1a"])
+
+        with self.assertRaisesRegex(BinaryTransferError, "Bad sound module"):
+            transport.send_binary("Upload sound noburn", b"payload", timeout=0.1)
+
+    def test_no_burn_transfer_allows_terminator_completion(self):
+        transport = self.transport([b"\x05", b"\x1a"])
+
+        reply = transport.send_binary(
+            "Upload sound noburn", b"payload", timeout=0.1, allow_terminator=True
+        )
+
+        self.assertEqual(reply, b"\x1a")
+
 
 class RobotVoiceTests(unittest.TestCase):
+    def test_runtime_sound_vocabulary_is_limited_to_live_verified_ids(self):
+        self.assertEqual(set(SOUNDS.values()), LIVE_SOUND_IDS)
+        self.assertNotIn("thank_you", SOUNDS)
+
     def test_play_file_keeps_stock_sound_api_separate(self):
         wav = b"RIFF" + bytes(4) + b"WAVE" + bytes(32)
         robot = Robot.__new__(Robot)
