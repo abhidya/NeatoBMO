@@ -35,6 +35,24 @@ Known state:
   known to match the installed `2.4.15667` bytes.
 - Public application updates are opaque `.enc` files with a 512-byte `neato`
   format-2 envelope and high-entropy, 512-byte-aligned payloads.
+- **Envelope structure (measured 2026-08-10 across builds 15893/16621/17844/
+  18755 P):** plaintext header — off 0-3 payload length (LE u32), off 4
+  `0x02` format version, off 5-9 `"neato"` magic, off 10-15 zero, **off
+  16-31 a 16-byte high-entropy field that is unique per image** (an
+  IV/nonce). Body: entropy **7.9998 bits/byte**, flat byte histogram, and
+  **zero repeated 16-byte blocks** in 53k (not ECB), zero repeated 512-byte
+  pages. Read off the wire this is a **128-bit block cipher (AES-class) in
+  CBC/CTR with a per-image IV and an on-chip key** — the MCU decrypts
+  internally.
+- **Brute force is not viable:** a 128-bit key is 2^128 ≈ 3.4e38 — ~1e13
+  years even at 1e18 keys/s. No ECB structure, no keystream reuse
+  (cross-hardware byte-differencing matched random), and known-plaintext
+  does not weaken AES. The only realistic route is **key extraction** from
+  the bootloader (glitch/side-channel or a leaked key), not cryptanalysis —
+  and that is gated by the no-readback / encrypted-bootloader state above.
+- `LDS_15295.enc` (16512 B lidar image) is **byte-identical across every
+  build 2.5–3.2**, carries a different (non-`neato`) 32-byte header, and is
+  also full-entropy — no leverage.
 - Pairwise comparison of the same 2.5 build for B/D/M/P hardware matches the
   random 1/256 byte-equality baseline, ruling out a reused aligned keystream
   that could be attacked by simple ciphertext differencing.
