@@ -332,6 +332,71 @@ class TextChunkingTests(unittest.TestCase):
                 text, self.synth_by_words(1.5), self.capacities, max_chunks=3)
 
 
+class ReservedThinkingSlotTests(unittest.TestCase):
+    """Reserved slots carry thinking audio in every generated bank."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.baseline = BMO_ARTIFACT.read_bytes()
+        cls.records = {r.sound_id: r
+                       for r in record_ranges_from_bytes(cls.baseline)}
+
+    def make_reserved(self):
+        return {3: b"\x11\x22" * 100, 19: b"\x33\x44" * 80}
+
+    def make_segments(self):
+        caps = [(sid, self.records[sid].sample_count)
+                for sid in SLOT_SEQUENCE if sid not in (3, 19)]
+        samples = normalize_peak(array("h", tone(2.0)))
+        return plan_segments(samples, caps)
+
+    def test_reserved_pcm_lands_in_slot_and_validates(self):
+        reserved = self.make_reserved()
+        segments = self.make_segments()
+        built, manifest = build_tts_bank(self.baseline, segments, "silence",
+                                         reserved=reserved)
+        record = self.records[3]
+        field = built[record.pcm_offset:record.pcm_offset + record.pcm_byte_count]
+        self.assertEqual(field[:200], reserved[3])
+        self.assertFalse(any(field[200:]))
+        roles = {s["sound_id"]: s["role"] for s in manifest["slots"]}
+        self.assertEqual(roles[3], "thinking")
+        self.assertEqual(roles[19], "thinking")
+        report = validate_tts_bank(self.baseline, built, segments, "silence",
+                                   reserved=reserved)
+        self.assertTrue(report["ok"],
+                        [c for c in report["checks"] if not c["ok"]])
+
+    def test_validation_flags_tampered_reserved_slot(self):
+        reserved = self.make_reserved()
+        segments = self.make_segments()
+        built, _ = build_tts_bank(self.baseline, segments, "silence",
+                                  reserved=reserved)
+        tampered = bytearray(built)
+        tampered[self.records[3].pcm_offset] ^= 0xFF
+        report = validate_tts_bank(self.baseline, bytes(tampered), segments,
+                                   "silence", reserved=reserved)
+        failed = {c["check"] for c in report["checks"] if not c["ok"]}
+        self.assertIn("slot_3_reserved_thinking", failed)
+
+    def test_speech_cannot_target_a_reserved_slot(self):
+        seg = SlotSegment(0, 3, self.records[3].sample_count, b"\x01\x02" * 10)
+        with self.assertRaisesRegex(TtsBankError, "reserved"):
+            build_tts_bank(self.baseline, [seg], "silence",
+                           reserved=self.make_reserved())
+
+    def test_generated_thinking_assets_fit_their_slots(self):
+        assets = ROOT / "assets/bmo-thinking-sounds"
+        limits = {"thinking-blip-a.wav": 3, "thinking-blip-b.wav": 19,
+                  "thinking-hum.wav": 9}
+        for name, sound_id in limits.items():
+            path = assets / name
+            self.assertTrue(path.exists(), name)
+            pcm = tts_bank.decode_wav(path.read_bytes())
+            self.assertLessEqual(len(pcm), self.records[sound_id].sample_count)
+            self.assertGreater(max(abs(s) for s in pcm), 1000)
+
+
 class SanitizeSpeechTextTests(unittest.TestCase):
     def test_emoji_and_symbols_are_stripped(self):
         self.assertEqual(

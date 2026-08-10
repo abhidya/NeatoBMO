@@ -215,9 +215,52 @@ def tts_status_payload():
     }
 
 
+# Thinking-sounds UX: three slots in every generated speech bank are reserved
+# for pre-rendered "thinking" audio (chiptune blips + a neural BMO hum), so a
+# background loop can vocalize while the brain/synth is busy — zero extra
+# flash writes, whatever bank is installed.  On the stock BMO bank the same
+# IDs hold chirps, which work fine as thinking noises too.
+THINKING_DIR = REPO_ROOT / "assets/bmo-thinking-sounds"
+THINKING_SLOT_FILES = {3: "thinking-blip-a.wav", 19: "thinking-blip-b.wav",
+                       9: "thinking-hum.wav"}
+THINKING_PATTERN = [(3, 1.6), (9, 2.8), (19, 1.8), (9, 3.0)]
+
+
+def load_thinking_sounds():
+    sounds = {}
+    for sound_id, name in THINKING_SLOT_FILES.items():
+        path = THINKING_DIR / name
+        if path.exists():
+            sounds[sound_id] = tts_bank.decode_wav(path.read_bytes()).tobytes()
+    return sounds
+
+
+THINKING_SOUNDS = load_thinking_sounds()
+
+
+def tts_thinking_loop(stop):
+    """Play thinking blips/hums between robot commands until stopped."""
+    if robot is None or not THINKING_SOUNDS:
+        return
+    index = 0
+    while not stop.is_set():
+        sound_id, wait = THINKING_PATTERN[index % len(THINKING_PATTERN)]
+        if rlock.acquire(timeout=0.2):
+            try:
+                robot.cmd(f"PlaySound {sound_id}", timeout=3)
+            except Exception:
+                pass
+            finally:
+                rlock.release()
+        if stop.wait(wait):
+            break
+        index += 1
+
+
 def tts_capacities(baseline):
     records = {r.sound_id: r for r in tts_bank.record_ranges_from_bytes(baseline)}
-    return [(sid, records[sid].sample_count) for sid in tts_bank.SLOT_SEQUENCE]
+    return [(sid, records[sid].sample_count) for sid in tts_bank.SLOT_SEQUENCE
+            if sid not in THINKING_SOUNDS]
 
 
 def tts_run_speak(job):
@@ -281,13 +324,21 @@ def tts_run_speak(job):
                 item = chunk_queue.get()
 
         # Wait for the first chunk before taking the robot lock, so other
-        # robot commands aren't blocked during the initial synthesis.
-        first = chunk_queue.get()
+        # robot commands aren't blocked during the initial synthesis — and
+        # let BMO vocalize thinking sounds while the wait lasts.
+        think_stop = threading.Event()
+        threading.Thread(target=tts_thinking_loop, args=(think_stop,),
+                         daemon=True).start()
+        try:
+            first = chunk_queue.get()
+        finally:
+            think_stop.set()
         with rlock:
             report = tts_bank.speak_chunks_operation(
                 burner, baseline, queued_chunks(first), "silence",
                 progress=job["progress"], stop_event=job["stop"],
-                installed_sha256=installed_bank_sha256)
+                installed_sha256=installed_bank_sha256,
+                reserved=THINKING_SOUNDS)
         job["report"] = report
         burns = sum(1 for c in report["chunks"]
                     if not c["burn"].get("skipped"))

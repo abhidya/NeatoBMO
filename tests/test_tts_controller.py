@@ -350,8 +350,8 @@ class SilentModeAndAutoSpeechTests(unittest.TestCase):
 
         original_build = tts_bank.build_tts_bank
 
-        def tampered_build(baseline, segments, unused):
-            built, manifest = original_build(baseline, segments, unused)
+        def tampered_build(baseline, segments, unused, **kwargs):
+            built, manifest = original_build(baseline, segments, unused, **kwargs)
             tampered = bytearray(built)
             tampered[300] ^= 0xFF  # directory byte: validation must fail
             return bytes(tampered), manifest

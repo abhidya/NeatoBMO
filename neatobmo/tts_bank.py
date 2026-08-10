@@ -337,19 +337,27 @@ def pcm_to_wav_bytes(pcm: bytes) -> bytes:
 
 
 def build_tts_bank(baseline: bytes, segments: list[SlotSegment],
-                   unused_slots: str = "silence") -> tuple[bytes, dict]:
+                   unused_slots: str = "silence",
+                   reserved: dict | None = None) -> tuple[bytes, dict]:
     """Overlay segment PCM onto the baseline image, PCM fields only.
 
     ``unused_slots`` is "silence" (zero the PCM of live slots that carry no
-    speech) or "keep" (retain the baseline PCM).  Recorded in the manifest.
+    speech) or "keep" (retain the baseline PCM).  ``reserved`` maps sound IDs
+    to raw PCM (e.g. thinking blips) written into slots that never carry
+    speech, so a thinking loop can play them whatever bank is installed.
+    Recorded in the manifest.
     """
     if unused_slots not in ("silence", "keep"):
         raise TtsBankError("unused_slots must be 'silence' or 'keep'")
+    reserved = reserved or {}
     records = {r.sound_id: r for r in record_ranges_from_bytes(baseline)}
     by_id = {seg.sound_id: seg for seg in segments}
-    unknown = sorted(set(by_id) - set(records))
+    unknown = sorted((set(by_id) | set(reserved)) - set(records))
     if unknown:
         raise TtsBankError(f"segments target absent sound IDs: {unknown}")
+    overlap = sorted(set(by_id) & set(reserved))
+    if overlap:
+        raise TtsBankError(f"speech segments target reserved slots: {overlap}")
     output = bytearray(baseline)
     manifest_slots = []
     for sound_id in sorted(records):
@@ -362,6 +370,14 @@ def build_tts_bank(baseline: bytes, segments: list[SlotSegment],
                     f"slot PCM field holds {record.pcm_byte_count}")
             payload = seg.pcm + bytes(record.pcm_byte_count - len(seg.pcm))
             role = "speech"
+        elif sound_id in reserved:
+            pcm = bytes(reserved[sound_id])
+            if len(pcm) > record.pcm_byte_count:
+                raise TtsBankError(
+                    f"reserved sound for slot {sound_id} is {len(pcm)} bytes; "
+                    f"slot PCM field holds {record.pcm_byte_count}")
+            payload = pcm + bytes(record.pcm_byte_count - len(pcm))
+            role = "thinking"
         elif unused_slots == "silence":
             payload = bytes(record.pcm_byte_count)
             role = "silenced"
@@ -396,8 +412,10 @@ def build_tts_bank(baseline: bytes, segments: list[SlotSegment],
 
 def validate_tts_bank(baseline: bytes, built: bytes,
                       segments: list[SlotSegment],
-                      unused_slots: str) -> dict:
+                      unused_slots: str,
+                      reserved: dict | None = None) -> dict:
     """Prove the built image is a safe PCM-only overlay of the baseline."""
+    reserved = reserved or {}
     checks: list[dict] = []
 
     def check(name: str, ok: bool, detail: str = "") -> bool:
@@ -451,7 +469,11 @@ def validate_tts_bank(baseline: bytes, built: bytes,
         if sound_id in by_id:
             continue
         field_ = built[record.pcm_offset:record.pcm_offset + record.pcm_byte_count]
-        if unused_slots == "silence":
+        if sound_id in reserved:
+            pcm = bytes(reserved[sound_id])
+            expected = pcm + bytes(record.pcm_byte_count - len(pcm))
+            check(f"slot_{sound_id}_reserved_thinking", field_ == expected)
+        elif unused_slots == "silence":
             check(f"slot_{sound_id}_unused_silenced", not any(field_))
         else:
             check(f"slot_{sound_id}_unused_baseline",
@@ -876,7 +898,8 @@ def speak_chunks_operation(burner: BankBurner, baseline: bytes,
                            unused_slots: str = "silence",
                            progress: PlaybackProgress | None = None,
                            stop_event=None,
-                           installed_sha256: str | None = None) -> dict:
+                           installed_sha256: str | None = None,
+                           reserved: dict | None = None) -> dict:
     """Fully automatic speech: build+validate+burn+play each chunk in order.
 
     ``chunks`` may be a list or a live generator (streaming pipeline): while
@@ -903,9 +926,9 @@ def speak_chunks_operation(burner: BankBurner, baseline: bytes,
         progress.current_text = chunk["text"]
         progress.state = "building"
         built, manifest = build_tts_bank(baseline, chunk["segments"],
-                                         unused_slots)
+                                         unused_slots, reserved=reserved)
         validation = validate_tts_bank(baseline, built, chunk["segments"],
-                                       unused_slots)
+                                       unused_slots, reserved=reserved)
         if not validation["ok"]:
             failed = [c["check"] for c in validation["checks"] if not c["ok"]]
             raise BankValidationError(
