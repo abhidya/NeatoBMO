@@ -53,6 +53,29 @@ Known state:
 - `LDS_15295.enc` (16512 B lidar image) is **byte-identical across every
   build 2.5–3.2**, carries a different (non-`neato`) 32-byte header, and is
   also full-entropy — no leverage.
+- **Weakness sweep (2026-08-10), all negative on the payload cipher:** no
+  ECB (0 repeats in 53k×16 B and 100k×8 B blocks) → rules out ECB and any
+  64-bit block cipher (DES/3DES/Blowfish/TEA); no stream keystream reuse
+  (XOR of the two same-size 805888 B images 2.5⊕2.7 across the payload is
+  7.999 bits/byte); no weak KDF (94 era-typical candidates — raw/MD5/SHA1/
+  SHA256 of `neato`/`vorwerk`/`VR100`/`XV11`/`kobold`/magic/IV, AES-128
+  CBC+CTR with the header IV — every decryption stayed full-entropy). The
+  per-image payload (off 2080→end, entropy 7.95) is encrypted correctly;
+  there is no search-space shortcut in it.
+- **But the image has a fixed, IV-independent crypto block worth chasing.**
+  Layout: `0–31` header, `32–511` zero, **`512–~2080` (~1568 B) a block
+  that is identical across builds within an era** — 2.5 == 2.7 (100 %),
+  3.1 ≈ 3.2 (97 %), cross-era only 7 % (random) — with a sub-block near
+  off 544 identical across **all** builds. It is independent of the
+  per-image IV, so it is not payload; its size/epoch-versioning fit a
+  **key-wrap or RSA signature**. If key-wrap, the per-image content key
+  sits here under a device master key (~2 master keys span all four
+  builds → recovering one unlocks a whole era); if a signature, firmware
+  is signed and a decrypt alone would not permit code injection. Either
+  way the lead is **on-chip master/signing-key extraction**, not
+  cryptanalysis — still gated by the no-readback state — and a next step
+  is fingerprinting the `512–2080` block against known RSA moduli / leaked
+  2011–2013 Neato/Vorwerk keys.
 - Pairwise comparison of the same 2.5 build for B/D/M/P hardware matches the
   random 1/256 byte-equality baseline, ruling out a reused aligned keystream
   that could be attacked by simple ciphertext differencing.
