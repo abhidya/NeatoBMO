@@ -26,6 +26,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from neatobmo import Robot
+from neatobmo import cues
 from neatobmo import emote
 from neatobmo import faces
 from neatobmo import tts_bank
@@ -37,14 +38,19 @@ API_KEY = open(KEY_FILE).read().strip() if os.path.exists(KEY_FILE) else None
 PORT = int(os.environ.get("PORT", "8485"))
 ESP32 = os.environ.get("NEATOBMO_ESP32", "http://10.0.0.106")
 
-# The persona's emoji palette is generated from the face engine's table so
-# the LLM can only emit emojis the LCD knows how to draw.
+# Stage cues are the persona's "tool calls": the small brain can't do real
+# tool calling, so it acts through bracketed cues that neatobmo/cues.py
+# parses best-effort (fuzzy names, any bracket style). Emojis still work as
+# a fallback face layer, so both vocabularies are offered.
 PERSONA = ("You are BMO, a cheerful little robot buddy living inside a Neato robot "
            "vacuum. You are playful, curious, and love your human. Keep replies to "
-           "1-3 short spoken-style sentences. Express your feelings with LOTS of "
-           "emojis sprinkled through every reply — pick from "
-           + " ".join(emote.EMOJI_FACES)
-           + " — your face screen plays them in order!")
+           "1-3 short spoken-style sentences. Act while you talk with stage cues "
+           "in square brackets, placed right where the feeling happens. "
+           "Faces: " + " ".join(f"[{n}]" for n in cues.FACE_NAMES) + ". "
+           "Moves: " + " ".join(f"[{n}]" for n in cues.MOVES) + ". "
+           "Sounds: " + " ".join(f"[sound:{n}]" for n in cues.SOUND_CUES) + ". "
+           "Use 1-3 cues per reply. Example: \"Yay, you are back! [happy] [wiggle] "
+           "Who wants to play video games? [sound:videogames] [party]\"")
 
 robot = None
 body_via = None  # "usb" | "bridge" | None, set at startup for the UI status pill
@@ -392,6 +398,7 @@ def body(fn):
 
 PAGE = """<!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light only">
 <title>BMO</title>
 <style>
  @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=VT323&display=swap');
@@ -533,6 +540,12 @@ PAGE = """<!doctype html>
        white-space:pre-wrap;word-break:break-all;background:var(--crt);color:var(--phos);
        border:3px solid var(--bezel);border-radius:12px;padding:8px 10px}
  #ttsoplog:empty{display:none}
+ :root{color-scheme:light only}
+ @media(max-width:480px){
+  #bar{gap:6px;padding:10px 8px calc(10px + env(safe-area-inset-bottom))}
+  #voice{font-size:12px;padding:6px 4px;max-width:29vw}
+  #mic,#sendbtn{width:44px;height:44px}
+  #face{font-size:52px}}
 </style>
 <div id="tabs">
  <div class="tab on" data-p="chat" onclick="show('chat')">💬 Chat</div>
@@ -1157,10 +1170,16 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 return self._json({"error": str(e)})
         if self.path == "/emote":
-            text = raw.decode(errors="replace")
-            faces_n = len(emote.parse_emojis(text)) or 1
-            emote_react(text)
-            return self._json({"ok": True, "faces": faces_n})
+            # accepts stage cues and emojis alike, so cues can be tested by
+            # hand: face cues become emojis for the cascade, sound/move cues
+            # run on the body
+            plan = cues.parse(raw.decode(errors="replace"))
+            faces_n = len(emote.parse_emojis(plan.display)) or 1
+            emote_react(plan.display)
+            if plan.actions():
+                body(lambda: cues.perform(robot, plan.actions()))
+            return self._json({"ok": True, "faces": faces_n,
+                               "cues": plan.steps})
         if self.path == "/ota":
             try:
                 req = urllib.request.Request(ESP32 + "/ota", data=raw,
@@ -1180,17 +1199,26 @@ class Handler(BaseHTTPRequestHandler):
             reply = None
             err = str(e)
         if reply:
-            emote_react(reply)
+            # the reply is a little performance: cues out of the text, faces
+            # to the cascade (as emojis), sounds/moves to the body, clean
+            # words to the voice
+            plan = cues.parse(reply)
+            emote_react(plan.display)
+            if plan.actions():
+                body(lambda: (robot.led("green"),
+                              cues.perform(robot, plan.actions())))
             voice_error = None
             if speak_on_robot:
                 # BMO's actual voice: the reply is flashed into the sound
                 # bank and spoken (skip the chirp so speech starts clean).
                 with tts_job_lock:
-                    _, voice_error = tts_start_speak(reply, "en+f4")
-            else:
+                    _, voice_error = tts_start_speak(plan.speech, "en+f4")
+            elif not plan.actions():
+                # no cue sounds: keep the old tone-guessed chirp fallback
                 body(lambda: (robot.led("green"), robot.play(chirp_for(reply)),
                               faces.blink(robot, 2, 0.1)))
-            out = {"reply": reply, "spoke": speak_on_robot and voice_error is None}
+            out = {"reply": plan.display, "cues": plan.steps,
+                   "spoke": speak_on_robot and voice_error is None}
             if voice_error:
                 out["voice_error"] = voice_error
         else:
