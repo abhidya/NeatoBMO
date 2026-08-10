@@ -1,0 +1,225 @@
+{
+  "checks": [
+    {
+      "name": "exact_file_size_770048",
+      "passed": true,
+      "value": 770048
+    },
+    {
+      "name": "directory_bytes_unchanged",
+      "passed": true
+    },
+    {
+      "name": "record_start_pages_unchanged",
+      "passed": true
+    },
+    {
+      "name": "record_headers_unchanged",
+      "passed": true
+    },
+    {
+      "changed_byte_count": 746449,
+      "name": "non_pcm_bytes_unchanged",
+      "passed": true,
+      "violation_count": 0
+    },
+    {
+      "name": "all_live_ids_present",
+      "passed": true,
+      "value": [
+        0,
+        1,
+        2,
+        3,
+        6,
+        7,
+        8,
+        9,
+        10,
+        19
+      ]
+    },
+    {
+      "name": "all_leading_content_matches_normalized_previews",
+      "passed": true
+    },
+    {
+      "name": "all_pcm_tails_zero_silence",
+      "passed": true
+    },
+    {
+      "name": "no_leading_preview_clipping",
+      "passed": true
+    }
+  ],
+  "image": "assets/bmo-sound-bank-offline-20260810/DfltSoundLib.BMO.pcm-only.Rev1.0.bin",
+  "passed": true,
+  "per_slot": [
+    {
+      "clips": false,
+      "leading_content_bytes": 120840,
+      "leading_content_seconds": 2.740136,
+      "leading_content_sha256": "edbeb39e3768dbaaeb64b03f843fb2304497a493f7196f03c915af6881eba99c",
+      "leading_matches_normalized_preview": true,
+      "original_duration_seconds": 2.881995,
+      "pcm_byte_count_header_preserved": 127096,
+      "peak_abs_s16": 12036,
+      "sample_count_header_preserved": 63548,
+      "silence_padding_all_zero": true,
+      "silence_padding_bytes": 6256,
+      "sound_id": 0,
+      "start_page": 8,
+      "written_pcm_sha256": "cb25ed2076768173a8c37312943305299137a29555c326d2aa05a455e8068102"
+    },
+    {
+      "clips": false,
+      "leading_content_bytes": 79372,
+      "leading_content_seconds": 1.799819,
+      "leading_content_sha256": "b04448ee0aa79fcefe101b125f727d749354f64ac82379ae8340331518c9109d",
+      "leading_matches_normalized_preview": true,
+      "original_duration_seconds": 1.867392,
+      "pcm_byte_count_header_preserved": 82352,
+      "peak_abs_s16": 10949,
+      "sample_count_header_preserved": 41176,
+      "silence_padding_all_zero": true,
+      "silence_padding_bytes": 2980,
+      "sound_id": 1,
+      "start_page": 257,
+      "written_pcm_sha256": "11c58d559fcc6aa9b6544e8073a305367fca0182abb352f25bcd337b2dc4afe5"
+    },
+    {
+      "clips": false,
+      "leading_content_bytes": 40428,
+      "leading_content_seconds": 0.916735,
+      "leading_content_sha256": "560d7c1e78be5a0171266d548427c303ba03ad0f449c19ea869491439892636d",
+      "leading_matches_normalized_preview": true,
+      "original_duration_seconds": 1.869388,
+      "pcm_byte_count_header_preserved": 82440,
+      "peak_abs_s16": 9815,
+      "sample_count_header_preserved": 41220,
+      "silence_padding_all_zero": true,
+      "silence_padding_bytes": 42012,
+      "sound_id": 2,
+      "start_page": 418,
+      "written_pcm_sha256": "0f9f7a3626b0964078e4eacf7462ffdb364bd95ca420e33abba6e3d56bcd8d15"
+    },
+    {
+      "clips": false,
+      "leading_content_bytes": 13230,
+      "leading_content_seconds": 0.3,
+      "leading_content_sha256": "30d4fe1fb4ef4cf0a48e7b3578bbded84f60c500039bd52b70de9cec0511fd0e",
+      "leading_matches_normalized_preview": true,
+      "original_duration_seconds": 0.321451,
+      "pcm_byte_count_header_preserved": 14176,
+      "peak_abs_s16": 22981,
+      "sample_count_header_preserved": 7088,
+      "silence_padding_all_zero": true,
+      "silence_padding_bytes": 946,
+      "sound_id": 3,
+      "start_page": 580,
+      "written_pcm_sha256": "ac75d0b67153f0fbffd6931c7fa8ea5f5808f615fac5d5461b0398eebf8738ec"
+    },
+    {
+      "clips": false,
+      "leading_content_bytes": 85114,
+      "leading_content_seconds": 1.930023,
+      "leading_content_sha256": "1496e783a05cf9eda9467681e26936dd7cb62a7fb69fe905759f672b80bbcacf",
+      "leading_matches_normalized_preview": true,
+      "original_duration_seconds": 2.008662,
+      "pcm_byte_count_header_preserved": 88582,
+      "peak_abs_s16": 15445,
+      "sample_count_header_preserved": 44291,
+      "silence_padding_all_zero": true,
+      "silence_padding_bytes": 3468,
+      "sound_id": 6,
+      "start_page": 608,
+      "written_pcm_sha256": "f04d8ef1de66cfb8601e7cc501bd6f9de0c6a9b7f3b056b8b0a50da186a14a78"
+    },
+    {
+      "clips": false,
+      "leading_content_bytes": 74970,
+      "leading_content_seconds": 1.7,
+      "leading_content_sha256": "5a10c87b543ff86130981bfa44b91bbcbce5d52fedd39cb70b8b04acc7da5098",
+      "leading_matches_normalized_preview": true,
+      "original_duration_seconds": 2.017324,
+      "pcm_byte_count_header_preserved": 88964,
+      "peak_abs_s16": 11775,
+      "sample_count_header_preserved": 44482,
+      "silence_padding_all_zero": true,
+      "silence_padding_bytes": 13994,
+      "sound_id": 7,
+      "start_page": 782,
+      "written_pcm_sha256": "d67af1d89593d8f53b044004c9e9bb752f4f8b6be5b31e3a1aee709a4782b64c"
+    },
+    {
+      "clips": false,
+      "leading_content_bytes": 85996,
+      "leading_content_seconds": 1.950023,
+      "leading_content_sha256": "23c1083aef5c8b3eb405fc5b3977e0c91a833c2f4aabacea16da090b9412ba47",
+      "leading_matches_normalized_preview": true,
+      "original_duration_seconds": 2.008662,
+      "pcm_byte_count_header_preserved": 88582,
+      "peak_abs_s16": 12701,
+      "sample_count_header_preserved": 44291,
+      "silence_padding_all_zero": true,
+      "silence_padding_bytes": 2586,
+      "sound_id": 8,
+      "start_page": 956,
+      "written_pcm_sha256": "fc9c86703502a444c2a915a0a67ad61d3c03eeb2810445ca2ef1333fd577409f"
+    },
+    {
+      "clips": false,
+      "leading_content_bytes": 58212,
+      "leading_content_seconds": 1.32,
+      "leading_content_sha256": "434d4af79e5c58f677dd7205686fbf98d87f24287a601704738b02e7b89422d9",
+      "leading_matches_normalized_preview": true,
+      "original_duration_seconds": 2.008662,
+      "pcm_byte_count_header_preserved": 88582,
+      "peak_abs_s16": 6994,
+      "sample_count_header_preserved": 44291,
+      "silence_padding_all_zero": true,
+      "silence_padding_bytes": 30370,
+      "sound_id": 9,
+      "start_page": 1130,
+      "written_pcm_sha256": "28d6d06da296a5fdf3d5bd1f065d7ab007537a69ace09a2f7b8f007ee24b5923"
+    },
+    {
+      "clips": false,
+      "leading_content_bytes": 87318,
+      "leading_content_seconds": 1.98,
+      "leading_content_sha256": "41c748b10efdfa9950f30d8d9842aad88048d93aa92e1c4219e5794b349ed60e",
+      "leading_matches_normalized_preview": true,
+      "original_duration_seconds": 1.991338,
+      "pcm_byte_count_header_preserved": 87818,
+      "peak_abs_s16": 16995,
+      "sample_count_header_preserved": 43909,
+      "silence_padding_all_zero": true,
+      "silence_padding_bytes": 500,
+      "sound_id": 10,
+      "start_page": 1304,
+      "written_pcm_sha256": "01a5900e0704fe8784fd793bf40fcfb6fb40279aaea5634db5d8bab6665af8d5"
+    },
+    {
+      "clips": false,
+      "leading_content_bytes": 13230,
+      "leading_content_seconds": 0.3,
+      "leading_content_sha256": "a64c904519d97826017fccf2ee886e7f58772f55901411a6aee1dbbb4c99e3d9",
+      "leading_matches_normalized_preview": true,
+      "original_duration_seconds": 0.321451,
+      "pcm_byte_count_header_preserved": 14176,
+      "peak_abs_s16": 27412,
+      "sample_count_header_preserved": 7088,
+      "silence_padding_all_zero": true,
+      "silence_padding_bytes": 946,
+      "sound_id": 19,
+      "start_page": 1476,
+      "written_pcm_sha256": "ea64eb45e744c1a0141fa73ace7658f5b7b138ea023d88725df191da5c1c0050"
+    }
+  ],
+  "preserved_failed_compact_artifact": "assets/bmo-sound-bank-offline-20260810/DfltSoundLib.BMO.compact.Rev1.0.bin",
+  "preserved_failed_compact_sha256": "a7bdb1142c627d44a695f6cb82f4389521ee2ea1068dd491c86414e8627ac848",
+  "preserved_failed_fixed_layout_artifact": "assets/bmo-sound-bank-offline-20260810/DfltSoundLib.BMO.Rev1.0.bin",
+  "preserved_failed_fixed_layout_sha256": "c17d42ec605efde8affd3d184ce41a2fd08aae80795633c4d6fe6b3e6750900f",
+  "sha256": "9d3d82d9275c03fa9f2abb163cdfd9393445737999916f6337d2d6b639b51159",
+  "transport_additive_checksum_hex": "0x047d62cc"
+}

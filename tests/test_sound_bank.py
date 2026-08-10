@@ -6,7 +6,10 @@ import wave
 
 from neato_sound_bank import (
     PAGE_SIZE,
+    blank_pages_between_records,
+    build_compact_from_wavs,
     build_from_wavs,
+    build_pcm_only_from_wavs,
     candidate_boundaries,
     record_ranges,
 )
@@ -96,6 +99,64 @@ class SoundBankTableTest(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "exceeds slot 1 capacity"):
                 build_from_wavs(image, {1: clip}, output)
+
+    def test_build_compact_from_wavs_updates_table_and_removes_blank_gap_pages(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            image = root / "sound.bin"
+            clip0 = root / "slot0.wav"
+            clip1 = root / "slot1.wav"
+            output = root / "compact.bin"
+            image.write_bytes(minimal_bank())
+            write_wav(clip0, [1, -1])
+            write_wav(clip1, [2, -2])
+
+            result = build_compact_from_wavs(image, {0: clip0, 1: clip1}, output)
+            records = record_ranges(output)
+            blanks = blank_pages_between_records(output)
+
+        self.assertEqual(result["file_size"], PAGE_SIZE * 12)
+        self.assertEqual([record["start_page"] for record in records], [8, 9])
+        self.assertEqual(records[0]["zero_padding_bytes"], PAGE_SIZE - 16 - 4)
+        self.assertEqual(blanks, [])
+
+    def test_blank_pages_between_records_detects_failed_fixed_gap_pattern(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "sound.bin"
+            image.write_bytes(minimal_bank())
+
+            blanks = blank_pages_between_records(image)
+
+        self.assertGreaterEqual(len(blanks), 1)
+        self.assertEqual(blanks[0]["after_sound_id"], 0)
+
+    def test_build_pcm_only_preserves_headers_table_and_padding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            image = root / "sound.bin"
+            clip0 = root / "slot0.wav"
+            clip1 = root / "slot1.wav"
+            output = root / "pcm-only.bin"
+            original = minimal_bank()
+            image.write_bytes(original)
+            write_wav(clip0, [1])
+            write_wav(clip1, [2])
+
+            result = build_pcm_only_from_wavs(image, {0: clip0, 1: clip1}, output)
+            built = output.read_bytes()
+
+        self.assertEqual(result["file_size"], len(original))
+        # Directory and both 16-byte record headers stay byte-for-byte intact.
+        self.assertEqual(built[:PAGE_SIZE * 8], original[:PAGE_SIZE * 8])
+        self.assertEqual(built[PAGE_SIZE * 8:PAGE_SIZE * 8 + 16],
+                         original[PAGE_SIZE * 8:PAGE_SIZE * 8 + 16])
+        self.assertEqual(built[PAGE_SIZE * 10:PAGE_SIZE * 10 + 16],
+                         original[PAGE_SIZE * 10:PAGE_SIZE * 10 + 16])
+        # Replacement writes only the original PCM region, with zero silence tail.
+        self.assertEqual(built[PAGE_SIZE * 8 + 16:PAGE_SIZE * 8 + 22],
+                         struct.pack("<h", 1) + b"\x00\x00\x00\x00")
+        self.assertEqual(built[PAGE_SIZE * 10 + 16:PAGE_SIZE * 10 + 20],
+                         struct.pack("<h", 2) + b"\x00\x00")
 
 
 if __name__ == "__main__":

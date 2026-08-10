@@ -10,18 +10,23 @@ through one Robot instance guarded by rlock.
     python3 bmo_web.py            # robot over USB, brain at 127.0.0.1:8000
 Open http://localhost:8485 in Chrome (mic needs Chrome/Edge).
 """
+import hashlib
 import json
 import os
 import threading
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from neatobmo import Robot
 from neatobmo import emote
 from neatobmo import faces
+from neatobmo.sounds import BMO_BANK, BMO_SEQUENCES, BMO_SOUND_SLOTS, LIVE_SOUND_IDS
 
 BRAIN = os.environ.get("NEATOBMO_BRAIN", "http://127.0.0.1:8000/v1").rstrip("/")
 KEY_FILE = os.path.expanduser("~/.neatobmo/coli_api_key")
@@ -41,6 +46,37 @@ PERSONA = ("You are BMO, a cheerful little robot buddy living inside a Neato rob
 robot = None
 rlock = threading.Lock()
 history = [{"role": "system", "content": PERSONA}]
+
+REPO_ROOT = Path(__file__).resolve().parent
+SOUND_BANK_PROFILES = {
+    "bmo": {
+        "label": "BMO PCM-only bank",
+        "path": REPO_ROOT / "assets/bmo-sound-bank-offline-20260810/DfltSoundLib.BMO.pcm-only.Rev1.0.bin",
+        "sha256": "9d3d82d9275c03fa9f2abb163cdfd9393445737999916f6337d2d6b639b51159",
+        "confirmation": "INSTALL BMO",
+    },
+    "original": {
+        "label": "Original Neato bank",
+        "path": REPO_ROOT / "assets/neato-xv12-sound-capture-20260810/public-reference/DfltSoundLib.Rev1.0.bin",
+        "sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+        "confirmation": "RESTORE ORIGINAL",
+    },
+}
+installed_sound_profile = "bmo"
+
+
+def sound_bank_profiles():
+    return {
+        key: {
+            "label": profile["label"],
+            "sha256": profile["sha256"],
+            "bytes": profile["path"].stat().st_size if profile["path"].exists() else None,
+            "available": profile["path"].exists(),
+            "confirmation": profile["confirmation"],
+            "download": f"/sound-bank-file?profile={key}",
+        }
+        for key, profile in SOUND_BANK_PROFILES.items()
+    }
 
 
 def brain_chat(text):
@@ -174,6 +210,13 @@ PAGE = """<!doctype html>
  #batt{width:min(680px,94vw);padding:8px;font-size:14px;line-height:1.6}
  .card{width:min(680px,94vw);margin:12px 0;padding:14px;background:#0a2a26;border:1px solid #2c6b5f;
        border-radius:14px;line-height:1.6}
+ #p-sounds{overflow-y:auto}
+ #soundgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;
+            width:min(680px,94vw);padding:0 0 16px}
+ .soundcard{padding:12px;background:#0a2a26;border:1px solid #2c6b5f;border-radius:12px}
+ .soundcard h3{margin:0 0 4px;color:#7ce0c5;font-size:16px}
+ .soundmeta{opacity:.75;font-size:12px;line-height:1.45;margin:5px 0 9px}
+ #soundseq{display:flex;flex-wrap:wrap;gap:6px;width:min(680px,94vw);padding:0 0 10px}
  a{color:#2fbf9b}
  input[type=file]{color:#e8f6ef}
  #facepanel{display:none;position:fixed;top:12px;right:12px;z-index:50;width:min(320px,90vw);
@@ -189,6 +232,7 @@ PAGE = """<!doctype html>
 </style>
 <div id="tabs">
  <div class="tab on" data-p="chat" onclick="show('chat')">Chat</div>
+ <div class="tab" data-p="sounds" onclick="show('sounds');loadSounds()">Sounds</div>
  <div class="tab" data-p="console" onclick="show('console')">Console</div>
  <div class="tab" data-p="sensors" onclick="show('sensors')">Sensors</div>
  <div class="tab" data-p="esp32" onclick="show('esp32')">ESP32</div>
@@ -208,6 +252,21 @@ PAGE = """<!doctype html>
   <button id="sendbtn" onclick="sendTxt()">➤</button>
 </div>
 </div>
+<div class="pane" id="p-sounds">
+ <div class="card" id="soundbank">Loading installed BMO sound bank…</div>
+ <div class="card" id="soundflash">
+  <b>Sound-bank installation</b><br>
+  <span class="soundmeta">Flash only the two locally validated exact images. Keep the robot powered and connected.</span><br>
+  <select id="bankprofile" class="mini"><option value="bmo">BMO bank</option><option value="original">Original Neato bank</option></select>
+  <input id="bankconfirm" placeholder="type INSTALL BMO" style="margin:6px;padding:7px;border-radius:8px;border:1px solid #2c6b5f;background:#0e3b35;color:#e8f6ef">
+  <button class="mini" onclick="installBank()">Write bank</button>
+  <div id="bankmsg" class="soundmeta"></div>
+  <a href="/sound-bank-file?profile=bmo">download BMO</a> ·
+  <a href="/sound-bank-file?profile=original">download original</a>
+ </div>
+ <div id="soundseq"></div>
+ <div id="soundgrid"></div>
+</div>
 <div class="pane" id="p-console">
 <div id="quick">
  <button class="mini" onclick="cmd('GetVersion')">GetVersion</button>
@@ -216,7 +275,7 @@ PAGE = """<!doctype html>
  <button class="mini" onclick="cmd('TestMode Off')">TestMode Off</button>
  <button class="mini" onclick="cmd('GetAnalogSensors')">Analog</button>
  <button class="mini" onclick="cmd('GetDigitalSensors')">Digital</button>
- <button class="mini" onclick="cmd('PlaySound 1')">Beep</button>
+ <button class="mini" onclick="playSequence('bmo_video_games_burst')">BMO Video Games</button>
  <button class="mini" onclick="cmd('Help')">Help</button>
  <button class="mini" onclick="toggleFaces()">Faces 🙂</button>
 </div>
@@ -327,6 +386,43 @@ async function cmd(c){clogAdd('> '+c);
  try{const r=await fetch('/cmd',{method:'POST',body:JSON.stringify({cmd:c})});
   const j=await r.json();clogAdd(j.error?('(error: '+j.error+')'):j.out);}
  catch(e){clogAdd('(request failed)');}}
+let soundsLoaded=false,soundCatalog=null;
+async function loadSounds(){
+ if(soundsLoaded)return;
+ try{
+  soundCatalog=await(await fetch('/sounds')).json();soundsLoaded=true;
+  const b=soundCatalog.bank,bank=document.getElementById('soundbank');
+  bank.textContent=`Installed: ${b.name} · ${b.format} @ ${b.sample_rate_hz} Hz · SHA-256 ${b.sha256}`;
+  const seq=document.getElementById('soundseq');
+  Object.entries(soundCatalog.sequences).forEach(([key,s])=>{
+   const button=document.createElement('button');button.className='mini';button.textContent='▶ '+s.label;
+   button.title=s.description+' · IDs '+s.ids.join(', ');button.onclick=()=>playSequence(key);seq.appendChild(button);});
+  const grid=document.getElementById('soundgrid');
+  soundCatalog.slots.forEach(s=>{
+   const card=document.createElement('div');card.className='soundcard';
+   const title=document.createElement('h3');title.textContent=`ID ${s.id} · ${s.label}`;
+   const role=document.createElement('div');role.textContent=s.role;
+   const meta=document.createElement('div');meta.className='soundmeta';
+   meta.textContent=`${s.content_seconds.toFixed(3)}s audio · ${s.slot_seconds.toFixed(3)}s slot · source: ${s.source}`;
+   const play=document.createElement('button');play.className='mini';play.textContent='▶ Play';play.onclick=()=>cmd('PlaySound '+s.id);
+   const source=document.createElement('a');source.href=s.source_url;source.target='_blank';source.textContent='source';source.style.marginLeft='10px';
+   card.append(title,role,meta,play,source);grid.appendChild(card);});
+ }catch(e){document.getElementById('soundbank').textContent='Could not load sound metadata: '+e;}}
+const bankProfile=document.getElementById('bankprofile'),bankConfirm=document.getElementById('bankconfirm');
+bankProfile.onchange=()=>{bankConfirm.value='';bankConfirm.placeholder=bankProfile.value==='bmo'?'type INSTALL BMO':'type RESTORE ORIGINAL';};
+async function installBank(){
+ const msg=document.getElementById('bankmsg'),profile=bankProfile.value,confirmation=bankConfirm.value;
+ msg.textContent='Writing validated sound bank; keep the robot powered and connected…';
+ try{const r=await fetch('/sound-bank-install',{method:'POST',body:JSON.stringify({profile,confirmation})});
+  const j=await r.json();
+  if(j.error){msg.textContent='Blocked/failed: '+j.error;return;}
+  msg.textContent=`Installed ${j.label}; IDs ${j.accepted_ids.join(', ')} verified. SHA-256 ${j.sha256}`;
+  bankConfirm.value='';
+ }catch(e){msg.textContent='Install request failed: '+e;}}
+async function playSequence(name){
+ try{const r=await fetch('/sound-sequence',{method:'POST',body:JSON.stringify({name})});
+  const j=await r.json();clogAdd(j.error?('(error: '+j.error+')'):('BMO sequence: '+j.commands.join(' → ')));}
+ catch(e){clogAdd('(sound sequence failed)');}}
 function drive(l,r){cmd('TestMode On');cmd(`SetMotor LWheelDist ${l} RWheelDist ${r} Speed 100`);}
 const cmdEl=document.getElementById('cmd');
 function sendCmd(){if(cmdEl.value.trim()){cmd(cmdEl.value.trim());cmdEl.value='';}}
@@ -460,6 +556,23 @@ class Handler(BaseHTTPRequestHandler):
         self._reply(json.dumps(obj).encode())
 
     def do_GET(self):
+        if self.path.startswith("/sound-bank-file?"):
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            profile_name = query.get("profile", [""])[0]
+            profile = SOUND_BANK_PROFILES.get(profile_name)
+            if profile is None or not profile["path"].exists():
+                return self._json({"error": "unknown or unavailable sound bank"})
+            data = profile["path"].read_bytes()
+            if hashlib.sha256(data).hexdigest() != profile["sha256"]:
+                return self._json({"error": "local sound-bank hash mismatch"})
+            return self._reply(data, "application/octet-stream")
+        if self.path == "/sounds":
+            slots = [{"id": sound_id, **metadata}
+                     for sound_id, metadata in sorted(BMO_SOUND_SLOTS.items())]
+            return self._json({"bank": BMO_BANK, "slots": slots,
+                               "sequences": BMO_SEQUENCES,
+                               "profiles": sound_bank_profiles(),
+                               "expected_installed_profile": installed_sound_profile})
         if self.path == "/faces":
             anims = {f: fn.__name__.replace("_anim_", "")
                      for f, fn in emote.ANIMS.items()}
@@ -497,6 +610,67 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 with rlock:
                     return self._json({"out": robot.cmd(c, timeout=4)})
+            except Exception as e:
+                return self._json({"error": str(e)})
+        if self.path == "/sound-sequence":
+            name = json.loads(raw).get("name", "")
+            sequence = BMO_SEQUENCES.get(name)
+            if sequence is None:
+                return self._json({"error": "unknown sound sequence"})
+            if robot is None:
+                return self._json({"error": "body not attached"})
+            commands = [f"PlaySound {sound_id}" for sound_id in sequence["ids"]]
+            try:
+                with rlock:
+                    replies = []
+                    delays = []
+                    for index, (sound_id, command) in enumerate(zip(sequence["ids"], commands)):
+                        replies.append(robot.cmd(command, timeout=4))
+                        if index + 1 < len(commands):
+                            delay = BMO_SOUND_SLOTS[sound_id]["slot_seconds"]
+                            delays.append(delay)
+                            time.sleep(delay)
+                return self._json({"name": name, "commands": commands,
+                                   "replies": replies, "delays_seconds": delays})
+            except Exception as e:
+                return self._json({"error": str(e)})
+        if self.path == "/sound-bank-install":
+            global installed_sound_profile
+            request = json.loads(raw)
+            profile_name = request.get("profile", "")
+            profile = SOUND_BANK_PROFILES.get(profile_name)
+            if profile is None:
+                return self._json({"error": "unknown sound-bank profile"})
+            if request.get("confirmation") != profile["confirmation"]:
+                return self._json({"error": f"type {profile['confirmation']} exactly"})
+            if robot is None:
+                return self._json({"error": "body not attached"})
+            try:
+                payload = profile["path"].read_bytes()
+            except OSError as exc:
+                return self._json({"error": f"sound-bank artifact unavailable: {exc}"})
+            digest = hashlib.sha256(payload).hexdigest()
+            if len(payload) != 770048 or digest != profile["sha256"]:
+                return self._json({"error": "refusing unvalidated sound-bank bytes"})
+            try:
+                with rlock:
+                    reply = robot.t.send_binary("Upload sound", payload, timeout=45.0)
+                    time.sleep(5.0)
+                    version = robot.cmd("GetVersion", timeout=5)
+                    accepted_ids = []
+                    for sound_id in range(21):
+                        result = robot.cmd(f"PlaySound {sound_id}", timeout=4)
+                        if "out of range" not in result.lower():
+                            accepted_ids.append(sound_id)
+                if "Software,2,4,15667" not in version:
+                    return self._json({"error": "write completed but GetVersion identity check failed"})
+                if set(accepted_ids) != set(LIVE_SOUND_IDS):
+                    return self._json({"error": f"post-write slot map mismatch: {accepted_ids}"})
+                installed_sound_profile = profile_name
+                return self._json({"ok": True, "profile": profile_name,
+                                   "label": profile["label"], "sha256": digest,
+                                   "accepted_ids": accepted_ids,
+                                   "receiver_hex": reply.hex()})
             except Exception as e:
                 return self._json({"error": str(e)})
         if self.path == "/lidar":

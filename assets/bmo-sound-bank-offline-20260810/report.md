@@ -5,11 +5,32 @@ not contact, command, or write the robot.
 
 ## Final artifact
 
-- Bank image: `DfltSoundLib.BMO.Rev1.0.bin`
+- Preferred PCM-only conservative bank image: `DfltSoundLib.BMO.pcm-only.Rev1.0.bin`
 - Size: `770048` bytes
+- SHA-256: `9d3d82d9275c03fa9f2abb163cdfd9393445737999916f6337d2d6b639b51159`
+- Offline transport additive checksum: `0x047d62cc`
+- Validation: `pcm-only-validation-report.json` reports `passed: true`
+
+The earlier failed artifacts are preserved as live-burn evidence:
+
+- Failed fixed-page image: `DfltSoundLib.BMO.Rev1.0.bin`
 - SHA-256: `c17d42ec605efde8affd3d184ce41a2fd08aae80795633c4d6fe6b3e6750900f`
-- Offline transport additive checksum: `0x047d66ad`
-- Validation: `validation-report.json` reports `passed: true`
+- Live result: received ACK/terminator and `GetVersion` stayed healthy, but
+  only ID 0 remained valid; IDs 1–20 reported out of range.
+- Failed compact image: `DfltSoundLib.BMO.compact.Rev1.0.bin`
+- SHA-256: `a7bdb1142c627d44a695f6cb82f4389521ee2ea1068dd491c86414e8627ac848`
+- Live result: received ACK/terminator and `GetVersion` stayed healthy, but
+  still only ID 0 remained valid; IDs 1–20 reported out of range.
+
+The compact result falsified the full-blank-page gap hypothesis as the sole
+cause. The third image is therefore maximally conservative: it starts from the
+vendor default and preserves every directory byte, every original start page,
+every 16-byte record header, and every original padding byte. It replaces only
+the exact original PCM payload bytes for the ten live IDs.
+
+Each approved BMO clip is written at the start of the original PCM field and
+zero-silence padded to the exact original `pcm_byte_count`. The header
+`sample_count` and `pcm_byte_count` are intentionally unchanged.
 
 ## Approved source set
 
@@ -85,23 +106,29 @@ explicit `--execute` flag and is intentionally not performed here.
 Builder:
 
 ```sh
-python3 tools/neato_sound_bank.py build-from-wavs \
+python3 tools/neato_sound_bank.py build-pcm-only-from-wavs \
   assets/neato-xv12-sound-capture-20260810/public-reference/DfltSoundLib.Rev1.0.bin \
   assets/bmo-sound-bank-offline-20260810/bmo-replacements.approved.json \
-  assets/bmo-sound-bank-offline-20260810/DfltSoundLib.BMO.Rev1.0.bin \
-  --output assets/bmo-sound-bank-offline-20260810/build-report.json
+  assets/bmo-sound-bank-offline-20260810/DfltSoundLib.BMO.pcm-only.Rev1.0.bin \
+  --output assets/bmo-sound-bank-offline-20260810/pcm-only-build-report.json
 ```
 
 Validation performed:
 
 - exact output size is `770048` bytes;
 - 512-byte page alignment retained;
-- first eight `KT` directory pages unchanged;
-- record start pages unchanged;
-- all ten built PCM hashes match the normalized preview WAV PCM hashes;
-- all slots fit fixed capacities;
-- no generated preview reaches full-scale clipping;
-- parsed round-trip exported `built-preview-wavs/` from the final image.
+- all directory bytes unchanged;
+- all original record start pages unchanged;
+- all 16-byte record headers unchanged;
+- all original padding bytes unchanged;
+- byte diffs occur only inside known original PCM payload regions;
+- all ten live IDs remain present in the unchanged page0 table;
+- each slot's leading BMO content hash matches the normalized preview WAV PCM;
+- every per-slot tail after leading content is zero silence to the exact
+  original PCM length;
+- no leading preview reaches full-scale clipping;
+- parsed round-trip exported `pcm-only-built-preview-wavs/` from the PCM-only
+  image.
 
 ## Post-burn acceptance plan
 

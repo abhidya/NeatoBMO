@@ -16,6 +16,8 @@ import serial
 ALLOWED_SHA256 = {
     "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a": "vendor-default",
     "c17d42ec605efde8affd3d184ce41a2fd08aae80795633c4d6fe6b3e6750900f": "validated-bmo",
+    "a7bdb1142c627d44a695f6cb82f4389521ee2ea1068dd491c86414e8627ac848": "validated-bmo-compact",
+    "9d3d82d9275c03fa9f2abb163cdfd9393445737999916f6337d2d6b639b51159": "validated-bmo-pcm-only",
 }
 EXPECTED_BYTES = 770_048
 COMMAND = "Upload sound"

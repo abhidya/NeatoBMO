@@ -38,13 +38,15 @@ See [DESIGN.md](DESIGN.md) for the full architecture and milestones.
 |---|---|
 | `DESIGN.md` | Architecture design doc (body/head/brain split, OSS stack, milestones) + as-built notes |
 | `esp32-body/` | ESP32-S3 firmware (PlatformIO + ESP-IDF): USB CDC-ACM host ↔ Neato, embedded dashboard + WS bridge + `/emote` + `/speak` + OTA (`:80`), WiFi log mirror (`:2323`), raw command bridge (`:3333`), P6 debug-UART bridge (`:3334`) |
-| `bmo_web.py` | The one web console (`:8485`): chat, console, sensors, emote, OTA proxy |
+| `bmo_web.py` | The one web console (`:8485`): chat, BMO sound metadata/playback, guarded bank install/restore, console, sensors, emote, OTA proxy |
 | `bmo_brain_server.py` | OpenAI-compatible wrapper around Colibri's OLMoE + espeak-ng TTS |
 | `bmo_agent.py` | CLI tool-calling agent (drive/sounds/LED via any OpenAI-compatible LLM) |
 | `neatobmo/` | Robot library: transports, typed commands, sounds, behaviors, emoji faces (`emote.py`) |
 | `tools/` | Probe & archive utilities: `lidar_viewer.py`, `backup_neato.py`, `firmware_probe.py`, `neato_firmware.py`, `neato_sound_bank.py`, `neato_sound_noburn_matrix.py` |
 | `tests/` | Unit tests (`PYTHONPATH=".:tools" python3 -m unittest discover -s tests` from the repo root) |
-| `assets/` | Captured sound-bank evidence (clips, probes, public reference bank) |
+| `assets/` | Captured sound-bank evidence, validated BMO bank/previews, and original recovery image |
+| `docs/SOUND_BANK_UPDATE.md` | Exact hashes and guarded web/CLI procedures for installing BMO sounds or restoring the original bank |
+| `docs/SOUND_BANK_TTS_PROMPT.md` | Implementation prompt for routing fixed BMO phrases through the bank and arbitrary speech through streamed WAV TTS |
 | `neato_protocol_dump.txt` | Ground-truth protocol harvested from the actual XV-12 (`Help` for every command, sample sensor output) |
 | `FIRMWARE_ARCHIVE.md` | Checksummed 2 TB archive, current-robot recovery snapshot, compatible version inventory, and reproduction commands |
 | `neato-driver-python/` | Vendored clone of [brannonvann/neato-driver-python](https://github.com/brannonvann/neato-driver-python) (MIT) for protocol reference |

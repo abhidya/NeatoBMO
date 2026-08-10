@@ -10,8 +10,13 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 import time
 from typing import Iterable
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from neatobmo.sounds import BMO_SOUND_SLOTS
 
 
 def load_sequences(path: Path) -> dict[str, list[int]]:
@@ -32,16 +37,26 @@ def commands_for_sequence(sequence: Iterable[int]) -> list[str]:
     return [f"PlaySound {int(sound_id)}" for sound_id in sequence]
 
 
-def play_sequence(target: str | None, commands: list[str], delay: float) -> list[str]:
+def delays_for_sequence(sequence: Iterable[int], override: float | None = None) -> list[float]:
+    sound_ids = [int(sound_id) for sound_id in sequence]
+    if override is not None:
+        return [override] * max(0, len(sound_ids) - 1)
+    return [float(BMO_SOUND_SLOTS[sound_id]["slot_seconds"])
+            for sound_id in sound_ids[:-1]]
+
+
+def play_sequence(target: str | None, commands: list[str], delay: float | None) -> list[str]:
     from neatobmo.robot import Robot
 
     robot = Robot(target)
     try:
         replies: list[str] = []
-        for command in commands:
+        sound_ids = [int(command.rsplit(" ", 1)[1]) for command in commands]
+        delays = delays_for_sequence(sound_ids, delay)
+        for index, command in enumerate(commands):
             replies.append(robot.cmd(command))
-            if delay > 0:
-                time.sleep(delay)
+            if index < len(delays):
+                time.sleep(delays[index])
         return replies
     finally:
         robot.close()
@@ -55,8 +70,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--delay",
         type=float,
-        default=0.0,
-        help="Optional fallback delay between single-ID PlaySound commands; default is burst mode.",
+        default=None,
+        help="Override delay between commands; default waits each slot's declared duration.",
     )
     parser.add_argument(
         "--execute",

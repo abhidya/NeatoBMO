@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from neato_sound_sequence import commands_for_sequence, load_sequences
+from neato_sound_sequence import commands_for_sequence, delays_for_sequence, load_sequences
 
 
 class SoundSequenceTest(unittest.TestCase):
@@ -19,6 +19,8 @@ class SoundSequenceTest(unittest.TestCase):
             commands_for_sequence(sequences["video_games"]),
             ["PlaySound 0", "PlaySound 1", "PlaySound 2"],
         )
+        self.assertEqual(delays_for_sequence([0, 1, 2]), [2.881995, 1.867392])
+        self.assertEqual(delays_for_sequence([0, 1, 2], 0.25), [0.25, 0.25])
 
 
 if __name__ == "__main__":

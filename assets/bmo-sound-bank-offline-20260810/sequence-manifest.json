@@ -1,10 +1,10 @@
 {
-  "command_model": "burst separate single-ID commands only",
-  "default_delay_seconds": 0.0,
+  "command_model": "separate single-ID commands paced by each slot's declared duration",
+  "default_delay_seconds": "per-slot slot_seconds metadata",
   "fallback_delay_seconds_user_configurable": true,
   "sequences": {
     "bmo_all_slots_demo_burst": {
-      "description": "All ten live BMO-filled slots in a burst/reference order.",
+      "description": "All ten live BMO-filled slots in a duration-paced reference order.",
       "ids": [
         0,
         1,
@@ -32,7 +32,7 @@
       "stitched_preview_wav": "stitched-sequence-previews/bmo_short_reactions_burst.wav"
     },
     "bmo_video_games_burst": {
-      "description": "Long approved BMO Video Games source split across three slots; host sends PlaySound 0, 1, 2 immediately.",
+      "description": "Long approved BMO Video Games source split across three slots; host waits for each declared slot duration before sending the next PlaySound command.",
       "ids": [
         0,
         1,
@@ -43,5 +43,5 @@
       "stitched_preview_wav": "stitched-sequence-previews/bmo_video_games_burst.wav"
     }
   },
-  "warning": "Do not use combined-ID syntax. Native robot events trigger one slot; these multi-slot lines require a host helper issuing multiple PlaySound commands."
+  "warning": "Do not spam or use combined-ID syntax: a new PlaySound interrupts the current clip. Native robot events trigger one slot; multi-slot lines require duration-paced host commands."
 }

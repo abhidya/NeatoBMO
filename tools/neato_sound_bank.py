@@ -35,6 +35,10 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def page_align(length: int) -> int:
+    return ((length + PAGE_SIZE - 1) // PAGE_SIZE) * PAGE_SIZE
+
+
 @dataclass(frozen=True)
 class SoundBank:
     path: str
@@ -368,6 +372,173 @@ def build_from_wavs(source: Path, replacements: Mapping[int, Path],
     }
 
 
+def build_compact_from_wavs(source: Path, replacements: Mapping[int, Path],
+                            destination: Path) -> dict[str, object]:
+    """Build an edited bank with compact 512-aligned records and updated table.
+
+    This is intended for the XV sound-library scanner behavior observed after
+    the fixed-page build: do not leave full zero pages between records.
+    """
+    original = source.read_bytes()
+    bank = SoundBank.read(source)
+    records = record_ranges(source)
+    live_sound_ids = [int(record["sound_id"]) for record in records]
+    missing = sorted(set(live_sound_ids) - set(replacements))
+    unknown = sorted(set(replacements) - set(live_sound_ids))
+    if missing:
+        raise ValueError(f"compact build requires replacements for all live sound IDs: {missing}")
+    if unknown:
+        raise ValueError(f"replacement requested for absent sound IDs: {unknown}")
+
+    directory = bytearray(original[:DEFAULT_AUDIO_START_PAGE * PAGE_SIZE])
+    # Reset the page0 table while preserving all other directory metadata.
+    entry_count = bank.declared_value + 1
+    if 8 + entry_count * 2 > PAGE_SIZE:
+        raise ValueError("declared sound-table length does not fit in header page")
+    for offset in range(8, 8 + entry_count * 2):
+        directory[offset] = 0
+
+    output = bytearray(len(original))
+    output[:len(directory)] = directory
+    current_page = DEFAULT_AUDIO_START_PAGE
+    changes: list[dict[str, object]] = []
+    for sound_id in live_sound_ids:
+        pcm = read_exact_pcm_wav(replacements[sound_id])
+        if len(pcm) % PCM_BYTES_PER_SAMPLE:
+            raise ValueError(f"{replacements[sound_id]}: replacement PCM is not sample-aligned")
+        record_bytes_used = RECORD_HEADER_SIZE + len(pcm)
+        record_capacity = page_align(record_bytes_used)
+        record_page_count = record_capacity // PAGE_SIZE
+        record_offset = current_page * PAGE_SIZE
+        next_page = current_page + record_page_count
+        if next_page > bank.page_count:
+            raise ValueError(
+                f"compact build exceeds bank capacity at slot {sound_id}: "
+                f"next page {next_page} > page count {bank.page_count}"
+            )
+        sample_count = len(pcm) // PCM_BYTES_PER_SAMPLE
+        header = (
+            RECORD_FLAGS
+            + struct.pack("<H", PCM_SAMPLE_RATE)
+            + struct.pack("<I", sample_count)
+            + struct.pack("<I", len(pcm))
+            + struct.pack("<I", 0)
+        )
+        struct.pack_into("<H", output, 8 + sound_id * 2, current_page)
+        output[record_offset:record_offset + len(header)] = header
+        output[record_offset + len(header):record_offset + len(header) + len(pcm)] = pcm
+        changes.append({
+            "sound_id": sound_id,
+            "source_wav": str(replacements[sound_id]),
+            "start_page": current_page,
+            "end_page_exclusive": next_page,
+            "sample_count": sample_count,
+            "pcm_byte_count": len(pcm),
+            "duration_seconds": round(sample_count / PCM_SAMPLE_RATE, 6),
+            "pcm_sha256": sha256(pcm),
+            "record_capacity_bytes": record_capacity,
+            "zero_padding_bytes": record_capacity - record_bytes_used,
+        })
+        current_page = next_page
+
+    built = bytes(output)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(built)
+    return {
+        "source": str(source),
+        "destination": str(destination),
+        "layout": "compact",
+        "file_size": len(built),
+        "page_count": len(built) // PAGE_SIZE,
+        "first_trailing_zero_page": current_page,
+        "sha256": sha256(built),
+        "transport_additive_checksum_hex": f"0x{(sum(built) & 0xFFFFFFFF):08x}",
+        "replaced_sound_ids": live_sound_ids,
+        "changes": changes,
+    }
+
+
+def build_pcm_only_from_wavs(source: Path, replacements: Mapping[int, Path],
+                             destination: Path) -> dict[str, object]:
+    """Replace only original PCM regions; preserve directory, headers, padding.
+
+    The replacement clip is written at the start of the original PCM field and
+    zero-padded to the original pcm_byte_count.  No metadata is changed.
+    """
+    original = source.read_bytes()
+    output = bytearray(original)
+    records = record_ranges(source)
+    record_by_id = {int(record["sound_id"]): record for record in records}
+    missing = sorted(set(record_by_id) - set(replacements))
+    unknown = sorted(set(replacements) - set(record_by_id))
+    if missing:
+        raise ValueError(f"PCM-only build requires replacements for all live sound IDs: {missing}")
+    if unknown:
+        raise ValueError(f"replacement requested for absent sound IDs: {unknown}")
+
+    changes: list[dict[str, object]] = []
+    for sound_id in sorted(record_by_id):
+        record = record_by_id[sound_id]
+        clip = replacements[sound_id]
+        pcm = read_exact_pcm_wav(clip)
+        target_len = int(record["pcm_byte_count"])
+        if len(pcm) > target_len:
+            raise ValueError(
+                f"{clip}: {len(pcm)} PCM bytes exceeds original slot {sound_id} "
+                f"PCM length {target_len}"
+            )
+        pcm_offset = int(record["pcm_offset"])
+        output[pcm_offset:pcm_offset + target_len] = pcm + bytes(target_len - len(pcm))
+        changes.append({
+            "sound_id": sound_id,
+            "source_wav": str(clip),
+            "original_sample_count": int(record["sample_count"]),
+            "original_pcm_byte_count": target_len,
+            "source_pcm_byte_count": len(pcm),
+            "source_duration_seconds": round((len(pcm) // PCM_BYTES_PER_SAMPLE) / PCM_SAMPLE_RATE, 6),
+            "silence_padding_bytes": target_len - len(pcm),
+            "written_pcm_sha256": sha256(pcm + bytes(target_len - len(pcm))),
+            "leading_content_sha256": sha256(pcm),
+        })
+
+    built = bytes(output)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(built)
+    return {
+        "source": str(source),
+        "destination": str(destination),
+        "layout": "pcm-only-preserve-directory-headers-padding",
+        "file_size": len(built),
+        "page_count": len(built) // PAGE_SIZE,
+        "sha256": sha256(built),
+        "transport_additive_checksum_hex": f"0x{(sum(built) & 0xFFFFFFFF):08x}",
+        "replaced_sound_ids": [change["sound_id"] for change in changes],
+        "changes": changes,
+    }
+
+
+def blank_pages_between_records(source: Path) -> list[dict[str, object]]:
+    """Report fully zero padding pages after PCM before the next record."""
+    data = source.read_bytes()
+    records = record_ranges(source)
+    blanks: list[dict[str, object]] = []
+    for record in records[:-1]:
+        sound_id = int(record["sound_id"])
+        padding_start = int(record["pcm_offset"]) + int(record["pcm_byte_count"])
+        padding_end = int(record["end_page_exclusive"]) * PAGE_SIZE
+        page = (padding_start + PAGE_SIZE - 1) // PAGE_SIZE
+        while (page + 1) * PAGE_SIZE <= padding_end:
+            page_data = data[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
+            if not any(page_data):
+                blanks.append({
+                    "after_sound_id": sound_id,
+                    "blank_page": page,
+                    "next_record_page": int(record["end_page_exclusive"]),
+                })
+            page += 1
+    return blanks
+
+
 def synthesize_bmo_wavs(destination: Path) -> dict[str, object]:
     """Create original BMO-inspired chiptune bleeps, not sampled show audio."""
     destination.mkdir(parents=True, exist_ok=True)
@@ -464,6 +635,22 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser_.add_argument("destination", type=Path)
     build_parser_.add_argument("--output", type=Path)
 
+    compact_parser = actions.add_parser("build-compact-from-wavs")
+    compact_parser.add_argument("image", type=Path)
+    compact_parser.add_argument("manifest", type=Path)
+    compact_parser.add_argument("destination", type=Path)
+    compact_parser.add_argument("--output", type=Path)
+
+    pcm_only_parser = actions.add_parser("build-pcm-only-from-wavs")
+    pcm_only_parser.add_argument("image", type=Path)
+    pcm_only_parser.add_argument("manifest", type=Path)
+    pcm_only_parser.add_argument("destination", type=Path)
+    pcm_only_parser.add_argument("--output", type=Path)
+
+    blanks_parser = actions.add_parser("blank-pages-between-records")
+    blanks_parser.add_argument("image", type=Path)
+    blanks_parser.add_argument("--output", type=Path)
+
     synth_parser = actions.add_parser("synthesize-bmo-wavs")
     synth_parser.add_argument("destination", type=Path)
     synth_parser.add_argument("--output", type=Path)
@@ -495,6 +682,26 @@ def main(argv: Iterable[str] | None = None) -> int:
             ),
             args.output,
         )
+    elif args.action == "build-compact-from-wavs":
+        emit(
+            build_compact_from_wavs(
+                args.image,
+                load_replacement_manifest(args.manifest),
+                args.destination,
+            ),
+            args.output,
+        )
+    elif args.action == "build-pcm-only-from-wavs":
+        emit(
+            build_pcm_only_from_wavs(
+                args.image,
+                load_replacement_manifest(args.manifest),
+                args.destination,
+            ),
+            args.output,
+        )
+    elif args.action == "blank-pages-between-records":
+        emit(blank_pages_between_records(args.image), args.output)
     else:
         emit(synthesize_bmo_wavs(args.destination), args.output)
     return 0

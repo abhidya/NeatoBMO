@@ -5,9 +5,11 @@
  *                sprite animation (hearts / tear / zzz / confetti) for the
  *                final emotion.
  *
- * Drawing uses SetLCD HLine/VLine segments; sprites move via FGWhite
- * selective erase so a frame costs ~10-25 serial commands, not a full
- * screen redraw.
+ * SetLCD HLine/VLine only draw full-span lines, so faces are carved:
+ * black eye pillars (VLine) masked to row bands by white rows (HLine),
+ * mouth = full-width band. Full carve ~150 cmds; nested-band changes
+ * (blink) go through a cheap per-row delta. Lingering animations use
+ * full-span-native effects (contrast throb/fade, bars, backlight).
  */
 #pragma once
 #include "esp_http_server.h"
