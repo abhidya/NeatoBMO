@@ -35,6 +35,9 @@ What each test proves:
   weights, Q/K head norms, GQA attention, post-attention/post-FFN norms, gated
   dense FFN, tied/untied lm-head fallback, and greedy token-id generation over
   a tiny BMOQ fixture.
+- `test_coli_gemma_generate` — Gemma app-level prompt-to-text wrapper:
+  callback tokenizer encode/decode, bounded allocation, yield/cancel callback
+  plumbing, telemetry, and decoded output over the tiny Gemma fixture.
 
 CTOK is a compact preconverted GPT-NeoX/OLMo byte-level BPE format for firmware:
 128-byte little-endian header, a dense 24-byte token directory indexed by token
@@ -76,3 +79,23 @@ python3 tools/export_gemma_gguf_bmoq.py \
 The exporter supports GGUF v3 `general.architecture=gemma3` with F32 norm
 tensors and Q8_0 matrices. It records Gemma metadata in the BMOQ manifest and
 streams Q8_0 rows into grouped symmetric Q4 without loading the whole model.
+
+Export the matching Gemma SentencePiece tokenizer from the same GGUF metadata:
+
+```sh
+python3 tools/export_gemma_tokenizer.py \
+  /Volumes/2TB/neatobmo-models/gemma-3-270m-q8_0/gemma-3-270m-Q8_0.gguf \
+  /Volumes/2TB/neatobmo-models/gemma-3-270m-q8_0/tokenizer.cspm
+```
+
+The `CSPM` tokenizer artifact keeps the 262k vocabulary and trie in
+`coli_store_t`, preserves BOS/EOS/PAD/UNK ids plus byte fallback tokens, and
+uses deterministic Viterbi segmentation over escaped whitespace pieces.
+
+After building `tools/build/test_coli_gemma_generate`, an opt-in real-weight
+smoke can generate exactly one greedy token from a converted Gemma BMOQ and
+Gemma CSPM tokenizer asset:
+
+```sh
+tools/build/test_coli_gemma_generate /usb/model.bmoq /usb/tokenizer.cspm "hi"
+```

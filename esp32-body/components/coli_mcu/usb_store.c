@@ -14,12 +14,31 @@
 #include "freertos/task.h"
 #include "usb/msc_host.h"
 #include "usb/msc_host_vfs.h"
+#include "coli_generate.h"
+#include "coli_gemma.h"
+#include "coli_gemma_generate.h"
 #include "coli_model.h"
+#include "coli_olmoe.h"
+#include "coli_spm.h"
 
 #define COLI_MOUNT_PATH "/usb"
 #define COLI_PROBE_FILE COLI_MOUNT_PATH "/model.bmoq"
+#define COLI_TOKENIZER_FILE COLI_MOUNT_PATH "/tokenizer.ctok"
+#define COLI_GEMMA_TOKENIZER_FILE COLI_MOUNT_PATH "/tokenizer.cspm"
+#define COLI_PROMPT_FILE COLI_MOUNT_PATH "/prompt.txt"
+#define COLI_GEMMA_MODEL_DIR \
+    COLI_MOUNT_PATH "/neatobmo-models/gemma-3-270m-q8_0"
+#define COLI_GEMMA_MODEL_FILE COLI_GEMMA_MODEL_DIR "/model.bmoq"
+#define COLI_GEMMA_NESTED_TOKENIZER_FILE COLI_GEMMA_MODEL_DIR "/tokenizer.cspm"
+#define COLI_GEMMA_PROMPT_FILE COLI_GEMMA_MODEL_DIR "/prompt.txt"
 #define COLI_READ_BUFFER_BYTES (16u * 1024u)
 #define COLI_BENCHMARK_BYTES (512u * 1024u)
+#define COLI_DEMO_PROMPT_BYTES 192u
+#define COLI_OLMOE_CONTEXT_TOKENS 4u
+#define COLI_GEMMA_CONTEXT_TOKENS 16u
+#define COLI_DEMO_MAX_NEW_TOKENS 1u
+#define COLI_DEMO_WORKSPACE_BYTES (768u * 1024u)
+#define COLI_DEMO_DECODED_CHUNK_BYTES 256u
 
 static const char *TAG = "coli_msc";
 
@@ -43,6 +62,29 @@ typedef struct {
 
 static QueueHandle_t s_events;
 static volatile bool s_removed;
+static TaskHandle_t s_generate_task;
+
+static bool file_exists(const char *path)
+{
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static const char *model_file_path(void)
+{
+    if (file_exists(COLI_PROBE_FILE)) return COLI_PROBE_FILE;
+    if (file_exists(COLI_GEMMA_MODEL_FILE)) return COLI_GEMMA_MODEL_FILE;
+    return NULL;
+}
+
+static const char *gemma_tokenizer_file_path(void)
+{
+    if (file_exists(COLI_GEMMA_TOKENIZER_FILE))
+        return COLI_GEMMA_TOKENIZER_FILE;
+    if (file_exists(COLI_GEMMA_NESTED_TOKENIZER_FILE))
+        return COLI_GEMMA_NESTED_TOKENIZER_FILE;
+    return COLI_GEMMA_TOKENIZER_FILE;
+}
 
 static void msc_event_callback(const msc_host_event_t *event, void *arg)
 {
@@ -150,6 +192,197 @@ static void probe_bmoq(const char *path)
     coli_store_close(store);
 }
 
+static bool generate_cancelled(void *context)
+{
+    (void)context;
+    return s_removed;
+}
+
+static void generate_yield(void *context)
+{
+    (void)context;
+    taskYIELD();
+}
+
+static void generate_log_chunk(void *context, const uint8_t *bytes,
+                               size_t byte_count)
+{
+    (void)context;
+    ESP_LOGI(TAG, "offline model chunk: %.*s", (int)byte_count,
+             (const char *)bytes);
+}
+
+static coli_status_t gemma_spm_encode(
+    void *context, coli_store_t *store, const uint8_t *prompt,
+    size_t prompt_bytes, uint32_t *token_ids, size_t token_capacity,
+    size_t *out_token_count)
+{
+    (void)store;
+    return coli_spm_encode((const coli_spm_t *)context, prompt, prompt_bytes,
+                           token_ids, token_capacity, out_token_count,
+                           COLI_SPM_ENCODE_ADD_BOS);
+}
+
+static coli_status_t gemma_spm_decode(
+    void *context, coli_store_t *store, const uint32_t *token_ids,
+    size_t token_count, uint8_t *text, size_t text_capacity,
+    size_t *out_text_bytes)
+{
+    (void)store;
+    return coli_spm_decode((const coli_spm_t *)context, token_ids, token_count,
+                           text, text_capacity, out_text_bytes);
+}
+
+static size_t read_prompt(uint8_t *prompt, size_t capacity)
+{
+    FILE *file = fopen(COLI_PROMPT_FILE, "rb");
+    if (!file) file = fopen(COLI_GEMMA_PROMPT_FILE, "rb");
+    if (!file) {
+        static const char fallback[] = "BMO:";
+        size_t bytes = sizeof(fallback) - 1u;
+        if (bytes > capacity) bytes = capacity;
+        memcpy(prompt, fallback, bytes);
+        return bytes;
+    }
+    size_t bytes = fread(prompt, 1, capacity, file);
+    fclose(file);
+    return bytes;
+}
+
+static void offline_generate_task(void *arg)
+{
+    (void)arg;
+    uint8_t prompt[COLI_DEMO_PROMPT_BYTES];
+    size_t prompt_bytes = read_prompt(prompt, sizeof(prompt));
+    ESP_LOGI(TAG, "offline generation starting prompt_bytes=%u max_new_tokens=%u",
+             (unsigned)prompt_bytes, COLI_DEMO_MAX_NEW_TOKENS);
+    coli_store_t *model_store = NULL;
+    coli_store_t *tokenizer_store = NULL;
+    const char *model_path = model_file_path();
+    coli_status_t status = model_path
+                               ? coli_store_open_file(model_path, &model_store)
+                               : COLI_ERR_IO;
+    uint32_t architecture = 0;
+    if (status == COLI_OK) {
+        coli_model_t model;
+        status = coli_model_open(model_store, &model);
+        if (status == COLI_OK) {
+            architecture = model.config.arch;
+            coli_model_close(&model);
+        }
+    }
+
+    if (status == COLI_OK && architecture == COLI_GEMMA3_ARCH_ID) {
+        status = coli_store_open_file(gemma_tokenizer_file_path(),
+                                      &tokenizer_store);
+        coli_spm_t spm;
+        bool spm_open = false;
+        if (status == COLI_OK) {
+            status = coli_spm_open(tokenizer_store, &spm);
+            spm_open = status == COLI_OK;
+        }
+        coli_gemma_generate_result_t result = {0};
+        if (status == COLI_OK) {
+            const coli_gemma_tokenizer_t tokenizer = {
+                .encode = gemma_spm_encode,
+                .decode = gemma_spm_decode,
+                .context = &spm,
+            };
+            const coli_gemma_generate_config_t config = {
+                .prompt = prompt,
+                .prompt_bytes = prompt_bytes,
+                .context_tokens = COLI_GEMMA_CONTEXT_TOKENS,
+                .max_prompt_tokens =
+                    COLI_GEMMA_CONTEXT_TOKENS - COLI_DEMO_MAX_NEW_TOKENS,
+                .max_new_tokens = COLI_DEMO_MAX_NEW_TOKENS,
+                .workspace_bytes = COLI_DEMO_WORKSPACE_BYTES,
+                .decoded_chunk_bytes = COLI_DEMO_DECODED_CHUNK_BYTES,
+                .should_cancel = generate_cancelled,
+                .yield = generate_yield,
+                .log_chunk = generate_log_chunk,
+                .callback_context = NULL,
+            };
+            status = coli_gemma_generate_with_tokenizer(
+                model_store, tokenizer_store, &tokenizer, &config, &result);
+        }
+        if (spm_open) coli_spm_close(&spm);
+        if (status == COLI_OK) {
+            ESP_LOGI(TAG,
+                     "offline Gemma done prompt_tokens=%u generated=%u "
+                     "decoded=%u kv=%u workspace=%u last_token=%" PRIu32,
+                     (unsigned)result.prompt_tokens,
+                     (unsigned)result.generated_tokens,
+                     (unsigned)result.decoded_bytes,
+                     (unsigned)result.kv_cache_bytes,
+                     (unsigned)result.workspace_bytes, result.last_token_id);
+        } else if (status != COLI_ERR_REMOVED) {
+            ESP_LOGW(TAG, "offline Gemma unavailable stage=%d status=%d",
+                     result.stage, status);
+        }
+    } else if (status == COLI_OK && architecture == BMOQ_MODEL_ARCH_OLMOE) {
+        status = coli_store_open_file(COLI_TOKENIZER_FILE, &tokenizer_store);
+        coli_generate_result_t result = {0};
+        if (status == COLI_OK) {
+            const coli_generate_config_t config = {
+                .prompt = prompt,
+                .prompt_bytes = prompt_bytes,
+                .context_tokens = COLI_OLMOE_CONTEXT_TOKENS,
+                .max_prompt_tokens =
+                    COLI_OLMOE_CONTEXT_TOKENS - COLI_DEMO_MAX_NEW_TOKENS,
+                .max_new_tokens = COLI_DEMO_MAX_NEW_TOKENS,
+                .workspace_bytes = COLI_DEMO_WORKSPACE_BYTES,
+                .decoded_chunk_bytes = COLI_DEMO_DECODED_CHUNK_BYTES,
+                .should_cancel = generate_cancelled,
+                .yield = generate_yield,
+                .log_chunk = generate_log_chunk,
+                .callback_context = NULL,
+            };
+            status = coli_generate_olmoe_greedy(model_store, tokenizer_store,
+                                                &config, &result);
+        }
+        if (status == COLI_OK) {
+            ESP_LOGI(TAG,
+                     "offline OLMoE done prompt_tokens=%u generated=%u "
+                     "decoded=%u kv=%u workspace=%u last_token=%" PRIu32,
+                     (unsigned)result.prompt_tokens,
+                     (unsigned)result.generated_tokens,
+                     (unsigned)result.decoded_bytes,
+                     (unsigned)result.kv_cache_bytes,
+                     (unsigned)result.workspace_bytes, result.last_token_id);
+        } else if (status != COLI_ERR_REMOVED) {
+            ESP_LOGW(TAG, "offline OLMoE unavailable stage=%d status=%d",
+                     result.stage, status);
+        }
+    } else if (status == COLI_OK) {
+        status = COLI_ERR_FORMAT;
+        ESP_LOGW(TAG, "offline model architecture unsupported: 0x%08" PRIx32,
+                 architecture);
+    }
+
+    if (tokenizer_store) coli_store_close(tokenizer_store);
+    if (model_store) coli_store_close(model_store);
+    if (status == COLI_ERR_REMOVED)
+        ESP_LOGW(TAG, "offline generation cancelled on storage removal");
+    s_generate_task = NULL;
+    vTaskDelete(NULL);
+}
+
+static void maybe_start_offline_generate(void)
+{
+    if (s_generate_task || s_removed) return;
+    if (!model_file_path()) {
+        ESP_LOGI(TAG,
+                 "offline generation waiting for %s or %s", COLI_PROBE_FILE,
+                 COLI_GEMMA_MODEL_FILE);
+        return;
+    }
+    if (xTaskCreate(offline_generate_task, "coli_generate", 8192, NULL, 2,
+                    &s_generate_task) != pdPASS) {
+        s_generate_task = NULL;
+        ESP_LOGE(TAG, "offline OLMoE task allocation failed");
+    }
+}
+
 static esp_err_t mount_device(uint8_t address, mounted_device_t *mounted)
 {
     esp_err_t err = msc_host_install_device(address, &mounted->device);
@@ -205,10 +438,15 @@ static void storage_task(void *arg)
                 continue;
             }
             ESP_LOGI(TAG, "MSC mounted at %s", COLI_MOUNT_PATH);
-            benchmark_file(COLI_PROBE_FILE);
-            probe_bmoq(COLI_PROBE_FILE);
+            const char *model_path = model_file_path();
+            if (model_path) {
+                benchmark_file(model_path);
+                probe_bmoq(model_path);
+            }
+            maybe_start_offline_generate();
         } else if (mounted.device == event.device.handle) {
             ESP_LOGW(TAG, "MSC removed; cancelling storage work");
+            s_removed = true;
             unmount_device(&mounted);
         }
     }
