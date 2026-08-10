@@ -4,18 +4,21 @@ The firmware's SetLCD draws FULL-SPAN lines only: `HLine <row>` and
 `VLine <col>` take a single number. Probed live (2026-08-09, fw 2.4.15667):
 any extra trailing number is parsed as a *Contrast* value and written to
 NAND — `SetLCD HLine 31 40 90` replied "Invalid Contrast Specified" and
-`VLine 64 10 50` silently set LCDContrast to 50. So there is no segment
-grammar, and faces are carved exactly like faces.c: black eye pillars
-(VLine) masked down to row bands by white rows (HLine), mouth = full-width
-band. Band geometry lives in neatobmo/faces.py, mirroring faces.c; if a
-face changes, change faces.py *and* faces.c.
+`VLine 64 10 50` silently set LCDContrast to 50. FGWhite is a complete
+no-op (ACKs, never draws or erases, on white or black backgrounds), so
+there is no selective erase: faces are GRIDS — full-height black eye
+pillars (VLine) crossed by full-width mouth bands (HLine), fully redrawn
+each time. Grid geometry lives in neatobmo/faces.py, mirroring faces.c;
+if a face changes, change faces.py *and* faces.c.
 
 FACES and ANIMS below also feed the web console's animated LCD preview
-(bmo_web /faces): FACES holds the stylized preview rects, and the ANIMS
-function names (hearts/tear/zzz/confetti) select the preview sprite. On
-the robot those same entries run full-span-native lingering effects —
-contrast throb / fade / breathe / bars strobe — matching faces.c, whose
-anims already accept that Contrast persists to NAND.
+(bmo_web /faces): FACES holds preview rects now derived from the same
+grid geometry the robot draws, and the ANIMS function names
+(hearts/tear/zzz/confetti) select the preview sprite — the one remaining
+preview embellishment; on the robot those entries run full-span-native
+lingering effects (contrast throb / fade / breathe / bars strobe),
+matching faces.c, whose anims already accept that Contrast persists to
+NAND.
 
 Usage:
     from neatobmo import emote
@@ -37,52 +40,21 @@ NEUTRAL, HAPPY, LAUGH, LOVE, SAD, SURPRISED, WINK, SLEEPY, ANGRY, PARTY, BLINK =
     "wink", "sleepy", "angry", "party", "blink")
 
 
-# ---- stylized preview rects for the web console LCD (not what the robot
-#      draws — the robot carves the GEO bands; these are the same faces as
-#      8x8-ish sprite art for bmo_web's canvas preview) --------------------
+# ---- preview rects for the web console LCD, derived from the real grid
+#      geometry so the preview shows exactly what the robot draws. The old
+#      hand-drawn sprite faces (dot eyes, heart eyes, smile arcs) are gone:
+#      they were prettier than the hardware can render (deprecated
+#      2026-08-10; see git history if the art is ever wanted again) --------
 
-def _rc(x, y, w, h):
-    return (x, y, x + w - 1, y + h - 1)
-
-
-EYES_DOT = [_rc(34, 20, 8, 8), _rc(86, 20, 8, 8)]
-EYES_LINE = [_rc(32, 23, 12, 3), _rc(84, 23, 12, 3)]
-EYES_WIDE = [_rc(33, 18, 10, 10), _rc(85, 18, 10, 10)]
-EYES_HAT = [_rc(32, 24, 12, 3), _rc(34, 21, 8, 3),
-            _rc(84, 24, 12, 3), _rc(86, 21, 8, 3)]
-EYES_LID = [_rc(32, 18, 12, 3), _rc(33, 22, 10, 6),
-            _rc(84, 18, 12, 3), _rc(85, 22, 10, 6)]
-EYES_BROW = [_rc(32, 16, 12, 3), _rc(34, 21, 8, 8),
-             _rc(84, 16, 12, 3), _rc(86, 21, 8, 8)]
+_LCD_W, _LCD_H = 128, 64    # bmo_web preview canvas dimensions
 
 
-def _heart(x, y):
-    return [_rc(x + 1, y, 3, 2), _rc(x + 6, y, 3, 2), _rc(x, y + 2, 10, 3),
-            _rc(x + 2, y + 5, 6, 2), _rc(x + 4, y + 7, 2, 1)]
+def _grid_rects(cols, rows):
+    return ([(lo, 0, hi, _LCD_H - 1) for lo, hi in cols] +
+            [(0, lo, _LCD_W - 1, hi) for lo, hi in rows])
 
 
-EYES_HEART = _heart(31, 17) + _heart(83, 17)
-
-M_FLAT = [_rc(52, 44, 25, 3)]
-M_SMILE = [_rc(44, 44, 41, 6), _rc(48, 50, 33, 3)]
-M_GRIN = [_rc(44, 42, 41, 10), _rc(50, 52, 29, 3)]
-M_SAD = [_rc(52, 50, 25, 3), _rc(46, 46, 6, 2), _rc(77, 46, 6, 2)]
-M_O = [_rc(56, 42, 17, 13)]
-M_SLEEP = [_rc(56, 48, 17, 3)]
-
-FACES = {
-    HAPPY:     EYES_HAT + M_SMILE,
-    LAUGH:     EYES_HAT + M_GRIN,
-    LOVE:      EYES_HEART + M_SMILE,
-    SAD:       EYES_DOT + M_SAD,
-    SURPRISED: EYES_WIDE + M_O,
-    WINK:      [EYES_DOT[0], EYES_LINE[1]] + M_SMILE,
-    SLEEPY:    EYES_LID + M_SLEEP,
-    ANGRY:     EYES_BROW + M_SAD,
-    PARTY:     EYES_WIDE + M_GRIN,
-    BLINK:     EYES_LINE + M_FLAT,
-    NEUTRAL:   EYES_DOT + M_FLAT,
-}
+FACES = {name: _grid_rects(cols, rows) for name, (cols, rows) in GEO.items()}
 
 EMOJI_FACES = {
     "\U0001F600": HAPPY,      # 😀
@@ -129,7 +101,7 @@ def parse_emojis(text, cap=MAX_CASCADE):
     return out
 
 
-# ---- drawing (carve + nested-band delta, same strategy as faces.c) -------
+# ---- drawing (full grid redraw each time, same strategy as faces.c) ------
 
 def _cmd(r, c):
     r.cmd(c, timeout=0.6)
@@ -140,38 +112,14 @@ def _lcd(r, op):
     _cmd(r, "SetLCD " + op)
 
 
-_shown = None   # face name currently carved on the LCD, or None
-
-
-def _delta_ok(name):
-    """Delta redraw is legal only when the new eye bands nest inside the
-    current ones (rows can be whited out per-row, but a row can never be
-    turned into "black at eye columns only" without redrawing pillars)."""
-    if _shown is None:
-        return False
-    (cel, cer, _), (el, er, _) = GEO[_shown], GEO[name]
-    return (el[0] >= cel[0] and el[-1] <= cel[-1] and
-            er[0] >= cer[0] and er[-1] <= cer[-1])
-
-
-def _delta_ops(name):
-    (cel, cer, cm), (el, er, m) = GEO[_shown], GEO[name]
-    ops = ["FGWhite"]
-    ops += [f"HLine {y}" for y in cel if y not in el and y not in m]
-    ops += [f"HLine {y}" for y in cer
-            if y not in er and y not in m and y not in cel]
-    ops += [f"HLine {y}" for y in cm if y not in m]
-    ops += ["FGBlack"]
-    ops += [f"HLine {y}" for y in m if y not in cm]
-    return ops
+_shown = None   # face name currently drawn on the LCD, or None
 
 
 def draw_face(r, face):
     global _shown
     if face not in GEO:
         face = NEUTRAL
-    ops = _delta_ops(face) if _delta_ok(face) else face_ops(face)
-    for op in ops:
+    for op in face_ops(face):
         _lcd(r, op)
     _shown = face
 
@@ -224,7 +172,7 @@ def _anim_confetti(r, live):    # party/laugh: strobe bars, then the face
         _lcd(r, "FGBlack")
         _lcd(r, "HBars" if i & 1 else "VBars")
         time.sleep(0.22)
-    last, _shown = _shown, None     # bars trashed the carve
+    last, _shown = _shown, None     # bars trashed the grid face
     if live() and last:
         draw_face(r, last)
 
@@ -246,7 +194,7 @@ def cascade(r, text):
     _generation += 1
     gen = _generation
     live = lambda: _generation == gen
-    _shown = None    # anything may have touched the LCD since: full carve
+    _shown = None    # anything may have touched the LCD since: full redraw
 
     seq = parse_emojis(text) or [HAPPY]   # plain text: just smile
     r.cmd("TestMode On")                  # SetLCD is TestMode-only
@@ -258,9 +206,10 @@ def cascade(r, text):
             return len(seq)
         draw_face(r, face)
         time.sleep(0.65)
-        if i < len(seq) - 1:
-            draw_face(r, BLINK)           # nested rows: cheap delta
+        if i < len(seq) - 1:              # eyelid flash between faces
+            _cmd(r, "SetLED BacklightOff")
             time.sleep(0.12)
+            _cmd(r, "SetLED BacklightOn")
     anim = ANIMS.get(seq[-1])
     if anim and live():
         anim(r, live)
