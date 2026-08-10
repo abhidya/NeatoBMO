@@ -10,5 +10,8 @@ __pycache__/
 *.pyc
 .DS_Store
 
+# private/copyrighted soundboard build intermediates; publish docs/*.bin only
+assets/bmo-soundboard-library-*/
+
 # tool state
 .omx/

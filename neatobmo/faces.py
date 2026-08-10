@@ -1,57 +1,55 @@
-"""Screen moods and carved faces for the XV-12 LCD.
+"""Grid faces and screen moods for the XV-12 LCD.
 
-The firmware only draws full-span lines, bars, and fills. Faces are
-therefore *carved*: black eye pillars (VLine) masked down to row bands by
-white rows (HLine), mouth = full-width black band. Later commands overwrite
-earlier ones, which is what makes a nested wink possible. A mouth narrower
-than the eye span is impossible with full-span primitives.
+Hardware-verified SetLCD reality (probed 2026-08-09 on the live robot):
+  - HLine <row> / VLine <col> draw a 1px BLACK line spanning the full screen.
+  - FGWhite is a complete no-op: it ACKs but draws/erases nothing, on both
+    white and black backgrounds. There is no selective erase.
+  - BGWhite / BGBlack fill the whole screen; the only way to remove ink.
+  - Commands ACK in ~100 ms over the ESP32 bridge.
 
-Mirrors esp32-body/src/faces.c — same geometry, same ordering — so faces
-can be tested over the :3333 bridge without reflashing.
+So the drawable language is: a union of full-height black columns and
+full-width black rows on white. Faces are grids — eye "pillars" (column
+groups) crossed by mouth "bands" (row groups); expression comes from
+widths, thicknesses, and asymmetry. Any change needs a full redraw
+(BGWhite + ~20-40 commands, a couple of seconds).
+
+Mirrors esp32-body/src/faces.c so faces can be tested over :3333 without
+reflashing.
 """
 import time
 
 LCD = 128
-EYE_L = range(32, 45)
-EYE_R = range(84, 97)
 
-# name -> (left-eye rows, right-eye rows, mouth rows); eyes may differ
-# (wink) only when one band nests inside the other
+# name -> (column spans, row spans); each span is (lo, hi) inclusive
 FACES = {
-    "neutral":   (range(20, 28), range(20, 28), range(44, 47)),
-    "happy":     (range(20, 28), range(20, 28), range(42, 51)),
-    "laugh":     (range(18, 29), range(18, 29), range(40, 53)),
-    "love":      (range(18, 29), range(18, 29), range(42, 51)),
-    "sad":       (range(20, 28), range(20, 28), range(50, 53)),
-    "surprised": (range(16, 29), range(16, 29), range(38, 56)),
-    "wink":      (range(20, 28), range(23, 26), range(42, 51)),
-    "sleepy":    (range(24, 27), range(24, 27), range(48, 51)),
-    "angry":     (range(22, 27), range(22, 27), range(50, 53)),
-    "party":     (range(16, 29), range(16, 29), range(40, 53)),
-    "blink":     (range(23, 26), range(23, 26), range(44, 47)),
+    "neutral":   ([(34, 42), (86, 94)], [(44, 46)]),
+    "happy":     ([(34, 42), (86, 94)], [(42, 50)]),
+    "laugh":     ([(32, 44), (84, 96)], [(40, 52)]),
+    "love":      ([(32, 44), (84, 96)], [(42, 50)]),
+    "sad":       ([(34, 42), (86, 94)], [(52, 54)]),
+    "surprised": ([(30, 46), (82, 98)], [(36, 55)]),
+    "wink":      ([(32, 44), (89, 91)], [(42, 50)]),
+    "sleepy":    ([(37, 39), (89, 91)], [(48, 50)]),
+    "angry":     ([(32, 44), (84, 96)], [(48, 50), (54, 56)]),
+    "party":     ([(30, 46), (82, 98)], [(40, 42), (46, 52)]),
+    "blink":     ([(37, 39), (89, 91)], [(44, 46)]),
 }
 
 
 def face_ops(name):
-    """The SetLCD op sequence that carves a full face (~150 commands)."""
-    el, er, mouth = FACES[name]
+    """The SetLCD op sequence for a full grid-face redraw."""
+    cols, rows = FACES[name]
     ops = ["BGWhite", "FGBlack"]
-    ops += [f"VLine {c}" for c in EYE_R]
-    if el != er:
-        ops += ["FGWhite"]
-        ops += [f"HLine {y}" for y in el if y not in er]
-        ops += ["FGBlack"]
-    ops += [f"VLine {c}" for c in EYE_L]
-    ops += ["FGWhite"]
-    ops += [f"HLine {y}" for y in range(LCD) if y not in el and y not in mouth]
-    ops += ["FGBlack"]
-    ops += [f"HLine {y}" for y in mouth]
+    for lo, hi in cols:
+        ops += [f"VLine {c}" for c in range(lo, hi + 1)]
+    for lo, hi in rows:
+        ops += [f"HLine {y}" for y in range(lo, hi + 1)]
     return ops
 
 
-def face(r, name):
-    """Carve a full face (~150 SetLCD commands)."""
-    r.lcd(*face_ops(name))
+def face(r, name, contrast=45):
+    """Redraw the screen as a grid face (~20-40 SetLCD commands)."""
+    r.lcd(f"Contrast {contrast}", *face_ops(name))
 
 
 def clear(r, white=True):
@@ -107,4 +105,4 @@ def wake(r):
     r.lcd("BGBlack")
     time.sleep(0.3)
     blink(r, times=3, speed=0.1)
-    r.lcd(f"Contrast 45", "BGWhite")
+    r.lcd("Contrast 45", "BGWhite")

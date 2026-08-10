@@ -12,5 +12,6 @@
 #define NEATO_SOUND_BANK_BYTES 770048U
 
 void neato_send(const char *cmd);
+esp_err_t neato_send_checked(const char *cmd);
 esp_err_t neato_send_binary(const char *cmd, const uint8_t *payload,
                             size_t payload_len, uint32_t timeout_ms);

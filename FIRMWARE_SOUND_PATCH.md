@@ -1,5 +1,87 @@
 # Native `PlaySound File` patch contract
 
+## Distilled CFW execution path
+
+The first deliverable is not the full audio handler. It is a **version-only
+custom firmware proof** built from the exact application running on this
+XV-12. That smaller patch proves acquisition, modification, execution, health
+checks, and rollback before functional code is changed.
+
+Upload acceptance and executable-image validity are separate gates. The
+updater passes the caller-provided bytes unchanged, and `Upload code noburn`
+does not reject arbitrary content. This confirms that the transport is not a
+signature validator; it does **not** prove whether a later boot stage decrypts,
+transforms, or directly executes the payload. Blindly modifying a public
+`.enc` file therefore remains unsafe even though the receiver accepts it.
+
+The preferred path avoids that ambiguity:
+
+1. Identify the exact flash device, geometry, debug connections, and boot path
+   on this P-family board. Begin with passive P6 DBGU capture; do not use J3.
+2. Establish a non-destructive raw read path and take two byte-identical full
+   captures, including any NAND OOB/ECC data required for restoration.
+3. Extract and validate the installed `2.4.15667` application. Require command
+   strings, a coherent ARM9 memory map, load/entry addresses, and reproducible
+   region hashes.
+4. Prove the execution path with an unchanged extracted image before patching.
+   Prefer a RAM/debug boot. If only flash execution is possible, first prove a
+   hardware restore on a spare/duplicate flash device.
+5. Build a deterministic same-size version patch. Change only the smallest
+   constant or fixed-width string that drives `GetVersion`; emit a manifest of
+   base hash, output hash, offsets, old/new bytes, and all integrity updates.
+6. Run the patched image through the same reversible path and require the CFW
+   version plus a complete health regression. Only then authorize a persistent
+   application write.
+7. Add `PlaySound File` as the second patch, using the validated version-only
+   CFW as the known-good baseline.
+
+The detailed implementation plan, acceptance gates, artifacts, and fallback
+routes live in
+[`.omx/plans/neato-cfw-version-path.md`](.omx/plans/neato-cfw-version-path.md).
+
+### Offline version-patch tooling
+
+`tools/neato_cfw.py` now implements the file-only part of the version-proof
+workflow. It cannot contact or write the robot.
+
+Inspect a future raw capture and locate candidate version representations:
+
+```sh
+python3 tools/neato_cfw.py inspect-raw raw-application.bin \
+  --find 15667 --output raw-application.inspect.json
+```
+
+After disassembly proves the correct representation and offset, build a
+same-size patch pinned to the raw capture's SHA-256:
+
+```sh
+python3 tools/neato_cfw.py patch-version \
+  raw-application.bin cfw-version-proof.bin \
+  --base-sha256 <64-hex-capture-sha256> \
+  --old 15667 --new 95667 --encoding ascii \
+  --offset <reviewed-offset>
+```
+
+Omit `--offset` only when the old encoded value occurs exactly once. Use
+`--encoding u16le` or `--encoding u32le` if disassembly proves the version is a
+little-endian integer constant rather than ASCII. The tool refuses a base hash
+mismatch, missing or ambiguous old value, size-changing replacement, existing
+output file, or out-of-range offset. It writes a deterministic JSON manifest.
+
+Independently re-check the base, patched file, and manifest before any hardware
+tool is allowed to consume the result:
+
+```sh
+python3 tools/neato_cfw.py verify-patch \
+  raw-application.bin cfw-version-proof.bin \
+  cfw-version-proof.bin.manifest.json
+```
+
+`verify-patch` requires the manifest hashes and sizes, expected old/new bytes,
+and an exact reconstruction proving that no bytes outside the approved
+replacement changed. It deliberately does not guess or update unknown boot
+checksums; those must be identified from the acquired image first.
+
 The goal is runtime speech through the XV-12's original speaker without
 rewriting its flash sound bank for every utterance.
 
@@ -58,9 +140,11 @@ host-side unlock path. See
 [FIRMWARE_ARCHIVE.md](FIRMWARE_ARCHIVE.md#current-unlockrecovery-status) and
 [/Volumes/2TB/neato-firmware-archive/work/logs/research-profile.md](/Volumes/2TB/neato-firmware-archive/work/logs/research-profile.md).
 
-The patch therefore needs a plaintext application produced by one of these
-paths: a verified decrypt/repack implementation, an authenticated hardware
-debug read, or a known-good unencrypted developer image. `tools/neato_firmware.py
+The patch therefore needs an executable application produced by one of these
+paths: an authenticated raw hardware read, a verified decrypt/repack
+implementation, or a known-good unencrypted developer image. A raw
+read/debug-write path is preferred because it can make the updater's `.enc`
+container irrelevant. `tools/neato_firmware.py
 validate-unlock` requires size coverage, multiple Neato command markers,
 substantial strings, lower entropy than ciphertext, and—when available—an
 exact repack hash before any candidate is trusted.

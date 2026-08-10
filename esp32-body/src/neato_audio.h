@@ -9,6 +9,7 @@
 
 esp_err_t speak_post(httpd_req_t *req);
 esp_err_t soundbank_post(httpd_req_t *req);
+esp_err_t neato_audio_init(void);
 esp_err_t neato_install_soundbank(const uint8_t *bank, size_t len,
                                   const char *expected_sha256);
 esp_err_t neato_sound_operation_begin(uint32_t timeout_ms);

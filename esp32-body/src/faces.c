@@ -11,46 +11,45 @@ void neato_send(const char *cmd); /* main.c */
 
 static const char *TAG = "faces";
 
-#define CMD_GAP_MS 25   /* pacing between SetLCD commands (verified safe) */
+#define CMD_GAP_MS 25   /* gap between SetLCD commands; fw drains them on a
+                           fixed 10 Hz tick regardless of send rate (queued,
+                           zero drops), so this only bounds our send burst */
 #define MAX_CASCADE 8
-#define LCD_SIZE 128
 #define CONTRAST_DEF 45
 
-/* Eye columns are fixed for every face; expressions vary only row bands.
- * SetLCD HLine/VLine draw full-span lines only, so faces are carved:
- * black eye pillars (VLine) masked down to bands by white rows (HLine),
- * mouth = full-width black band. A band narrower than the eye span is
- * impossible with full-span primitives (2x2 checkerboard argument). */
-#define EYE_L0 32
-#define EYE_L1 44
-#define EYE_R0 84
-#define EYE_R1 96
+/* Hardware-verified SetLCD reality (probed 2026-08-09 on the live robot):
+ * HLine/VLine draw 1px BLACK full-span lines; FGWhite is a complete no-op
+ * (ACKs, draws nothing, erases nothing); BGWhite/BGBlack are the only way
+ * to remove ink. Faces are therefore grids: full-height eye pillars
+ * crossed by full-width mouth bands, redrawn from scratch each time
+ * (~20-40 cmds, ~2-4 s at the fw's 10 Hz SetLCD tick). Expression =
+ * pillar width + band thickness/position. */
 
 typedef enum {
     F_NEUTRAL, F_HAPPY, F_LAUGH, F_LOVE, F_SAD, F_SURPRISED,
     F_WINK, F_SLEEPY, F_ANGRY, F_PARTY, F_BLINK,
 } face_t;
 
-/* Row bands: [lo,hi] inclusive; left/right eyes may differ (wink)
- * only when one eye's band is nested inside the other's. */
+/* Column spans for the two eye pillars + up to two row bands for the
+ * mouth ([lo,hi] inclusive; second band unused when b2hi == 0). */
 typedef struct {
-    uint8_t el0, el1;   /* left eye rows  */
-    uint8_t er0, er1;   /* right eye rows */
-    uint8_t m0, m1;     /* mouth rows     */
+    uint8_t l0, l1, r0, r1;     /* left / right pillar columns */
+    uint8_t b1lo, b1hi;         /* mouth band 1 rows */
+    uint8_t b2lo, b2hi;         /* mouth band 2 rows (0,0 = none) */
 } geo_t;
 
 static const geo_t GEO[] = {
-    [F_NEUTRAL]   = { 20, 27, 20, 27, 44, 46 },
-    [F_HAPPY]     = { 20, 27, 20, 27, 42, 50 },
-    [F_LAUGH]     = { 18, 28, 18, 28, 40, 52 },
-    [F_LOVE]      = { 18, 28, 18, 28, 42, 50 },
-    [F_SAD]       = { 20, 27, 20, 27, 50, 52 },
-    [F_SURPRISED] = { 16, 28, 16, 28, 38, 55 },
-    [F_WINK]      = { 20, 27, 23, 25, 42, 50 },
-    [F_SLEEPY]    = { 24, 26, 24, 26, 48, 50 },
-    [F_ANGRY]     = { 22, 26, 22, 26, 50, 52 },
-    [F_PARTY]     = { 16, 28, 16, 28, 40, 52 },
-    [F_BLINK]     = { 23, 25, 23, 25, 44, 46 },
+    [F_NEUTRAL]   = { 34, 42, 86, 94, 44, 46, 0, 0 },
+    [F_HAPPY]     = { 34, 42, 86, 94, 42, 50, 0, 0 },
+    [F_LAUGH]     = { 32, 44, 84, 96, 40, 52, 0, 0 },
+    [F_LOVE]      = { 32, 44, 84, 96, 42, 50, 0, 0 },
+    [F_SAD]       = { 34, 42, 86, 94, 52, 54, 0, 0 },
+    [F_SURPRISED] = { 30, 46, 82, 98, 36, 55, 0, 0 },
+    [F_WINK]      = { 32, 44, 89, 91, 42, 50, 0, 0 },
+    [F_SLEEPY]    = { 37, 39, 89, 91, 48, 50, 0, 0 },
+    [F_ANGRY]     = { 32, 44, 84, 96, 48, 50, 54, 56 },
+    [F_PARTY]     = { 30, 46, 82, 98, 40, 42, 46, 52 },
+    [F_BLINK]     = { 37, 39, 89, 91, 44, 46, 0, 0 },
 };
 
 typedef struct {
@@ -59,8 +58,7 @@ typedef struct {
 } cascade_t;
 
 static QueueHandle_t s_q;
-static geo_t s_cur;
-static bool s_valid;    /* s_cur reflects what is on the LCD */
+static face_t s_cur = F_NEUTRAL;
 
 /* ---- serial drawing primitives ----------------------------------------- */
 
@@ -75,81 +73,21 @@ static void cmdf(const char *fmt, ...)
     vTaskDelay(pdMS_TO_TICKS(CMD_GAP_MS));
 }
 
-static void hline_span(uint8_t lo, uint8_t hi)
-{
-    for (int r = lo; r <= hi; r++) cmdf("SetLCD HLine %d", r);
-}
-
-static void vline_span(uint8_t lo, uint8_t hi)
-{
-    for (int c = lo; c <= hi; c++) cmdf("SetLCD VLine %d", c);
-}
-
-static bool in_band(int r, uint8_t lo, uint8_t hi) { return r >= lo && r <= hi; }
-
-/* Full carve, ~150 cmds. Later commands overwrite earlier full-span
- * lines, which is what makes a nested wink possible: the thin eye's
- * pillars go down first, its extra rows are whited out, then the tall
- * eye's pillars land on top of those white rows. */
-static void carve_face(const geo_t *g)
-{
-    cmdf("SetLCD BGWhite");
-    cmdf("SetLCD FGBlack");
-    vline_span(EYE_R0, EYE_R1);
-    if (g->el0 != g->er0 || g->el1 != g->er1) {
-        cmdf("SetLCD FGWhite");
-        for (int r = g->el0; r <= g->el1; r++)
-            if (!in_band(r, g->er0, g->er1)) cmdf("SetLCD HLine %d", r);
-        cmdf("SetLCD FGBlack");
-    }
-    vline_span(EYE_L0, EYE_L1);
-    cmdf("SetLCD FGWhite");
-    for (int r = 0; r < LCD_SIZE; r++)
-        if (!in_band(r, g->el0, g->el1) && !in_band(r, g->m0, g->m1))
-            cmdf("SetLCD HLine %d", r);
-    cmdf("SetLCD FGBlack");
-    hline_span(g->m0, g->m1);
-    s_cur = *g;
-    s_valid = true;
-}
-
-/* Delta update: legal only when the new eye bands are nested inside the
- * current ones (rows can be whited out per-row, but a row can never be
- * turned into "black at eye columns only" without redrawing pillars).
- * Mouth rows toggle freely: full-width black or white HLines. */
-static bool delta_ok(const geo_t *g)
-{
-    return s_valid &&
-           g->el0 >= s_cur.el0 && g->el1 <= s_cur.el1 &&
-           g->er0 >= s_cur.er0 && g->er1 <= s_cur.er1;
-}
-
-static void delta_face(const geo_t *g)
-{
-    cmdf("SetLCD FGWhite");
-    for (int r = s_cur.el0; r <= s_cur.el1; r++)
-        if (!in_band(r, g->el0, g->el1) && !in_band(r, g->m0, g->m1))
-            cmdf("SetLCD HLine %d", r);
-    for (int r = s_cur.er0; r <= s_cur.er1; r++)
-        if (!in_band(r, g->er0, g->er1) && !in_band(r, g->m0, g->m1) &&
-            !in_band(r, s_cur.el0, s_cur.el1))
-            cmdf("SetLCD HLine %d", r);
-    for (int r = s_cur.m0; r <= s_cur.m1; r++)
-        if (!in_band(r, g->m0, g->m1)) cmdf("SetLCD HLine %d", r);
-    cmdf("SetLCD FGBlack");
-    for (int r = g->m0; r <= g->m1; r++)
-        if (!in_band(r, s_cur.m0, s_cur.m1)) cmdf("SetLCD HLine %d", r);
-    s_cur = *g;
-}
-
 static void draw_face(face_t f)
 {
     const geo_t *g = &GEO[f];
-    if (delta_ok(g)) delta_face(g);
-    else carve_face(g);
+    cmdf("SetLCD BGWhite");
+    cmdf("SetLCD FGBlack");
+    for (int c = g->l0; c <= g->l1; c++) cmdf("SetLCD VLine %d", c);
+    for (int c = g->r0; c <= g->r1; c++) cmdf("SetLCD VLine %d", c);
+    for (int r = g->b1lo; r <= g->b1hi; r++) cmdf("SetLCD HLine %d", r);
+    if (g->b2hi)
+        for (int r = g->b2lo; r <= g->b2hi; r++) cmdf("SetLCD HLine %d", r);
+    s_cur = f;
 }
 
-/* ---- lingering animations (full-span native: contrast + bars + light) --- */
+/* ---- lingering animations (all verified primitives: contrast, bars,
+ *      backlight, full fills) --------------------------------------------- */
 
 static bool interrupted(void)
 {
@@ -199,8 +137,7 @@ static void anim_flicker(void)          /* party/laugh: strobe bars, then face *
         cmdf(i & 1 ? "SetLCD HBars" : "SetLCD VBars");
         vTaskDelay(pdMS_TO_TICKS(220));
     }
-    s_valid = false;                    /* bars trashed the carve */
-    if (!interrupted()) carve_face(&s_cur);
+    if (!interrupted()) draw_face(s_cur);
 }
 
 /* ---- cascade player ------------------------------------------------------ */
@@ -218,16 +155,17 @@ static void faces_task(void *arg)
         for (int i = 0; i < c.n && !interrupted(); i++) {
             draw_face(c.seq[i]);
             vTaskDelay(pdMS_TO_TICKS(650));
-            if (i < c.n - 1) {
-                draw_face(F_BLINK);          /* nested rows: cheap delta */
+            if (i < c.n - 1) {               /* eyelid flash between faces */
+                cmdf("SetLED BacklightOff");
                 vTaskDelay(pdMS_TO_TICKS(120));
+                cmdf("SetLED BacklightOn");
             }
         }
         if (interrupted()) continue;
         switch (c.seq[c.n - 1]) {            /* linger on the last emotion */
         case F_LOVE:   anim_pulse();   break;
         case F_SAD:    anim_dim();     break;
-        case F_SLEEPY: anim_drowse(); break;
+        case F_SLEEPY: anim_drowse();  break;
         case F_PARTY:
         case F_LAUGH:  anim_flicker(); break;
         default: break;

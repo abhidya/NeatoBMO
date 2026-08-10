@@ -57,8 +57,15 @@ static sound_status_t s_status = {.state = "idle"};
 
 static bool ensure_lock(void)
 {
-    if (!s_lock) s_lock = xSemaphoreCreateMutex();
+    if (!s_lock) remote_soundboard_init();
     return s_lock != NULL;
+}
+
+esp_err_t remote_soundboard_init(void)
+{
+    if (s_lock) return ESP_OK;
+    s_lock = xSemaphoreCreateMutex();
+    return s_lock ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
 static void set_status(const char *state, const char *error)
@@ -212,7 +219,14 @@ static void sound_task(void *arg)
         }
         char command[32];
         snprintf(command, sizeof(command), "PlaySound %d", job->slots[i]);
-        neato_send(command);
+        err = neato_send_checked(command);
+        if (err != ESP_OK) {
+            char message[160];
+            snprintf(message, sizeof(message), "PlaySound failed: %s",
+                     esp_err_to_name(err));
+            set_status("error", message);
+            goto done;
+        }
         vTaskDelay(pdMS_TO_TICKS(job->waits_ms[i]));
     }
     set_status("ready", NULL);

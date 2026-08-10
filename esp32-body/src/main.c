@@ -14,6 +14,8 @@
 #include "usb/usb_host.h"
 #include "usb/cdc_acm_host.h"
 #include "debug_uart.h"
+#include "neato_audio.h"
+#include "remote_soundboard.h"
 #include "neato_usb.h"
 #include "wifi_log.h"
 
@@ -80,26 +82,33 @@ static void usb_lib_task(void *arg)
     }
 }
 
-void neato_send(const char *cmd)
+esp_err_t neato_send_checked(const char *cmd)
 {
-    if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(2000)) != pdTRUE) return;
+    if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(2000)) != pdTRUE)
+        return ESP_ERR_TIMEOUT;
     cdc_acm_dev_hdl_t dev = s_dev;
     if (!dev) {
         xSemaphoreGive(s_tx_mutex);
-        return;
+        return ESP_ERR_INVALID_STATE;
     }
     char buf[64];
     int n = snprintf(buf, sizeof(buf), "%s\n", cmd);
     if (n <= 0 || n >= (int)sizeof(buf)) {
         ESP_LOGE(TAG, "command too long");
         xSemaphoreGive(s_tx_mutex);
-        return;
+        return ESP_ERR_INVALID_ARG;
     }
     esp_err_t err = cdc_acm_host_data_tx_blocking(dev, (const uint8_t *)buf, n, 1000);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "tx failed: %s", esp_err_to_name(err));
     }
     xSemaphoreGive(s_tx_mutex);
+    return err;
+}
+
+void neato_send(const char *cmd)
+{
+    (void)neato_send_checked(cmd);
 }
 
 static esp_err_t wait_binary_event(uint8_t expected, uint32_t timeout_ms)
@@ -173,6 +182,8 @@ void app_main(void)
     s_tx_mutex = xSemaphoreCreateMutex();
     s_binary_events = xQueueCreate(8, sizeof(uint8_t));
     ESP_ERROR_CHECK(s_tx_mutex && s_binary_events ? ESP_OK : ESP_ERR_NO_MEM);
+    ESP_ERROR_CHECK(neato_audio_init());
+    ESP_ERROR_CHECK(remote_soundboard_init());
     wifi_log_start();
     web_start();
     debug_uart_start();

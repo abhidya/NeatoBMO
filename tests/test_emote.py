@@ -54,7 +54,7 @@ class Drawing(unittest.TestCase):
             else:
                 self.assertEqual(len(parts), 2, f"extra args in {c!r}")
 
-    def test_draw_face_carves_full_span_lines(self):
+    def test_draw_face_is_a_grid_of_full_span_lines(self):
         r = FakeRobot()
         emote.draw_face(r, emote.HAPPY)
         self.assertEqual(r.sent[:2], ["SetLCD BGWhite", "SetLCD FGBlack"])
@@ -62,24 +62,22 @@ class Drawing(unittest.TestCase):
         self.assertTrue(any(" VLine " in c for c in r.sent))
         self.assert_full_span_grammar(r.sent)
 
-    def test_nested_blink_is_a_cheap_delta(self):
+    def test_no_fgwhite_ever(self):
+        """FGWhite is a hardware no-op (probed 2026-08-09): it must never
+        appear — anything relying on it silently draws nothing."""
+        for face in emote.FACES:
+            r = FakeRobot()
+            emote.draw_face(r, face)
+            self.assertNotIn("SetLCD FGWhite", r.sent, face)
+
+    def test_every_redraw_starts_from_a_clean_screen(self):
         r = FakeRobot()
         emote.draw_face(r, emote.HAPPY)
-        full = len(r.sent)
         r.sent.clear()
-        emote.draw_face(r, emote.BLINK)   # nested in happy: delta redraw
-        self.assertLess(len(r.sent), full // 3)
-        self.assertNotIn("SetLCD BGWhite", r.sent)
-        self.assert_full_span_grammar(r.sent)
-
-    def test_non_nested_face_recarves(self):
-        r = FakeRobot()
-        emote.draw_face(r, emote.BLINK)
-        r.sent.clear()
-        emote.draw_face(r, emote.SURPRISED)  # wider band: needs full carve
+        emote.draw_face(r, emote.SURPRISED)  # no erase: always full redraw
         self.assertIn("SetLCD BGWhite", r.sent)
 
-    def test_every_face_carves_with_valid_grammar(self):
+    def test_every_face_draws_with_valid_grammar(self):
         for face in emote.FACES:
             emote._shown = None
             r = FakeRobot()

@@ -25,8 +25,15 @@ static char s_installed_soundbank_sha256[65];
 
 static bool ensure_sound_lock(void)
 {
-    if (!s_sound_lock) s_sound_lock = xSemaphoreCreateRecursiveMutex();
+    if (!s_sound_lock) neato_audio_init();
     return s_sound_lock != NULL;
+}
+
+esp_err_t neato_audio_init(void)
+{
+    if (s_sound_lock) return ESP_OK;
+    s_sound_lock = xSemaphoreCreateRecursiveMutex();
+    return s_sound_lock ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
 esp_err_t neato_sound_operation_begin(uint32_t timeout_ms)

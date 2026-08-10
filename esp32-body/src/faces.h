@@ -2,14 +2,15 @@
  *
  *   POST /emote  body = UTF-8 text (a BMO reply); emojis found in it are
  *                mapped to faces and played as a cascade, ending in a short
- *                sprite animation (hearts / tear / zzz / confetti) for the
- *                final emotion.
+ *                lingering animation (contrast throb / fade / breathe /
+ *                bars strobe) for the final emotion. The hearts/tear/zzz/
+ *                confetti sprites exist only in the bmo_web browser preview.
  *
- * SetLCD HLine/VLine only draw full-span lines, so faces are carved:
- * black eye pillars (VLine) masked to row bands by white rows (HLine),
- * mouth = full-width band. Full carve ~150 cmds; nested-band changes
- * (blink) go through a cheap per-row delta. Lingering animations use
- * full-span-native effects (contrast throb/fade, bars, backlight).
+ * Hardware-verified: SetLCD HLine/VLine draw 1px black full-span lines
+ * only; FGWhite is a no-op (no selective erase); BGWhite/BGBlack are the
+ * only erase. Faces are grids — full-height eye pillars crossed by
+ * full-width mouth bands, fully redrawn each time (~20-40 cmds). Blinks
+ * use the LCD backlight; lingering animations use contrast/bars/fills.
  */
 #pragma once
 #include "esp_http_server.h"

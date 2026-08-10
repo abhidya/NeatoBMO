@@ -1,0 +1,260 @@
+===== GetVersion =====
+GetVersion
+Component,Major,Minor,Build
+ModelID,-1,XV12,
+ConfigID,1,,
+Serial Number,WTD41611DD,0037829,P
+Software,2,4,15667
+BatteryType,1,NIMH_12CELL,
+BlowerType,1,BLOWER_ORIG,
+BrushSpeed,1200,,
+BrushMotorType,1,BRUSH_MOTOR_ORIG,
+SideBrushType,1,SIDE_BRUSH_NONE,
+WheelPodType,1,WHEEL_POD_ORIG,
+DropSensorType,1,DROP_SENSOR_ORIG,
+MagSensorType,1,MAG_SENSOR_ORIG,
+WallSensorType,1,WALL_SENSOR_ORIG,
+Locale,1,LOCALE_USA,
+LDS Software,V2.6.15295,,
+LDS Serial,WTD41411AA-0061795,,
+LDS CPU,F2802x/c001,,
+MainBoard Vendor ID,543,,
+MainBoard Serial Number,25810,,
+MainBoard Version,7,1,
+ChassisRev,1,,
+UIPanelRev,1,,
+
+===== GetCalInfo =====
+GetCalInfo
+Parameter,Value
+LDSOffset,0
+XAccel,0
+YAccel,0
+ZAccel,0
+RTCOffset,348790
+LCDContrast,45
+RDropMin,209
+RDropMid,66
+RDropMax,19
+LDropMin,223
+LDropMid,88
+LDropMax,47
+WallMin,697
+WallMid,232
+WallMax,85
+
+===== GetWarranty =====
+GetWarranty
+000eac05
+0440
+46ec926d
+
+===== GetSchedule =====
+GetSchedule
+Schedule is Enabled
+Sun 00:00 - None -
+Mon 00:00 - None -
+Tue 00:00 - None -
+Wed 00:00 - None -
+Thu 00:00 - None -
+Fri 00:00 - None -
+Sat 06:00 H
+
+===== GetTime =====
+GetTime
+Sunday 0:00:00
+
+===== GetCharger =====
+GetCharger
+Label,Value
+FuelPercent,94
+BatteryOverTemp,0
+ChargingActive,0
+ChargingEnabled,0
+ConfidentOnFuel,0
+OnReservedFuel,0
+EmptyFuel,0
+BatteryFailure,0
+ExtPwrPresent,1
+ThermistorPresent[0],1
+ThermistorPresent[1],1
+BattTempCAvg[0],22
+BattTempCAvg[1],21
+VBattV,16.04
+VExtV,24.19
+Charger_mAH,0
+MaxPWM,65536
+PWM,0
+
+===== GetAnalogSensors =====
+GetAnalogSensors
+SensorName,Value
+WallSensorInMM,55
+BatteryVoltageInmV,16041
+LeftDropInMM,60
+RightDropInMM,60
+RightMagSensor,0
+LeftMagSensor,-1
+XTemp0InC,-30
+XTemp1InC,15
+VacuumCurrentInmA,0
+ChargeVoltInmV,24169
+NotConnected1,0
+BatteryTemp1InC,21
+NotConnected2,0
+CurrentInmA,21
+NotConnected3,0
+BatteryTemp0InC,22
+
+===== GetDigitalSensors =====
+GetDigitalSensors
+Digital Sensor Name, Value
+SNSR_DC_JACK_CONNECT,1
+SNSR_DUSTBIN_IS_IN,1
+SNSR_LEFT_WHEEL_EXTENDED,0
+SNSR_RIGHT_WHEEL_EXTENDED,0
+LSIDEBIT,0
+LFRONTBIT,0
+RSIDEBIT,0
+RFRONTBIT,0
+
+===== GetButtons =====
+GetButtons
+Button Name,Pressed
+BTN_SOFT_KEY,0
+BTN_SCROLL_UP,0
+BTN_START,0
+BTN_BACK,0
+BTN_SCROLL_DOWN,0
+
+===== GetMotors =====
+GetMotors
+Parameter,Value
+Brush_MaxPWM,65536
+Brush_PWM,0
+Brush_mVolts,0
+Brush_Encoder,0
+Brush_RPM, 0
+Vacuum_MaxPWM,65536
+Vacuum_PWM,0
+Vacuum_CurrentInMA,0
+Vacuum_Encoder,0
+Vacuum_RPM, 0
+LeftWheel_MaxPWM,65536
+LeftWheel_PWM,0
+LeftWheel_mVolts,0
+LeftWheel_Encoder,0
+LeftWheel_PositionInMM,0
+LeftWheel_RPM,0
+RightWheel_MaxPWM,65536
+RightWheel_PWM,0
+RightWheel_mVolts,0
+RightWheel_Encoder,0
+RightWheel_PositionInMM,0
+RightWheel_RPM,0
+Laser_MaxPWM,65536
+Laser_PWM,0
+Laser_mVolts,0
+Laser_Encoder,0
+Laser_RPM, 0
+Charger_MaxPWM,65536
+Charger_PWM,0
+Charger_mAH, 0
+
+===== GetErr =====
+GetErr
+
+===== Help =====
+Help
+Help Strlen = 2002
+Help - Without any argument, this prints a list of all possible cmds.
+With a command name, it prints the help for that particular command
+Clean - Starts a cleaning by simulating press of start button.
+DiagTest - Executes different test modes. Once set, press Start button to engage. (Test modes are mutually exclusive.)
+GetAccel - Get the Accelerometer readings.
+GetAnalogSensors - Get the A2D readings for the analog sensors.
+GetButtons - Get the state of the UI Buttons.
+GetCalInfo - Prints out the cal info from the System Control Block.
+GetCharger - Get the diagnostic data for the charging system.
+GetDigitalSensors - Get the state of the digital sensors.
+GetErr - Get Error Message.
+GetLDSScan - Get scan packet from LDS.
+GetLifeStatLog - Get All Life Stat Logs.
+GetMotors - Get the diagnostic data for the motors.
+GetSchedule - Get the Cleaning Schedule. (24 hour clock format)
+GetSysLog - Get System Log data.
+GetTime - Get Current Scheduler Time.
+GetVersion - Get the version information for the system software and hardware.
+GetWarranty - Get the warranty validation codes.
+PlaySound - Play the specified sound in the robot.
+RestoreDefaults - Restore user settings to default.
+SetDistanceCal - Set distance sensor calibration values for min and max distances.
+SetFuelGauge - Set Fuel Gauge Level.
+SetMotor - Sets the specified motor to run in a direction at a requested speed. (TestMode Only)
+SetTime - Sets the current day, hour, and minute for the scheduler clock.
+SetLED - Sets the specified LED to on,off,blink, or dim. (TestMode Only)
+SetLCD - Sets the LCD to the specified display. (TestMode Only)
+SetLDSRotation - Sets LDS rotation on or off. Can only be run in TestMode.
+SetSchedule - Modify Cleaning Schedule.
+SetSystemMode - Set the operation mode of the robot. (TestMode Only)
+SetWallFollower - Enables/Disables wall follower
+TestMode - Sets TestMode on or off. Some commands can only be run in TestMode.
+Upload - Uploads new program to the robot.
+
+===== Help Upload =====
+Help Upload
+Help Strlen = 651
+Upload - Uploads new program to the robot.
+    dump - Dump the contents of the upload save area.
+    code - Upload file is the main application. (Mutually exclusive with sound, LDS)
+    sound - Upload file is a sound module. (Mutually exclusive with code, LDS)
+    LDS - Upload file is an LDS module. (Mutually exclusive with sound, code)
+    xmodem - Use xmodem protocal when transmitting upload module
+    size - data size to upload to device.
+    noburn - test option -- do NOT burn the flash after the upload.
+    readflash - test option -- read the flash at the current region.
+    reboot - Reset the robot after performing the upload.
+
+===== Help PlaySound =====
+Help PlaySound
+Help Strlen = 810
+PlaySound - Play the specified sound in the robot.
+    SoundID - Play the sound library entry specified by the number in the next argument.
+
+    Legal values are:
+
+       0 - Waking Up
+       1 - Starting Cleaning
+       2 - Cleaning Completed
+       3 - Attention Needed
+       4 - Backing up into base station
+       5 - Base Station Docking Completed
+       6 - Test Sound 1
+       7 - Test Sound 2
+       8 - Test Sound 3
+       9 - Test Sound 4
+       10 - Test Sound 5
+       11 - Exploring
+       12 - ShutDown
+       13 - Picked Up
+       14 - Going to sleep
+       15 - Returning Home
+       16 - User Canceled Cleaning
+       17 - User Terminated Cleaning
+       18 - Slipped Off Base While Charging
+       19 - Alert
+       20 - Thank You
+
+    Stop - Stop playing sound.
+
+===== Help SetConfig =====
+Help SetConfig
+Help Strlen = 0
+
+===== Help SetSystemMode =====
+Help SetSystemMode
+Help Strlen = 304
+SetSystemMode - Set the operation mode of the robot. (TestMode Only)
+    Shutdown - Shut down the robot. (mutually exclusive of other options)
+    Hibernate - Start hibernate operation.(mutually exclusive of other options)
+    Standby - Start standby operation. (mutually exclusive of other options)

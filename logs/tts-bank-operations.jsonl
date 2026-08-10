@@ -1,0 +1,9 @@
+{"ts": 1786336367.724, "job": "tts-1786336367-48130774", "message": "preview built: voice=en+f4 speech=0.899s segments=1 sha256=48130774c9fece45f317c04a109d5ab54f5e0a0eaef1f5d66581a2cc57fb1a2f validation_ok=True"}
+{"ts": 1786336448.833, "job": "live-hi-daddy", "message": "burn temporary TTS bank: 770048 bytes sha256=48130774c9fece45f317c04a109d5ab54f5e0a0eaef1f5d66581a2cc57fb1a2f"}
+{"ts": 1786336451.909, "job": "live-hi-daddy", "message": "burn temporary TTS bank: receiver replied 061a"}
+{"ts": 1786336459.121, "job": "live-hi-daddy", "message": "burn temporary TTS bank: identity + slot map verified [0, 1, 2, 3, 6, 7, 8, 9, 10, 19]"}
+{"ts": 1786336459.223, "job": "live-hi-daddy", "message": "play segment 0: slot 0, waiting 2.881995s"}
+{"ts": 1786336462.111, "job": "live-hi-daddy", "message": "burn persistent BMO bank: 770048 bytes sha256=9d3d82d9275c03fa9f2abb163cdfd9393445737999916f6337d2d6b639b51159"}
+{"ts": 1786336465.233, "job": "live-hi-daddy", "message": "burn persistent BMO bank: receiver replied 061a"}
+{"ts": 1786336472.422, "job": "live-hi-daddy", "message": "burn persistent BMO bank: identity + slot map verified [0, 1, 2, 3, 6, 7, 8, 9, 10, 19]"}
+{"ts": 1786336472.425, "job": "live-hi-daddy", "message": "final state: restored"}
