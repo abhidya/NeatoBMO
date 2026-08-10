@@ -5,24 +5,37 @@ boundaries and burned+spoken chunk by chunk. The speech bank **persists**
 (no restore write per utterance); "Bring back BMO sounds" reinstalls the
 BMO bank on demand. Chat replies speak the same way when the voice selector
 is set to 🤖 robot — stage cues (`neatobmo/cues.py`) are stripped first, so
-only the cue-free speech text reaches the bank.
+only the cue-free speech text reaches the bank, and in the default
+**soundbyte** mode (`NEATOBMO_SPEECH`) LLM replies are additionally
+condensed to a ~1.5 s spoken burst (`cues.condense`); hand-authored
+routine replies bypass the cap.
 
-> Each chunk is one 770,048-byte flash write. There is no per-utterance
-> confirmation — the gates are internal and automatic (below).
+> Each chunk is one 770,048-byte flash write, except that re-speaking a
+> bank whose hash is already installed skips the write. There is no
+> per-utterance confirmation — the gates are internal and automatic
+> (below). The web UI surfaces a per-session flash-write (wear) counter
+> via `/tts-bank/status`.
 
 ## Pipeline
 
 ```
-text → sentence units → greedy chunk packing (fit test = real slot planning)
-     → espeak-ng WAV (Colibri server, or local fallback with identical
-       voice/speed/pitch: en+f4, -s 160, -p 70)
-     → 22050 Hz mono s16le, silence-trimmed, peak-normalized (-1 dBFS)
-     → boundary-aware split across the ten live slots, tiny fades
+text → sentence units, each synthesized solo in a producer thread that
+       runs concurrently with burn/play (first chunk flushes after one
+       sentence so speech starts fast; pack_audio_chunks)
+     → WAV from the neural BMO voice (Piper prosody → RVC timbre,
+       tools/bmo_voice_server.py at :8486, auto-started); fallbacks:
+       Colibri /v1/audio/speech, then local espeak-ng en+f4 -s160 -p70
+     → 22050 Hz mono s16le, silence-trimmed, peak-normalized to ≈-8 dBFS
+       (~40% FS — -1 dBFS overdrove the robot speaker)
+     → boundary-aware split across the ten live slots, tiny fades,
+       sentence-gap silence between units
      → PCM-only overlay on the BMO baseline → byte-exact validation
-     → Upload sound (USB direct, or relayed via ESP32 POST /soundbank)
+     → Upload sound (USB direct, or relayed via ESP32 POST /soundbank);
+       skipped when the same bank hash is already installed
      → silent GetVersion identity check (no audible sweep)
-     → PlaySound per slot, waiting each slot's full declared duration;
-       each reply doubles as slot verification ("out of range" ⇒ abort)
+     → PlaySound per slot, content-paced (content length + 0.15 s margin,
+       not the zero-padded declared slot length); each reply doubles as
+       slot verification ("out of range" ⇒ abort)
      → next chunk … → last bank stays installed
 ```
 
@@ -43,15 +56,18 @@ end-to-end when the robot hangs off the ESP32 instead of the Mac.
 - `BankBurner.burn_and_verify` only accepts the exact bytes validated in the
   current operation (size + SHA-256 recheck).
 - The ESP32 `/soundbank` endpoint independently requires exact size, the KT
-  directory marker, and a matching `X-Bank-SHA256` over the staged bytes
-  before starting the USB transaction.
+  directory marker, and a matching `X-Bank-SHA256`. With PSRAM the bytes are
+  staged and checked before the USB transaction starts; on no-PSRAM boards a
+  streaming HTTP→USB path hashes in flight and, on a short body or SHA
+  mismatch, poisons the trailing transport checksum so the robot NAKs the
+  transfer.
 - After every write: GetVersion must show `WTD41611DD` +
   `Software,2,4,15667`. Playback replies verify each live slot without the
   audible 0–20 sweep (the explicit BMO restore still runs the full sweep).
 - One speech job at a time; robot access serialized through `rlock`;
   `/sound-bank-install` is blocked while speech runs.
 - Speech is never silently truncated: unfittable text raises with a clear
-  message (`max_chunks` default 12 ≈ 3.5 minutes of speech).
+  message (`max_chunks` default 24 ≈ 7 minutes of speech).
 
 ## Slot sequence
 

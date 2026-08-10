@@ -21,6 +21,16 @@ Evidence links:
 - [live slot sweep](/Volumes/2TB/neato-firmware-archive/work/logs/live-playsound-sweep-20260810.md)
 - [USB readback probe](/Volumes/2TB/neato-firmware-archive/work/logs/sound-readback-probe-20260810.md)
 
-Only the two exact hashes documented in `docs/SOUND_BANK_UPDATE.md` are approved
-for the web/CLI write paths. Arbitrary uploads and metadata-changing custom
-banks remain blocked.
+Approved write paths today:
+
+- **Profile install/restore** (web "Sounds" tab, CLI): only the two exact
+  hashes documented in `docs/SOUND_BANK_UPDATE.md` (BMO bank / vendor
+  original).
+- **Generated TTS banks** (`neatobmo/tts_bank.py`): each spoken utterance
+  builds a bank that preserves the validated directory/header/page structure
+  and replaces PCM spans only; `BankBurner.burn_and_verify` accepts exactly
+  the bytes whose SHA-256 was computed and validated in that same operation,
+  then verifies the robot end-to-end after the burn. The web UI tracks a
+  per-session flash-write (wear) counter.
+
+Arbitrary uploads and metadata-changing custom banks remain blocked.

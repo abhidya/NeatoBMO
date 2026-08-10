@@ -1,7 +1,9 @@
 # Updating or restoring the Neato XV-12 sound bank
 
-This repository contains exactly two approved sound-bank images for XV-12
-`WTD41611DD-0037829-P`, firmware `2.4.15667`, mainboard `7.1`:
+This repository contains two approved **profile** sound-bank images for XV-12
+`WTD41611DD-0037829-P`, firmware `2.4.15667`, mainboard `7.1` (the remote
+soundboard additionally publishes 36 derived modules built off the same
+validated BMO baseline — see `docs/BMO_REMOTE_SOUNDBOARD.md`):
 
 | Profile | File | SHA-256 |
 |---|---|---|
@@ -11,20 +13,25 @@ This repository contains exactly two approved sound-bank images for XV-12
 Both images have been burned successfully and verified with the expected live
 slot map `0,1,2,3,6,7,8,9,10,19`.
 
-The BMO image is the persistent day-to-day baseline. Temporary experimental or
-TTS-generated banks must never replace its saved artifact; after temporary
-playback, select **BMO bank**, type `INSTALL BMO`, and run the guarded restore.
-The original Neato profile is retained as an emergency/manual fallback.
+The BMO image is the day-to-day baseline. TTS-generated speech banks are
+**persistent by design**: after BMO speaks, the last speech bank stays in the
+sound flash (`installed profile: tts`) until "🎵 Bring back BMO sounds" —
+a one-click `POST /tts-bank/restore`, no typed phrase — reinstalls the BMO
+bank (see `docs/TTS_BANK.md`). No generated bank ever replaces the saved
+artifacts on disk. The original Neato profile is retained as an
+emergency/manual fallback.
 
 ## Web portal
 
-Run `python3 bmo_web.py`, open `http://localhost:8485`, and select **Sounds**.
-The page provides metadata and playback for every BMO slot, burst sequences,
-downloads for both exact images, and guarded installation profiles.
+Run `python3 bmo_web.py` and open `http://localhost:8485` (port overridable
+via `PORT`). The **Sounds** tab provides metadata and playback for every BMO
+slot, burst sequences, downloads for both exact images, and guarded
+installation profiles. The **TTS** tab is the normal bank-writing path:
+automatic speech through `/tts-bank/speak|status|stop|restore`
+(`docs/TTS_BANK.md`).
 
 Multi-slot sequences are duration-paced. Sending commands immediately does not
-queue them on this firmware; the next command interrupts current playback. See
-`docs/SOUND_BANK_TTS_PROMPT.md` for the hybrid fixed-phrase/streamed-TTS design.
+queue them on this firmware; the next command interrupts current playback.
 
 A write requires typing the selected profile's phrase exactly:
 

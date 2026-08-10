@@ -8,7 +8,7 @@ page link + OTA upload proxied through POST /ota). All serial access goes
 through one Robot instance guarded by rlock.
 
     python3 bmo_web.py            # robot over USB, brain at 127.0.0.1:8000
-Open http://localhost:8485 in Chrome (mic needs Chrome/Edge).
+Open http://localhost:8485 (or $PORT) in Chrome (mic needs Chrome/Edge).
 """
 import hashlib
 import json

@@ -10,6 +10,8 @@ Current evidence for understanding the XV-12 without further flash writes:
   probes and the evidence required to locate the rendering path.
 - [Hardware readback options](hardware-readback-options.md): P6, passive NAND,
   SAM-BA, and JTAG options with non-erasing boundaries.
+- [CFW session handoff 2026-08-10](NEATO_CFW_SESSION_HANDOFF_2026-08-10.md):
+  the latest readback/custom-firmware session record.
 
 The immediate safe order is USB observation, LCD visual/bus capture, passive
 P6 capture, then only board-confirmed read-only recovery. Do not treat a

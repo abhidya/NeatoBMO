@@ -1,5 +1,14 @@
 # Implementation prompt: hybrid BMO sound-bank and TTS path
 
+> **Historical document (superseded).** This prompt predates the shipped
+> speech path and was deliberately not followed on key points: the
+> implementation (see `docs/TTS_BANK.md`) rewrites the sound flash per
+> utterance with automatic internal gates and persistent banks, the default
+> WAV source is the neural BMO voice server (`tools/bmo_voice_server.py`),
+> and no `VoiceRouter` was built. `PlaySound File` is still not accepted by
+> stock firmware (`FIRMWARE_SOUND_PATCH.md`). Kept as a record of the design
+> considered at the time.
+
 Use this prompt for a focused implementation task:
 
 > Build a production-safe hybrid voice path for this NeatoBMO repository.

@@ -83,7 +83,11 @@ replacement changed. It deliberately does not guess or update unknown boot
 checksums; those must be identified from the acquired image first.
 
 The goal is runtime speech through the XV-12's original speaker without
-rewriting its flash sound bank for every utterance.
+rewriting its flash sound bank for every utterance. (The shipped interim
+path does exactly that rewrite: `neatobmo/tts_bank.py` packs speech into
+validated ~17 s banks and burns them chunk by chunk, with persistent mode
+avoiding only the restore write. This patch remains the way to retire that
+flash wear entirely.)
 
 ## Existing pieces confirmed on the robot
 
@@ -120,8 +124,12 @@ Wire sequence:
 6. The buffer is released after playback. No sound flash is erased or written.
 
 The host implementation lives in `SerialTransport.send_binary()` and
-`Robot.play_file()`. Colibri exposes `/v1/audio/speech`; `bmo_web.py` sends that
-WAV directly to `PlaySound File`.
+`Robot.play_file()` (currently unused by the web app, which speaks through
+the TTS sound-bank path instead). Speech WAVs come from the neural BMO voice
+server by default (`tools/bmo_voice_server.py`), with Colibri
+`/v1/audio/speech` and espeak-ng as fallbacks; once this patch lands,
+`bmo_web.py` can relay those WAVs to `PlaySound File` via the ESP32 `/speak`
+endpoint with no host protocol change.
 
 ## Firmware extraction/patch boundary
 
@@ -176,7 +184,10 @@ After plaintext is acquired:
   22,050-Hz WAV.
 - The ESP32 `POST /speak` endpoint stages at most 512 KiB in PSRAM, validates
   the WAV, serializes USB access, then sends `PlaySound File` plus checksum.
-- On stock firmware the endpoint returns a clear HTTP conflict instead of
+- The ESP32 also serves `POST /soundbank` (`neato_audio.c`): a SHA-256-gated
+  sound-bank install with a streaming HTTP→USB relay path for boards without
+  PSRAM — this is the transport the shipped TTS-bank speech uses today.
+- On stock firmware `/speak` returns a clear HTTP conflict instead of
   pretending playback succeeded. Once the handler patch is installed, no host
   or ESP32 protocol change should be needed.
 
@@ -185,8 +196,12 @@ After plaintext is acquired:
 `Upload sound` is a module-level updater command, not a documented
 per-`PlaySound` slot command. The public default module is an unencrypted,
 770,048-byte, 512-byte-page image. It can be transferred without decrypting
-the application, but a successful custom upload still requires knowing the
-module's integrity fields and the mapping from its records to sound IDs.
+the application. The module's integrity constraints and record→sound-ID
+mapping have since been proven live (see `docs/SOUND_BANK_UPDATE.md`,
+"Proven customization constraint"): preserve the directory, page table,
+record headers, declared lengths, and all non-PCM bytes; replace PCM spans
+only. `neatobmo/tts_bank.py` implements that envelope and burns custom banks
+in production today.
 
 `tools/neato_sound_bank.py` is intentionally analysis-only: it validates the page
 layout, makes byte-identical staging copies, extracts the inferred raw PCM,
@@ -235,8 +250,12 @@ The direct USB readback gate is now tested and closed on firmware `2.4.15667`:
 `Upload sound readflash` returns only its echo/terminator; its XMODEM form
 never starts a transfer; and `Upload sound dump` yields no sound bytes. See
 [sound-readback-probe-20260810.md](/Volumes/2TB/neato-firmware-archive/work/logs/sound-readback-probe-20260810.md).
-That leaves hardware-level acquisition as the only path to a byte-exact
-installed-bank rollback image before a bank-writing experiment.
+That left hardware-level acquisition as the only path to a byte-exact image
+of the *originally installed* bank. Bank-writing has since proceeded without
+it: the archived vendor default (SHA `d3969779…b64a`) proved out as the
+rollback image, restoring all ten slots after a failed custom write, and the
+validated BMO bank plus generated TTS banks now install routinely under the
+write gates.
 
 The current approval boundary is maintained in
 [SOUND_BANK_WRITE_GATES.md](SOUND_BANK_WRITE_GATES.md).

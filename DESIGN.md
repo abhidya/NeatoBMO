@@ -15,16 +15,33 @@ The plan below predates the implementation; these decisions supersede it:
 - **No MQTT.** The body's transport is the ESP32's own HTTP server (`web.c`):
   embedded dashboard at `/`, WebSocket `/ws` raw serial bridge for browsers,
   raw TCP `:3333` for programmatic clients, plus `/emote` (emoji → LCD face
-  cascades, `faces.c`) and `/speak` (WAV relay). No broker on the LAN.
-- **No Wyoming stack yet.** Voice is Colibri: `bmo_brain_server.py` wraps the
-  OLMoE chat engine and espeak-ng TTS behind an OpenAI-compatible API;
-  `bmo_web.py` (`:8485`) is the orchestrator (browser mic for STT for now).
+  cascades, `faces.c`), `/speak` (WAV relay), and `/soundbank` (SHA-256-gated
+  bank install with a streaming HTTP→USB path for no-PSRAM boards,
+  `neato_audio.c`). No broker on the LAN.
+- **No Wyoming stack yet.** The default voice is the neural BMO clone:
+  `tools/bmo_voice_server.py` (`:8486`, its own Python 3.12 venv at
+  `~/.neatobmo/voice-venv`) runs Piper prosody through a BMO RVC timbre;
+  Colibri (`bmo_brain_server.py`: OLMoE chat + espeak-ng TTS behind an
+  OpenAI-compatible API) and plain espeak-ng are explicit choices/fallbacks.
+  `bmo_web.py` (`:8485`, `PORT`-overridable) is the orchestrator; voice input
+  is the browser mic with a "hey BMO" wake word.
+- **A routine layer answers before the model.** Everyday utterances
+  ("hello!", "dance!", "what time is it?") are matched by
+  `neatobmo/routines.py` and answered instantly from precached cue-annotated
+  scripts, with a small state machine for multi-turn follow-ups; only misses
+  go to the (slow) OLMoE brain. Default speech mode is **soundbyte**
+  (`NEATOBMO_SPEECH`): spoken words are capped at a ~1.5 s burst and the
+  soundboard/moves/faces carry the reply.
 - **The face lives on the Neato's own LCD first.** `faces.c` on the ESP32 and
   its 1:1 Python port `neatobmo/emote.py` draw the same emoji faces over WiFi
   or USB; the projector head (§3) remains future work.
-- **Native speech is gated.** The `PlaySound File` firmware patch path and the
-  sound-flash write gates are tracked in FIRMWARE_SOUND_PATCH.md and
-  SOUND_BANK_WRITE_GATES.md — no flash writes until every gate passes.
+- **Speech ships via validated sound-flash banks.** The gate checklist in
+  SOUND_BANK_WRITE_GATES.md has been passed: TTS speech is packed into
+  byte-exact ~17 s banks and burned+verified per chunk (`neatobmo/tts_bank.py`,
+  wear counter in the web UI), and the two approved profile images
+  (BMO / original) install and restore end-to-end. The *streamed* native
+  path (`PlaySound File`) still awaits the firmware patch tracked in
+  FIRMWARE_SOUND_PATCH.md.
 - **Tool calling is stage cues, not a schema.** §5's `drive()`/`set_face()`
   tool-calling plan assumed a model that can emit structured calls; OLMoE
   can't, so the persona instead acts through inline bracketed cues
