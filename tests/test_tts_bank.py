@@ -363,7 +363,8 @@ class WebGuardWiringTests(unittest.TestCase):
         self.assertIn("a TTS bank operation is running", self.page)
 
     def test_chat_robot_voice_routes_through_bank_speech(self):
-        self.assertIn("tts_start_speak(reply", self.page)
+        # the spoken text is the cue-stripped plan, not the raw reply
+        self.assertIn("tts_start_speak(plan.speech", self.page)
 
     def test_voice_parameters_match_brain_server_defaults(self):
         self.assertIn("TTS_SPEED = 160", self.page)
