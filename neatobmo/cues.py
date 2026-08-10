@@ -68,7 +68,7 @@ SOUND_ALIASES = {
     "welcome": "hello", "greeting": "hello",
     "love": "homeboys", "friend": "homeboys",
     "party": "yeah", "cheer": "yeah", "laughter": "yeah", "laugh": "yeah",
-    "happy": "yeah", "excited": "yeah",
+    "happy": "yeah", "excited": "yeah", "wiggle": "yeah",
     "music": "videogames", "song": "videogames", "sing": "videogames",
     "game": "videogames", "dance": "bmotime",
     "surprise": "json", "surprised": "json", "wow": "json",
@@ -206,6 +206,8 @@ def parse(text):
             for kind, name in resolved:
                 if counts[kind] >= caps[kind]:
                     continue
+                if kind == "face" and steps and steps[-1] == (kind, name):
+                    continue        # model stutter: [sleepy] [sleepy]
                 counts[kind] += 1
                 steps.append((kind, name))
                 if kind == "face":
@@ -227,8 +229,35 @@ def parse(text):
     # fallback: no face cues but the model used emojis — count those as faces
     if counts["face"] == 0:
         from .emote import parse_emojis
-        steps.extend(("face", f) for f in parse_emojis(display))
+        emoji_faces = parse_emojis(display)
+        steps.extend(("face", f) for f in emoji_faces)
+        # last resort: no cues and no emojis — read the mood off the words
+        # so the face never stays blank (a buddy always reacts)
+        if not emoji_faces:
+            face = _mood_face(speech)
+            if face:
+                steps.append(("face", face))
     return Plan(speech, display, steps)
+
+
+# keyword mood guesses, checked in order; first hit wins (mirrors the old
+# chirp_for heuristic, but for faces)
+_MOOD_KEYWORDS = [
+    ("love", ("love", "friend", "miss you", "hug")),
+    ("sad", ("sad", "sorry", "oh no", "bad day")),
+    ("surprised", ("wow", "whoa", "really?", "guess what", "amazing")),
+    ("sleepy", ("sleep", "tired", "goodnight", "good night")),
+    ("laugh", ("haha", "funny", "joke")),
+    ("happy", ("yay", "fun", "play", "great", "!")),
+]
+
+
+def _mood_face(text):
+    t = text.lower()
+    for face, words in _MOOD_KEYWORDS:
+        if any(w in t for w in words):
+            return face
+    return None
 
 
 def perform(r, steps, gap=0.4):

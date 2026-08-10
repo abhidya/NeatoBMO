@@ -1,17 +1,50 @@
 [
  {
   "label": "greeting",
-  "latency": 513.0700559616089,
-  "reply": "[happy] Hey there, human! [sound:beep] Did you miss your cheerful BMO? [sound:welcome] I sure hope so! [sound:love] Let me give you a quick hug and show you all the fun things I've been up to while you were gone! [sound:spin] See? I'm always ready for action! [sound:party] Now, what do you want to do first? [sound:yeah] Let the good times roll! [sound:videogames]",
-  "tokens": 8,
+  "latency": 34.09807896614075,
+  "reply": "[happy] [spin] Hey there, human! [sound:hello] [sound:welcome] I've been just buzzing around, waiting for your return. Did you have a busy day? [sound:homeboys] Let me know all about it! [sound:butt] Oh, and guess what? I've been practicing my dance moves for your return. [sound:wiggle] Ready to see the magic? [sound:videog",
+  "tokens": 7,
   "steps": [
    [
     "face",
     "happy"
    ],
    [
+    "move",
+    "spin"
+   ],
+   [
     "sound",
-    "beep"
+    "hello"
+   ],
+   [
+    "sound",
+    "hello"
+   ],
+   [
+    "sound",
+    "homeboys"
+   ]
+  ],
+  "unresolved": [
+   "sound:wiggle"
+  ],
+  "emoji": 0,
+  "speech": "Hey there, human! I've been just buzzing around, waiting for your return. Did you have a busy day? Let me know all about it! Oh, and guess what? I've been practicing my dance moves for your return. Ready to see the magic? [sound:videog"
+ },
+ {
+  "label": "play",
+  "latency": 23.483821153640747,
+  "reply": "[happy] [dance] Oh, I'd love that! [sound:yeah] Let's turn on the fun! [sound:videogames] Who's winning? [sound:beep]",
+  "tokens": 5,
+  "steps": [
+   [
+    "face",
+    "happy"
+   ],
+   [
+    "move",
+    "dance"
    ],
    [
     "sound",
@@ -20,42 +53,21 @@
    [
     "sound",
     "videogames"
+   ],
+   [
+    "sound",
+    "beep"
    ]
   ],
-  "unresolved": [
-   "sound:welcome",
-   "sound:love",
-   "sound:spin",
-   "sound:party"
-  ],
+  "unresolved": [],
   "emoji": 0,
-  "speech": "Hey there, human! Did you miss your cheerful BMO? I sure hope so! Let me give you a quick hug and show you all the fun things I've been up to while you were gone! See? I'm always ready for action! Now, what do you want to do first? Let the good times roll!"
+  "speech": "Oh, I'd love that! Let's turn on the fun! Who's winning?"
  },
  {
   "label": "joke",
-  "latency": 0.0014538764953613281,
-  "reply": "",
-  "tokens": 0,
-  "steps": [],
-  "unresolved": [],
-  "emoji": 0,
-  "speech": ""
- },
- {
-  "label": "dance",
-  "latency": 0.001413106918334961,
-  "reply": "",
-  "tokens": 0,
-  "steps": [],
-  "unresolved": [],
-  "emoji": 0,
-  "speech": ""
- },
- {
-  "label": "scare",
-  "latency": 401.113676071167,
-  "reply": "[happy] [spin] Watch me go, [sound:spin] spinning around like a little ball of joy! [sound:beep]",
-  "tokens": 4,
+  "latency": 24.42120909690857,
+  "reply": "[happy] [spin] Hey there, human! Wanna hear a joke? Why don't we ever tell secrets on a farm? Because the potatoes have eyes, the corn has ears, and the beans stalk! [sound:beep]",
+  "tokens": 3,
   "steps": [
    [
     "face",
@@ -70,154 +82,27 @@
     "beep"
    ]
   ],
-  "unresolved": [
-   "sound:spin"
-  ],
-  "emoji": 0,
-  "speech": "Watch me go, spinning around like a little ball of joy!"
- },
- {
-  "label": "sleep",
-  "latency": 370.1671953201294,
-  "reply": "[startled] Oh no, did I make a loud noise? [sound:surprise] I didn't mean to startle you. Let me know if I should quiet down, okay? [neutral]",
-  "tokens": 3,
-  "steps": [
-   [
-    "face",
-    "neutral"
-   ]
-  ],
-  "unresolved": [
-   "startled",
-   "sound:surprise"
-  ],
-  "emoji": 0,
-  "speech": "Oh no, did I make a loud noise? I didn't mean to startle you. Let me know if I should quiet down, okay?"
- },
- {
-  "label": "love",
-  "latency": 130.5168170928955,
-  "reply": "[sleepy] Alright, time for some Zzz's, [sleepy] [wiggle] but remember, I'm here, [love] always ready to watch over you. [sound:beep] Sweet dreams! [sound:beep]",
-  "tokens": 6,
-  "steps": [
-   [
-    "face",
-    "sleepy"
-   ],
-   [
-    "face",
-    "sleepy"
-   ],
-   [
-    "move",
-    "wiggle"
-   ],
-   [
-    "face",
-    "love"
-   ],
-   [
-    "sound",
-    "beep"
-   ],
-   [
-    "sound",
-    "beep"
-   ]
-  ],
   "unresolved": [],
   "emoji": 0,
-  "speech": "Alright, time for some Zzz's, but remember, I'm here, always ready to watch over you. Sweet dreams!"
+  "speech": "Hey there, human! Wanna hear a joke? Why don't we ever tell secrets on a farm? Because the potatoes have eyes, the corn has ears, and the beans stalk!"
  },
  {
-  "label": "angry",
-  "latency": 32.20598578453064,
-  "reply": "[happy] Hey there, [love] human! It's such a pleasure to be your best friend and help you around the house. [wink] Let's make some fun memories together! [sound:beep]",
-  "tokens": 4,
+  "label": "sad",
+  "latency": 30.190495014190674,
+  "reply": "Oh no, I'm sorry to hear that, [sad]. [sound:sad] Maybe we can make some time for something fun to lift your spirits. [sound:beep] How about we play some video games together? [sound:videogames] I'll be your cheerleader and we can laugh off the bad vibes. [sound:laugh] Do you feel like it might help?",
+  "tokens": 5,
   "steps": [
    [
     "face",
-    "happy"
-   ],
-   [
-    "face",
-    "love"
-   ],
-   [
-    "face",
-    "wink"
-   ],
-   [
-    "sound",
-    "beep"
-   ]
-  ],
-  "unresolved": [],
-  "emoji": 0,
-  "speech": "Hey there, human! It's such a pleasure to be your best friend and help you around the house. Let's make some fun memories together!"
- },
- {
-  "label": "surprise",
-  "latency": 41.0734589099884,
-  "reply": "Oh no, not my sandcastle! [surprised] [look] Who could do such a thing? [face:neutral] Let me fix that right up! [wiggle] Here we go, rebuilding it piece by piece. [sound:beep] There, all fixed! [happy] Who wants to help rebuild? [sound:cheer]",
-  "tokens": 7,
-  "steps": [
-   [
-    "face",
-    "surprised"
-   ],
-   [
-    "move",
-    "look"
-   ],
-   [
-    "face",
-    "neutral"
-   ],
-   [
-    "move",
-    "wiggle"
+    "sad"
    ],
    [
     "sound",
     "beep"
    ],
    [
-    "face",
-    "happy"
-   ]
-  ],
-  "unresolved": [
-   "sound:cheer"
-  ],
-  "emoji": 0,
-  "speech": "Oh no, not my sandcastle! Who could do such a thing? Let me fix that right up! Here we go, rebuilding it piece by piece. There, all fixed! Who wants to help rebuild?"
- },
- {
-  "label": "music",
-  "latency": 44.57898998260498,
-  "reply": "[surprised] Oh, really? [sound:beep] That sounds like a fantastic adventure! [wiggle] Do you need any help packing? Or maybe I could help scare off any beach creatures with my friendly antics? [laugh] I just love the beach! [happy] Let's make it a great day! [sound:videogames]",
-  "tokens": 6,
-  "steps": [
-   [
-    "face",
-    "surprised"
-   ],
-   [
     "sound",
     "beep"
-   ],
-   [
-    "move",
-    "wiggle"
-   ],
-   [
-    "face",
-    "laugh"
-   ],
-   [
-    "face",
-    "happy"
    ],
    [
     "sound",
@@ -226,44 +111,6 @@
   ],
   "unresolved": [],
   "emoji": 0,
-  "speech": "Oh, really? That sounds like a fantastic adventure! Do you need any help packing? Or maybe I could help scare off any beach creatures with my friendly antics? I just love the beach! Let's make it a great day!"
- },
- {
-  "label": "curious",
-  "latency": 46.07007694244385,
-  "reply": "[laugh] Oh, music time! [sound:music] Let me sing you a little tune. [sound:beep]\n\n[sound:song] *giggles* Here's a fun one for you: [sound:beep] \"Row, row, row your boat, gently down the stream. [sound:song] *giggles* Life is but a dream!\" [sound:laughter]\n\nFeel free to pick any song you like, and I'll join in with the melody! [sound:beep]",
-  "tokens": 10,
-  "steps": [
-   [
-    "face",
-    "laugh"
-   ],
-   [
-    "sound",
-    "beep"
-   ],
-   [
-    "sound",
-    "json"
-   ],
-   [
-    "face",
-    "laugh"
-   ],
-   [
-    "sound",
-    "beep"
-   ],
-   [
-    "face",
-    "laugh"
-   ]
-  ],
-  "unresolved": [
-   "sound:music",
-   "sound:laughter"
-  ],
-  "emoji": 0,
-  "speech": "Oh, music time! Let me sing you a little tune. \n\n Here's a fun one for you: \"Row, row, row your boat, gently down the stream. Life is but a dream!\" \n\nFeel free to pick any song you like, and I'll join in with the melody!"
+  "speech": "Oh no, I'm sorry to hear that,. Maybe we can make some time for something fun to lift your spirits. How about we play some video games together? I'll be your cheerleader and we can laugh off the bad vibes. Do you feel like it might help?"
  }
 ]

@@ -61,18 +61,49 @@ def read_until_prompt(timeout=600):
     raise TimeoutError("engine generation timeout")
 
 
+DIRTY = False   # a timed-out request left the REPL mid-generation
+
+
+def _exchange(prompt):
+    PROC.stdin.write("/reset\n")
+    PROC.stdin.flush()
+    read_until_prompt(60)
+    PROC.stdin.write(prompt.replace("\n", " ").strip() + "\n")
+    PROC.stdin.flush()
+    return read_until_prompt()
+
+
 def ask(prompt):
-    """One-shot: reset context, send flattened prompt, return reply."""
+    """One-shot: reset context, send flattened prompt, return reply.
+
+    The engine is a shared stdin/stdout REPL, so a timeout leaves it
+    desynchronized: its still-running generation later lands in front of
+    the next request's read and that request returns instantly with an
+    empty reply (observed 2026-08-10, cue-profile run). After any failure
+    the REPL is marked dirty and drained before reuse, and an empty reply
+    is treated as leftover desync: drain and retry once.
+    """
+    global DIRTY
     if not LOCK.acquire(blocking=False):
         print("chat: queued behind a running generation")
         LOCK.acquire()
     try:
-        PROC.stdin.write("/reset\n")
-        PROC.stdin.flush()
-        read_until_prompt(30)
-        PROC.stdin.write(prompt.replace("\n", " ").strip() + "\n")
-        PROC.stdin.flush()
-        return read_until_prompt()
+        if DIRTY:
+            print("chat: draining desynchronized engine output")
+            try:
+                read_until_prompt()          # let the orphan generation end
+            except RuntimeError:
+                print("chat: engine died; restarting")
+                start_engine()
+            DIRTY = False
+        reply = _exchange(prompt)
+        if not reply.strip():
+            print("chat: empty reply (stale prompt); resyncing and retrying")
+            reply = _exchange(prompt)
+        return reply
+    except Exception:
+        DIRTY = True
+        raise
     finally:
         LOCK.release()
 
@@ -212,7 +243,9 @@ def main():
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--cache", type=int, default=64)
     ap.add_argument("--bits", type=int, default=8)
-    ap.add_argument("--max-new", type=int, default=300)
+    # 1-3 spoken-style sentences plus cues fit in well under 96 tokens;
+    # 300 tripled decode latency for output the persona forbids anyway.
+    ap.add_argument("--max-new", type=int, default=96)
     ap.add_argument("--temp", type=float, default=0.7)
     ap.add_argument("--tts-engine", default="espeak-ng")
     ap.add_argument("--tts-voice", default="en+f4")

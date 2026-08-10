@@ -46,18 +46,20 @@ class TestSloppyModelOutput(unittest.TestCase):
 
     def test_unknown_bracket_chatter_stripped(self):
         p = cues.parse("[thinks very hard] hmm, maybe!")
-        self.assertEqual(p.steps, [])
+        # no token resolved; only the mood fallback ("!") adds a face
+        self.assertEqual(p.steps, [("face", "happy")])
         self.assertEqual(p.speech, "hmm, maybe!")
 
     def test_multi_word_stage_direction_resolves_by_word(self):
         p = cues.parse("*wiggles excitedly* hi!")
-        self.assertEqual(p.steps, [("move", "wiggle")])
+        self.assertEqual(p.steps, [("move", "wiggle"), ("face", "happy")])
         self.assertEqual(p.speech, "hi!")
 
     def test_parentheses_never_resolve_by_word(self):
-        # "love" inside real parenthetical speech must not trigger a face
+        # the parenthetical must not resolve as cues (words stay in speech);
+        # only the mood fallback reads "love" off the sentence as a face
         p = cues.parse("I made it (with love and care) for you")
-        self.assertEqual(p.steps, [])
+        self.assertEqual(p.steps, [("face", "love")])
         self.assertEqual(p.speech, "I made it (with love and care) for you")
 
     def test_real_parenthetical_speech_kept(self):
@@ -98,10 +100,23 @@ class TestFallbacksAndCaps(unittest.TestCase):
         self.assertEqual(len([s for s in p.steps if s[0] == "move"]),
                          cues.MAX_MOVES)
 
-    def test_plain_text_no_steps(self):
+    def test_plain_text_gets_a_mood_face(self):
+        # no cues, no emojis: the mood fallback keeps the face alive
         p = cues.parse("Hello friend, how are you today?")
-        self.assertEqual(p.steps, [])
+        self.assertEqual(p.steps, [("face", "love")])
         self.assertEqual(p.speech, "Hello friend, how are you today?")
+
+    def test_flat_text_stays_stepless(self):
+        p = cues.parse("The weather report said rain.")
+        self.assertEqual(p.steps, [])
+
+    def test_consecutive_duplicate_faces_collapse(self):
+        p = cues.parse("[sleepy] [sleepy] so cozy")
+        self.assertEqual(p.steps, [("face", "sleepy")])
+
+    def test_distinct_faces_do_not_collapse(self):
+        p = cues.parse("[happy] [sad] mood swings")
+        self.assertEqual(p.steps, [("face", "happy"), ("face", "sad")])
 
 
 class TestVocabularyIntegrity(unittest.TestCase):
