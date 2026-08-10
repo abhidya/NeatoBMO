@@ -35,28 +35,63 @@ class Drawing(unittest.TestCase):
     def setUp(self):
         self._gap = emote.CMD_GAP
         emote.CMD_GAP = 0
+        emote._shown = None
 
     def tearDown(self):
         emote.CMD_GAP = self._gap
+        emote._shown = None
 
-    def test_draw_face_clears_then_draws_segments(self):
+    def assert_full_span_grammar(self, sent):
+        """fw 2.4: HLine/VLine take exactly one number; a stray trailing
+        number is parsed as a Contrast value and written to NAND."""
+        for c in sent:
+            if not c.startswith("SetLCD "):
+                continue
+            parts = c.split()
+            if parts[1] in ("HLine", "VLine", "Contrast"):
+                self.assertEqual(len(parts), 3, f"extra args in {c!r}")
+                self.assertTrue(parts[2].isdigit(), f"bad arg in {c!r}")
+            else:
+                self.assertEqual(len(parts), 2, f"extra args in {c!r}")
+
+    def test_draw_face_carves_full_span_lines(self):
         r = FakeRobot()
         emote.draw_face(r, emote.HAPPY)
         self.assertEqual(r.sent[:2], ["SetLCD BGWhite", "SetLCD FGBlack"])
-        self.assertTrue(all(c.startswith("SetLCD ") for c in r.sent))
-        self.assertTrue(any("HLine" in c or "VLine" in c for c in r.sent[2:]))
+        self.assertTrue(any(" HLine " in c for c in r.sent))
+        self.assertTrue(any(" VLine " in c for c in r.sent))
+        self.assert_full_span_grammar(r.sent)
 
-    def test_rect_uses_fewest_segments(self):
+    def test_nested_blink_is_a_cheap_delta(self):
         r = FakeRobot()
-        emote._rect(r, (10, 20, 12, 40))   # tall box -> vertical segments
-        self.assertTrue(all(c.startswith("SetLCD VLine ") for c in r.sent))
-        self.assertEqual(len(r.sent), 3)
+        emote.draw_face(r, emote.HAPPY)
+        full = len(r.sent)
+        r.sent.clear()
+        emote.draw_face(r, emote.BLINK)   # nested in happy: delta redraw
+        self.assertLess(len(r.sent), full // 3)
+        self.assertNotIn("SetLCD BGWhite", r.sent)
+        self.assert_full_span_grammar(r.sent)
+
+    def test_non_nested_face_recarves(self):
+        r = FakeRobot()
+        emote.draw_face(r, emote.BLINK)
+        r.sent.clear()
+        emote.draw_face(r, emote.SURPRISED)  # wider band: needs full carve
+        self.assertIn("SetLCD BGWhite", r.sent)
+
+    def test_every_face_carves_with_valid_grammar(self):
+        for face in emote.FACES:
+            emote._shown = None
+            r = FakeRobot()
+            emote.draw_face(r, face)
+            self.assert_full_span_grammar(r.sent)
 
     def test_cascade_plain_text_smiles(self):
         r = FakeRobot()
         n = emote.cascade(r, "no emojis here")
         self.assertEqual(n, 1)
         self.assertEqual(r.sent[0], "TestMode On")
+        self.assert_full_span_grammar(r.sent)
 
 
 if __name__ == "__main__":

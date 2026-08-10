@@ -1,10 +1,57 @@
-"""Screen moods for the XV-12 LCD.
+"""Screen moods and carved faces for the XV-12 LCD.
 
-The firmware only draws full-span lines, bars, and fills — so these are
-abstract "mood screens" and animations, not drawn faces: blinks, breathing
-contrast fades, excitement flickers. Synced with sounds/LEDs by behaviors.
+The firmware only draws full-span lines, bars, and fills. Faces are
+therefore *carved*: black eye pillars (VLine) masked down to row bands by
+white rows (HLine), mouth = full-width black band. Later commands overwrite
+earlier ones, which is what makes a nested wink possible. A mouth narrower
+than the eye span is impossible with full-span primitives.
+
+Mirrors esp32-body/src/faces.c — same geometry, same ordering — so faces
+can be tested over the :3333 bridge without reflashing.
 """
 import time
+
+LCD = 128
+EYE_L = range(32, 45)
+EYE_R = range(84, 97)
+
+# name -> (left-eye rows, right-eye rows, mouth rows); eyes may differ
+# (wink) only when one band nests inside the other
+FACES = {
+    "neutral":   (range(20, 28), range(20, 28), range(44, 47)),
+    "happy":     (range(20, 28), range(20, 28), range(42, 51)),
+    "laugh":     (range(18, 29), range(18, 29), range(40, 53)),
+    "love":      (range(18, 29), range(18, 29), range(42, 51)),
+    "sad":       (range(20, 28), range(20, 28), range(50, 53)),
+    "surprised": (range(16, 29), range(16, 29), range(38, 56)),
+    "wink":      (range(20, 28), range(23, 26), range(42, 51)),
+    "sleepy":    (range(24, 27), range(24, 27), range(48, 51)),
+    "angry":     (range(22, 27), range(22, 27), range(50, 53)),
+    "party":     (range(16, 29), range(16, 29), range(40, 53)),
+    "blink":     (range(23, 26), range(23, 26), range(44, 47)),
+}
+
+
+def face_ops(name):
+    """The SetLCD op sequence that carves a full face (~150 commands)."""
+    el, er, mouth = FACES[name]
+    ops = ["BGWhite", "FGBlack"]
+    ops += [f"VLine {c}" for c in EYE_R]
+    if el != er:
+        ops += ["FGWhite"]
+        ops += [f"HLine {y}" for y in el if y not in er]
+        ops += ["FGBlack"]
+    ops += [f"VLine {c}" for c in EYE_L]
+    ops += ["FGWhite"]
+    ops += [f"HLine {y}" for y in range(LCD) if y not in el and y not in mouth]
+    ops += ["FGBlack"]
+    ops += [f"HLine {y}" for y in mouth]
+    return ops
+
+
+def face(r, name):
+    """Carve a full face (~150 SetLCD commands)."""
+    r.lcd(*face_ops(name))
 
 
 def clear(r, white=True):

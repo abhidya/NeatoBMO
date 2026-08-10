@@ -34,7 +34,9 @@ class SerialTransport:
         buf = b""
         t0 = time.time()
         while time.time() - t0 < timeout:
-            chunk = self.ser.read(65536)
+            # read only what has arrived: read(65536) would block out the
+            # full serial timeout even after the terminator is already in
+            chunk = self.ser.read(self.ser.in_waiting or 1)
             if chunk:
                 buf += chunk
                 if TERM in buf:

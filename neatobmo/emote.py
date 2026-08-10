@@ -1,9 +1,21 @@
-"""Emoji -> LCD face cascades, ported 1:1 from esp32-body/src/faces.c.
+"""Emoji -> LCD face cascades over USB, a true port of esp32-body/src/faces.c.
 
-One canonical face vocabulary for both the firmware and the USB path: the
-rect tables and emoji map below mirror faces.c exactly (same coordinates,
-same cascade timing), so a reply tested locally over USB looks identical
-when the ESP32 draws it. If a face changes, change it here *and* in faces.c.
+The firmware's SetLCD draws FULL-SPAN lines only: `HLine <row>` and
+`VLine <col>` take a single number. Probed live (2026-08-09, fw 2.4.15667):
+any extra trailing number is parsed as a *Contrast* value and written to
+NAND — `SetLCD HLine 31 40 90` replied "Invalid Contrast Specified" and
+`VLine 64 10 50` silently set LCDContrast to 50. So there is no segment
+grammar, and faces are carved exactly like faces.c: black eye pillars
+(VLine) masked down to row bands by white rows (HLine), mouth = full-width
+band. Band geometry lives in neatobmo/faces.py, mirroring faces.c; if a
+face changes, change faces.py *and* faces.c.
+
+FACES and ANIMS below also feed the web console's animated LCD preview
+(bmo_web /faces): FACES holds the stylized preview rects, and the ANIMS
+function names (hearts/tear/zzz/confetti) select the preview sprite. On
+the robot those same entries run full-span-native lingering effects —
+contrast throb / fade / breathe / bars strobe — matching faces.c, whose
+anims already accept that Contrast persists to NAND.
 
 Usage:
     from neatobmo import emote
@@ -11,13 +23,23 @@ Usage:
 """
 import time
 
-CMD_GAP = 0.025          # pacing between SetLCD commands (CMD_GAP_MS)
+from .faces import FACES as GEO, face_ops
+
+CMD_GAP = 0              # fw 2.4 processes SetLCD on a 10 Hz tick (measured
+                         # 2026-08-09: 10.0 cmd/s at gaps 0-25 ms, zero drops)
+                         # so the reply wait in _cmd already paces us; any
+                         # extra sleep only slows cascades down
 MAX_CASCADE = 8
+CONTRAST_DEF = 45        # faces.c CONTRAST_DEF
 
 NEUTRAL, HAPPY, LAUGH, LOVE, SAD, SURPRISED, WINK, SLEEPY, ANGRY, PARTY, BLINK = (
     "neutral", "happy", "laugh", "love", "sad", "surprised",
     "wink", "sleepy", "angry", "party", "blink")
 
+
+# ---- stylized preview rects for the web console LCD (not what the robot
+#      draws — the robot carves the GEO bands; these are the same faces as
+#      8x8-ish sprite art for bmo_web's canvas preview) --------------------
 
 def _rc(x, y, w, h):
     return (x, y, x + w - 1, y + h - 1)
@@ -107,86 +129,104 @@ def parse_emojis(text, cap=MAX_CASCADE):
     return out
 
 
-# ---- drawing (same segment strategy as faces.c: fewest commands wins) ----
+# ---- drawing (carve + nested-band delta, same strategy as faces.c) -------
 
 def _cmd(r, c):
     r.cmd(c, timeout=0.6)
     time.sleep(CMD_GAP)
 
 
-def _rect(r, box):
-    x0, y0, x1, y1 = box
-    if y1 - y0 <= x1 - x0:
-        for row in range(y0, y1 + 1):
-            _cmd(r, f"SetLCD HLine {row} {x0} {x1}")
-    else:
-        for col in range(x0, x1 + 1):
-            _cmd(r, f"SetLCD VLine {col} {y0} {y1}")
+def _lcd(r, op):
+    _cmd(r, "SetLCD " + op)
 
 
-def _rects(r, boxes):
-    for b in boxes:
-        _rect(r, b)
+_shown = None   # face name currently carved on the LCD, or None
 
 
-def _erase(r, boxes):
-    _cmd(r, "SetLCD FGWhite")
-    _rects(r, boxes)
-    _cmd(r, "SetLCD FGBlack")
+def _delta_ok(name):
+    """Delta redraw is legal only when the new eye bands nest inside the
+    current ones (rows can be whited out per-row, but a row can never be
+    turned into "black at eye columns only" without redrawing pillars)."""
+    if _shown is None:
+        return False
+    (cel, cer, _), (el, er, _) = GEO[_shown], GEO[name]
+    return (el[0] >= cel[0] and el[-1] <= cel[-1] and
+            er[0] >= cer[0] and er[-1] <= cer[-1])
+
+
+def _delta_ops(name):
+    (cel, cer, cm), (el, er, m) = GEO[_shown], GEO[name]
+    ops = ["FGWhite"]
+    ops += [f"HLine {y}" for y in cel if y not in el and y not in m]
+    ops += [f"HLine {y}" for y in cer
+            if y not in er and y not in m and y not in cel]
+    ops += [f"HLine {y}" for y in cm if y not in m]
+    ops += ["FGBlack"]
+    ops += [f"HLine {y}" for y in m if y not in cm]
+    return ops
 
 
 def draw_face(r, face):
-    _cmd(r, "SetLCD BGWhite")
-    _cmd(r, "SetLCD FGBlack")
-    _rects(r, FACES.get(face, FACES[NEUTRAL]))
+    global _shown
+    if face not in GEO:
+        face = NEUTRAL
+    ops = _delta_ops(face) if _delta_ok(face) else face_ops(face)
+    for op in ops:
+        _lcd(r, op)
+    _shown = face
 
 
-# ---- sprite animations (linger on the last emotion) ----------------------
+# ---- lingering animations (full-span native, mirroring faces.c; the
+#      function names select the matching web-preview sprite) --------------
 
-def _anim_hearts(r, live):
-    for step in range(14):
+def _anim_hearts(r, live):      # love: heartbeat contrast throb
+    for _ in range(4):
         if not live():
             return
-        y = 40 - step * 3
-        h = _heart(52, y)
-        _rects(r, h)
-        time.sleep(0.06)
-        if y > 4:
-            _erase(r, h)
+        _lcd(r, "Contrast 60")
+        time.sleep(0.18)
+        _lcd(r, f"Contrast {CONTRAST_DEF}")
+        time.sleep(0.42)
 
 
-def _anim_tear(r, live):
-    for step in range(8):
+def _anim_tear(r, live):        # sad: world slowly fades, then recovers
+    for c in range(CONTRAST_DEF, 19, -5):
         if not live():
             return
-        t = [_rc(88, 30 + step * 3, 2, 4)]
-        _rects(r, t)
-        time.sleep(0.08)
-        _erase(r, t)
+        _lcd(r, f"Contrast {c}")
+        time.sleep(0.15)
+    time.sleep(0.6)
+    _lcd(r, f"Contrast {CONTRAST_DEF}")
 
 
-def _anim_zzz(r, live):
-    for step in range(10):
+def _anim_zzz(r, live):         # sleepy: breathing fade + lights out
+    for _ in range(2):
+        for c in range(CONTRAST_DEF, 14, -5):
+            if not live():
+                return
+            _lcd(r, f"Contrast {c}")
+            time.sleep(0.09)
+        for c in range(15, CONTRAST_DEF + 1, 5):
+            if not live():
+                return
+            _lcd(r, f"Contrast {c}")
+            time.sleep(0.09)
+    if live():
+        _cmd(r, "SetLED BacklightOff")
+
+
+def _anim_confetti(r, live):    # party/laugh: strobe bars, then the face
+    global _shown
+    for i in range(6):
         if not live():
             return
-        y = 34 - step * 3
-        if y < 4:
-            break
-        z = [_rc(104, y, 8, 1), _rc(108, y + 2, 3, 1), _rc(104, y + 4, 8, 1)]
-        _rects(r, z)
-        time.sleep(0.12)
-        _erase(r, z)
-
-
-def _anim_confetti(r, live):
-    for step in range(10):
-        if not live():
-            return
-        c = [_rc(10 + (step * 37) % 100, 2 + (step * 13) % 12, 2, 2),
-             _rc(20 + (step * 53) % 90, 2 + (step * 29) % 12, 2, 2)]
-        _rects(r, c)
-        time.sleep(0.09)
-        _erase(r, c)
+        _lcd(r, "BGWhite")
+        _lcd(r, "FGBlack")
+        _lcd(r, "HBars" if i & 1 else "VBars")
+        time.sleep(0.22)
+    last, _shown = _shown, None     # bars trashed the carve
+    if live() and last:
+        draw_face(r, last)
 
 
 ANIMS = {LOVE: _anim_hearts, SAD: _anim_tear, SLEEPY: _anim_zzz,
@@ -202,21 +242,24 @@ def cascade(r, text):
     makes any in-flight cascade stop at its next step, like the firmware's
     depth-1 overwrite queue.
     """
-    global _generation
+    global _generation, _shown
     _generation += 1
     gen = _generation
     live = lambda: _generation == gen
+    _shown = None    # anything may have touched the LCD since: full carve
 
     seq = parse_emojis(text) or [HAPPY]   # plain text: just smile
     r.cmd("TestMode On")                  # SetLCD is TestMode-only
     time.sleep(0.1)
+    _cmd(r, "SetLED BacklightOn")
+    _lcd(r, f"Contrast {CONTRAST_DEF}")
     for i, face in enumerate(seq):
         if not live():
             return len(seq)
         draw_face(r, face)
         time.sleep(0.65)
         if i < len(seq) - 1:
-            draw_face(r, BLINK)
+            draw_face(r, BLINK)           # nested rows: cheap delta
             time.sleep(0.12)
     anim = ANIMS.get(seq[-1])
     if anim and live():
