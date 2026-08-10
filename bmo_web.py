@@ -433,8 +433,12 @@ PAGE = """<!doctype html>
  #tabs .tab:nth-child(6){--tabc:#ff9f43}
  .pane{display:none;flex:1;flex-direction:column;align-items:center;width:100%;min-height:0}
  .pane.on{display:flex}
- #face{font-size:60px;margin:12px 0 2px;transition:transform .2s;
-       filter:drop-shadow(0 3px 0 var(--shadow))}
+ /* header avatar: a mini BMO face screen playing the stylized sprite
+    faces (web-only art — the real LCD draws full-span grid bands) */
+ #face{width:176px;height:88px;margin:14px 0 4px;flex:none;
+       image-rendering:pixelated;background:#d8f3cd;
+       border:5px solid var(--bezel);border-radius:14px;
+       box-shadow:0 4px 0 var(--shadow),inset 0 0 0 transparent}
  #conn{font-size:12px;padding:3px 12px;border-radius:99px;border:2px solid var(--bezel);
        background:var(--cream);color:var(--ink);margin:4px 0;font-weight:600}
  #conn::before{content:'●';margin-right:6px;color:var(--red)}
@@ -556,7 +560,7 @@ PAGE = """<!doctype html>
  <div class="tab" data-p="esp32" onclick="show('esp32')">🔧 ESP32</div>
 </div>
 <div class="pane on" id="p-chat">
-<div id="face">🤖</div>
+<canvas id="face" width="128" height="64"></canvas>
 <div id="conn">checking body…</div>
 <div id="status">BMO · voice: espeak-ng → sound-bank speech</div>
 <div id="log"></div>
@@ -664,7 +668,7 @@ PAGE = """<!doctype html>
 <script>
 function show(p){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.p===p));
  document.querySelectorAll('.pane').forEach(d=>d.classList.toggle('on',d.id==='p-'+p));}
-const log=document.getElementById('log'),face=document.getElementById('face');
+const log=document.getElementById('log');
 function add(cls,text){const d=document.createElement('div');d.className='msg '+cls;
  d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;}
 const STATUS_DEFAULT='BMO · voice: espeak-ng → sound-bank speech';
@@ -702,14 +706,14 @@ async function send(text){
  txtEl.disabled=true;btn.disabled=true;
  st.textContent='thinking… 0s';
  const tick=setInterval(()=>{st.textContent='thinking… '+Math.floor((Date.now()-t0)/1000)+'s';},1000);
- add('you',text);face.textContent='🤔';
+ add('you',text);faceThink();
  const think=thinkBubble();
  try{
   const r=await fetch('/chat',{method:'POST',body:JSON.stringify({text,
    speak:voiceSel.value==='robot'})});
   const j=await r.json();
   clearInterval(tick);think.remove();
-  face.textContent='😊';add('bmo',j.reply);
+  add('bmo',j.reply);faceCascade(j.reply);
   st.textContent=j.voice_error
    ? 'BMO · robot voice: '+j.voice_error
    : STATUS_DEFAULT;
@@ -717,13 +721,12 @@ async function send(text){
   if(voiceSel.value==='local')speakLocal(j.reply);
  }catch(e){
   clearInterval(tick);think.remove();
-  face.textContent='😵';add('bmo','(brain unreachable)');
+  faceSad();add('bmo','(brain unreachable)');
   st.textContent=STATUS_DEFAULT;
  }finally{
   clearInterval(tick);pending=false;
   txtEl.disabled=false;btn.disabled=false;txtEl.focus();
  }
- setTimeout(()=>face.textContent='🤖',3000);
 }
 function sendTxt(){const t=document.getElementById('txt');if(t.value.trim()){send(t.value.trim());t.value='';}}
 document.getElementById('txt').addEventListener('keydown',e=>{if(e.key==='Enter')sendTxt();});
@@ -830,17 +833,103 @@ async function ota(){const f=document.getElementById('fw').files[0],m=document.g
  try{const r=await fetch('/ota',{method:'POST',body:await f.arrayBuffer()});
   const j=await r.json();m.textContent=j.error?('failed: '+j.error):('ESP32 said: '+j.out);}
  catch(e){m.textContent='upload failed: '+e;}}
-// ---- faces panel + LCD emulator ----
+// ---- BMO face screens: header avatar + faces panel LCD emulator ----
+// The header avatar plays the stylized sprite faces (dot eyes, heart
+// eyes, smile arcs) that were retired from the LCD preview because the
+// hardware only draws full-span lines — no such limit in a canvas.
+// The faces panel still shows the honest grid geometry the robot draws.
 const LCD_BG='#cdd5c0',LCD_PX='#1a2216';
-const lcd=document.getElementById('lcd'),lctx=lcd.getContext('2d');
-let facesData=null,facesLoading=null,emoteGen=0;
 const zzzSleep=ms=>new Promise(res=>setTimeout(res,ms));
-function lcdClear(){lctx.fillStyle=LCD_BG;lctx.fillRect(0,0,128,64);}
-lcdClear();
-function lcdRects(rects,color){lctx.fillStyle=color;
- for(const[x0,y0,x1,y1]of rects)lctx.fillRect(x0,y0,x1-x0+1,y1-y0+1);}
-function lcdFace(name){lcdClear();
- const r=facesData&&facesData.faces[name];if(r)lcdRects(r,LCD_PX);}
+let facesData=null,facesLoading=null,lastActive=Date.now();
+function mkScreen(canvas,bg,px){const ctx=canvas.getContext('2d');
+ const s={g:0,bg,px,
+  clear(){ctx.fillStyle=bg;ctx.fillRect(0,0,128,64);},
+  rects(r,c){ctx.fillStyle=c||px;
+   for(const[x0,y0,x1,y1]of r)ctx.fillRect(x0,y0,x1-x0+1,y1-y0+1);},
+  show(r){s.clear();if(r)s.rects(r);}};
+ s.clear();return s;}
+const hdr=mkScreen(document.getElementById('face'),'#d8f3cd','#1a4a35');
+const panel=mkScreen(document.getElementById('lcd'),LCD_BG,LCD_PX);
+const rc=(x,y,w,h)=>[x,y,x+w-1,y+h-1];
+function heartRects(x,y){return[rc(x+1,y,3,2),rc(x+6,y,3,2),rc(x,y+2,10,3),
+ rc(x+2,y+5,6,2),rc(x+4,y+7,2,1)];}
+const eyesDot=dx=>[rc(34+dx,20,8,8),rc(86+dx,20,8,8)];
+const EYES_LINE=[rc(32,23,12,3),rc(84,23,12,3)],
+      EYES_WIDE=[rc(33,18,10,10),rc(85,18,10,10)],
+      EYES_HAT=[rc(32,24,12,3),rc(34,21,8,3),rc(84,24,12,3),rc(86,21,8,3)],
+      EYES_LID=[rc(32,18,12,3),rc(33,22,10,6),rc(84,18,12,3),rc(85,22,10,6)],
+      EYES_BROW=[rc(32,16,12,3),rc(34,21,8,8),rc(84,16,12,3),rc(86,21,8,8)],
+      EYES_HEART=[...heartRects(31,17),...heartRects(83,17)],
+      M_FLAT=[rc(52,44,25,3)],M_SMILE=[rc(44,44,41,6),rc(48,50,33,3)],
+      M_GRIN=[rc(44,42,41,10),rc(50,52,29,3)],
+      M_SAD=[rc(52,50,25,3),rc(46,46,6,2),rc(77,46,6,2)],
+      M_O=[rc(56,42,17,13)],M_SLEEP=[rc(56,48,17,3)];
+const SPRITES={
+ happy:[...EYES_HAT,...M_SMILE],laugh:[...EYES_HAT,...M_GRIN],
+ love:[...EYES_HEART,...M_SMILE],sad:[...eyesDot(0),...M_SAD],
+ surprised:[...EYES_WIDE,...M_O],wink:[eyesDot(0)[0],EYES_LINE[1],...M_SMILE],
+ sleepy:[...EYES_LID,...M_SLEEP],angry:[...EYES_BROW,...M_SAD],
+ party:[...EYES_WIDE,...M_GRIN],blink:[...EYES_LINE,...M_FLAT],
+ neutral:[...eyesDot(0),...M_FLAT]};
+const SPRITE_ANIMS={love:'hearts',sad:'tear',sleepy:'zzz',party:'confetti'};
+async function runAnimOn(s,name,g){
+ if(name==='hearts'){
+  for(let st=0;st<14;st++){const y=40-st*3,r=heartRects(52,y);
+   s.rects(r);await zzzSleep(60);if(g!==s.g)return;
+   if(y>4)s.rects(r,s.bg);}
+ }else if(name==='tear'){
+  for(let st=0;st<8;st++){const r=[rc(88,30+st*3,2,4)];
+   s.rects(r);await zzzSleep(80);if(g!==s.g)return;
+   s.rects(r,s.bg);}
+ }else if(name==='zzz'){
+  for(let st=0;st<10;st++){const y=34-st*3;if(y<4)break;
+   const r=[[104,y,111,y],[108,y+2,110,y+2],[104,y+4,111,y+4]];
+   s.rects(r);await zzzSleep(120);if(g!==s.g)return;
+   s.rects(r,s.bg);}
+ }else if(name==='confetti'){
+  for(let st=0;st<10;st++){
+   const ax=10+(st*37)%100,ay=2+(st*13)%12,bx=20+(st*53)%90,by=2+(st*29)%12;
+   const r=[rc(ax,ay,2,2),rc(bx,by,2,2)];
+   s.rects(r);await zzzSleep(90);if(g!==s.g)return;
+   s.rects(r,s.bg);}}}
+// header face states: live reactions + cute idle behaviors
+async function faceIdle(){const g=++hdr.g;
+ hdr.show(SPRITES.happy);
+ while(g===hdr.g){
+  await zzzSleep(1600+Math.random()*2800);if(g!==hdr.g)return;
+  if(Date.now()-lastActive>90000){                    // dozed off
+   hdr.show(SPRITES.sleepy);await runAnimOn(hdr,'zzz',g);
+   if(g!==hdr.g)return;continue;}
+  const roll=Math.random();
+  if(roll<.5){hdr.show(SPRITES.blink);await zzzSleep(130);}
+  else if(roll<.8){                                   // glance around
+   const d=Math.random()<.5?-6:6;
+   hdr.show([...eyesDot(d),...M_SMILE]);await zzzSleep(700);
+   if(g!==hdr.g)return;
+   hdr.show([...eyesDot(-d),...M_SMILE]);await zzzSleep(500);}
+  else if(roll<.93){hdr.show(SPRITES.wink);await zzzSleep(450);}
+  else{hdr.show(SPRITES.laugh);await zzzSleep(500);}
+  if(g!==hdr.g)return;
+  hdr.show(SPRITES.happy);}}
+async function faceThink(){const g=++hdr.g;lastActive=Date.now();
+ const dx=[0,-6,0,6];let i=0;
+ while(g===hdr.g){
+  hdr.show([...eyesDot(dx[i++%4]),...M_FLAT]);await zzzSleep(420);}}
+async function faceSad(){const g=++hdr.g;lastActive=Date.now();
+ hdr.show(SPRITES.sad);await runAnimOn(hdr,'tear',g);
+ await zzzSleep(1200);if(g===hdr.g)faceIdle();}
+async function faceCascade(text){const g=++hdr.g;lastActive=Date.now();
+ try{await loadFaces();}catch(e){}
+ const names=facesData?parseEmojis(text):['happy'];
+ for(let i=0;i<names.length;i++){
+  if(i>0){hdr.show(SPRITES.blink);await zzzSleep(120);if(g!==hdr.g)return;}
+  hdr.show(SPRITES[names[i]]||SPRITES.happy);await zzzSleep(650);if(g!==hdr.g)return;}
+ const anim=SPRITE_ANIMS[names[names.length-1]];
+ if(anim){await runAnimOn(hdr,anim,g);if(g!==hdr.g)return;}
+ await zzzSleep(2000);if(g===hdr.g)faceIdle();}
+faceIdle();loadFaces();
+// faces panel (honest grid geometry — what the robot really draws)
+function lcdFace(name){panel.show(facesData&&facesData.faces[name]);}
 function facesOpen(){return document.getElementById('facepanel').classList.contains('on');}
 function loadFaces(){
  if(facesData)return Promise.resolve(facesData);
@@ -866,37 +955,15 @@ function parseEmojis(text){
   for(const k of keys){if(text.startsWith(k,i)){hit=k;break;}}
   if(hit){out.push(map[hit]);i+=hit.length;}else i++;}
  return out.length?out:['happy'];}
-function heartRects(x,y){return[[x+1,y,x+3,y+1],[x+6,y,x+8,y+1],
- [x,y+2,x+9,y+4],[x+2,y+5,x+7,y+6],[x+4,y+7,x+5,y+7]];}
-async function runAnim(name,g){
- if(name==='hearts'){
-  for(let s=0;s<14;s++){const y=40-s*3,r=heartRects(52,y);
-   lcdRects(r,LCD_PX);await zzzSleep(60);if(g!==emoteGen)return;
-   if(y>4)lcdRects(r,LCD_BG);}
- }else if(name==='tear'){
-  for(let s=0;s<8;s++){const r=[[88,30+s*3,89,33+s*3]];
-   lcdRects(r,LCD_PX);await zzzSleep(80);if(g!==emoteGen)return;
-   lcdRects(r,LCD_BG);}
- }else if(name==='zzz'){
-  for(let s=0;s<10;s++){const y=34-s*3;if(y<4)break;
-   const r=[[104,y,111,y],[108,y+2,110,y+2],[104,y+4,111,y+4]];
-   lcdRects(r,LCD_PX);await zzzSleep(120);if(g!==emoteGen)return;
-   lcdRects(r,LCD_BG);}
- }else if(name==='confetti'){
-  for(let s=0;s<10;s++){
-   const ax=10+(s*37)%100,ay=2+(s*13)%12,bx=20+(s*53)%90,by=2+(s*29)%12;
-   const r=[[ax,ay,ax+1,ay+1],[bx,by,bx+1,by+1]];
-   lcdRects(r,LCD_PX);await zzzSleep(90);if(g!==emoteGen)return;
-   lcdRects(r,LCD_BG);}}}
 async function runCascade(text){
  try{
   if(!(await loadFaces()))return;
-  const g=++emoteGen,names=parseEmojis(text);
+  const g=++panel.g,names=parseEmojis(text);
   for(let i=0;i<names.length;i++){
-   if(i>0){lcdFace('blink');await zzzSleep(120);if(g!==emoteGen)return;}
-   lcdFace(names[i]);await zzzSleep(650);if(g!==emoteGen)return;}
+   if(i>0){lcdFace('blink');await zzzSleep(120);if(g!==panel.g)return;}
+   lcdFace(names[i]);await zzzSleep(650);if(g!==panel.g)return;}
   const anim=(facesData.anims||{})[names[names.length-1]];
-  if(anim)await runAnim(anim,g);
+  if(anim)await runAnimOn(panel,anim,g);
  }catch(e){}}
 function previewOnly(text){runCascade(text);}
 function playEmote(text){
