@@ -20,6 +20,8 @@
 #include "esp_http_server.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
+#include "neato_audio.h"
+#include "neato_usb.h"
 #include "wifi_mgr.h"
 
 static const char *TAG = "web";
@@ -31,8 +33,7 @@ extern const char index_html_end[] asm("_binary_index_html_end");
 extern const char wifi_html_start[] asm("_binary_wifi_html_start");
 extern const char wifi_html_end[] asm("_binary_wifi_html_end");
 
-void neato_send(const char *cmd); /* main.c */
-esp_err_t speak_post(httpd_req_t *req); /* audio.c */
+esp_err_t emote_post(httpd_req_t *req); /* faces.c */
 
 /* ---- push Neato bytes to the websocket client (called from USB rx task) */
 typedef struct {
@@ -222,16 +223,18 @@ void web_start(void)
     static const httpd_uri_t ws = { .uri = "/ws", .method = HTTP_GET, .handler = ws_handler,
                                     .is_websocket = true };
     static const httpd_uri_t ota = { .uri = "/ota", .method = HTTP_POST, .handler = ota_post };
-    static const httpd_uri_t speak = { .uri = "/speak", .method = HTTP_POST, .handler = speak_post };
     static const httpd_uri_t wifi = { .uri = "/wifi", .method = HTTP_GET, .handler = wifi_page_get };
     static const httpd_uri_t wscan = { .uri = "/wifi/scan", .method = HTTP_GET, .handler = wifi_scan_get };
     static const httpd_uri_t wstat = { .uri = "/wifi/status", .method = HTTP_GET, .handler = wifi_status_get };
     static const httpd_uri_t wsave = { .uri = "/wifi/save", .method = HTTP_POST, .handler = wifi_save_post };
     static const httpd_uri_t wforget = { .uri = "/wifi/forget", .method = HTTP_POST, .handler = wifi_forget_post };
+    static const httpd_uri_t speak = { .uri = "/speak", .method = HTTP_POST, .handler = speak_post };
+    static const httpd_uri_t emote = { .uri = "/emote", .method = HTTP_POST, .handler = emote_post };
+    httpd_register_uri_handler(s_server, &speak);
+    httpd_register_uri_handler(s_server, &emote);
     httpd_register_uri_handler(s_server, &root);
     httpd_register_uri_handler(s_server, &ws);
     httpd_register_uri_handler(s_server, &ota);
-    httpd_register_uri_handler(s_server, &speak);
     httpd_register_uri_handler(s_server, &wifi);
     httpd_register_uri_handler(s_server, &wscan);
     httpd_register_uri_handler(s_server, &wstat);

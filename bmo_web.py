@@ -13,6 +13,7 @@ Open http://localhost:8485 in Chrome (mic needs Chrome/Edge).
 import json
 import os
 import threading
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -21,16 +22,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from neatobmo import Robot
 from neatobmo import faces
 
-BRAIN = "http://127.0.0.1:8000/v1"
+BRAIN = os.environ.get("NEATOBMO_BRAIN", "http://127.0.0.1:8000/v1").rstrip("/")
 KEY_FILE = os.path.expanduser("~/.neatobmo/coli_api_key")
 API_KEY = open(KEY_FILE).read().strip() if os.path.exists(KEY_FILE) else None
 PORT = 8485
 ESP32 = os.environ.get("NEATOBMO_ESP32", "http://10.0.0.106")
-TTS_RATE = 16000  # must match AUDIO_RATE_HZ in esp32-body/src/audio.c
 
 PERSONA = ("You are BMO, a cheerful little robot buddy living inside a Neato robot "
            "vacuum. You are playful, curious, and love your human. Keep replies to "
-           "1-3 short spoken-style sentences.")
+           "1-3 short spoken-style sentences. Express your feelings with LOTS of "
+           "emojis sprinkled through every reply — pick from 😊 😄 😂 😍 💖 😢 😭 "
+           "😮 😱 😉 😴 💤 😠 🎉 🎮 ✨ 🤖 — your face screen plays them in order!")
 
 robot = None
 rlock = threading.Lock()
@@ -50,30 +52,36 @@ def brain_chat(text):
     return reply
 
 
-def tts_pcm8(text):
-    """espeak-ng -> raw unsigned 8-bit mono PCM at TTS_RATE, or None."""
-    import shutil, struct, subprocess, wave, io
-    if not shutil.which("espeak-ng"):
-        return None
-    wav_bytes = subprocess.run(
-        ["espeak-ng", "-v", "en+f4", "-s", "160", "-p", "70", "--stdout", text],
-        capture_output=True, timeout=30).stdout
-    if not wav_bytes:
-        return None
-    with wave.open(io.BytesIO(wav_bytes)) as w:
-        rate, nch, width = w.getframerate(), w.getnchannels(), w.getsampwidth()
-        frames = w.readframes(w.getnframes())
-    samples = struct.unpack(f"<{len(frames)//2}h", frames) if width == 2 else \
-              [(b - 128) * 256 for b in frames]
-    if nch == 2:
-        samples = [(samples[i] + samples[i+1]) // 2 for i in range(0, len(samples), 2)]
-    out = bytearray()  # nearest-neighbour resample; fidelity is not the point
-    step = rate / TTS_RATE
-    i = 0.0
-    while i < len(samples):
-        out.append((samples[int(i)] >> 8) + 128 & 0xFF)
-        i += step
-    return bytes(out)
+def colibri_tts(text):
+    """Ask the Colibri server for the WAV that the Neato will play."""
+    req = urllib.request.Request(
+        BRAIN + "/audio/speech",
+        data=json.dumps({"model": "espeak-ng", "voice": "en+f4",
+                         "input": text, "response_format": "wav"}).encode(),
+        headers={"Content-Type": "application/json",
+                 **({"Authorization": f"Bearer {API_KEY}"} if API_KEY else {})})
+    with urllib.request.urlopen(req, timeout=45) as resp:
+        wav = resp.read()
+    if not wav.startswith(b"RIFF"):
+        raise RuntimeError("Colibri TTS returned a non-WAV response")
+    return wav
+
+
+def esp32_play_wav(wav):
+    """Send a Colibri WAV to the ESP32, which relays it over Neato USB."""
+    req = urllib.request.Request(
+        ESP32 + "/speak",
+        data=wav,
+        headers={"Content-Type": "audio/wav"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            reply = resp.read().decode(errors="replace").strip()
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace").strip()
+        raise RuntimeError(detail or f"ESP32 voice relay returned HTTP {exc.code}") from exc
+    if reply != "OK":
+        raise RuntimeError(f"unexpected ESP32 voice response: {reply or 'empty'}")
 
 
 def chirp_for(reply):
@@ -89,6 +97,17 @@ def chirp_for(reply):
     if "!" in reply:
         return "happy"
     return "hello"
+
+
+def emote_on_esp32(reply):
+    """Fire-and-forget: ESP32 draws the reply's emojis as an LCD face cascade."""
+    def push():
+        try:
+            req = urllib.request.Request(ESP32 + "/emote", data=reply.encode())
+            urllib.request.urlopen(req, timeout=5).read()
+        except Exception:
+            pass
+    threading.Thread(target=push, daemon=True).start()
 
 
 def body(fn):
@@ -151,7 +170,7 @@ PAGE = """<!doctype html>
 </div>
 <div class="pane on" id="p-chat">
 <div id="face">🤖</div>
-<div id="status">BMO · brain: OLMoE via Colibri · body: USB</div>
+<div id="status">BMO · TTS: Colibri · voice: ESP32 USB → PlaySound File</div>
 <div id="log"></div>
 <div id="bar">
   <button id="mic" title="hold to talk">🎤</button>
@@ -210,6 +229,9 @@ async function send(text){
   const r=await fetch('/chat',{method:'POST',body:JSON.stringify({text})});
   const j=await r.json();
   face.textContent='😊';add('bmo',j.reply);
+  document.getElementById('status').textContent=j.voice_error
+   ? 'BMO · voice firmware patch still needed: '+j.voice_error
+   : 'BMO · TTS: Colibri · voice: ESP32 USB → PlaySound File';
  }catch(e){face.textContent='😵';add('bmo','(brain unreachable)');}
  setTimeout(()=>face.textContent='🤖',3000);
 }
@@ -350,21 +372,17 @@ class Handler(BaseHTTPRequestHandler):
         if reply:
             body(lambda: (robot.led("green"), robot.play(chirp_for(reply)),
                           faces.blink(robot, 2, 0.1)))
-            pcm = None
+            emote_on_esp32(reply)
+            voice_error = None
             try:
-                pcm = tts_pcm8(reply)
-            except Exception:
-                pass
-            if pcm:
-                def push(p=pcm):
-                    try:
-                        r = urllib.request.Request(ESP32 + "/speak", data=p,
-                            headers={"Content-Type": "application/octet-stream"})
-                        urllib.request.urlopen(r, timeout=len(p) / TTS_RATE + 15).read()
-                    except Exception as ex:
-                        print("speak failed:", ex)
-                threading.Thread(target=push, daemon=True).start()
-            out = {"reply": reply, "spoke": bool(pcm)}
+                wav = colibri_tts(reply)
+                esp32_play_wav(wav)
+            except Exception as ex:
+                voice_error = str(ex)
+                print("PlaySound File failed:", ex)
+            out = {"reply": reply, "spoke": voice_error is None}
+            if voice_error:
+                out["voice_error"] = voice_error
         else:
             body(lambda: robot.led("red"))
             out = {"reply": "", "error": err}

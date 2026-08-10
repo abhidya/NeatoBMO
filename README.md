@@ -21,17 +21,23 @@ See [DESIGN.md](DESIGN.md) for the full architecture and milestones.
 - ✅ Web dashboard (lidar radar, command console, drive pad) served from the Mac —
   [neato_dashboard.py](neato_dashboard.py); ESP32-hosted version in progress
   ([esp32-body/src/web.c](esp32-body/src/web.c) + OTA).
-- 🔜 Behavior library (sounds/dance/LCD faces), Colibri LAN serving, voice loop.
+- 🚧 Native voice transport complete — Colibri produces the Neato PCM format,
+  and the ESP32 validates and relays WAV files over USB. The remaining gate is
+  the XV `PlaySound File` firmware handler documented in
+  [FIRMWARE_SOUND_PATCH.md](FIRMWARE_SOUND_PATCH.md).
 
 ## Repo layout
 
 | Path | What |
 |---|---|
 | `DESIGN.md` | Architecture design doc (body/head/brain split, OSS stack, milestones) |
-| `esp32-body/` | ESP32-S3 firmware (PlatformIO + ESP-IDF): USB CDC-ACM host ↔ Neato, WiFi log mirror (`:2323`), raw command bridge (`:3333`), embedded web UI + OTA (WIP) |
+| `esp32-body/` | ESP32-S3 firmware (PlatformIO + ESP-IDF): USB CDC-ACM host ↔ Neato, WiFi log mirror (`:2323`), command bridge (`:3333`), P6 debug-UART bridge (`:3334`), embedded web UI + OTA (WIP) |
 | `neato_dashboard.py` | LAN dashboard: lidar radar, console with full command set, drive controls |
 | `lidar_viewer.py` | Original USB lidar visualizer (M0-era debug tool) |
 | `neato_protocol_dump.txt` | Ground-truth protocol harvested from the actual XV-12 (`Help` for every command, sample sensor output) |
+| `FIRMWARE_ARCHIVE.md` | Checksummed 2 TB archive, current-robot recovery snapshot, compatible version inventory, and reproduction commands |
+| `neato_firmware.py` | Offline encrypted-envelope inspector, archive cataloger, and plaintext unlock validator |
+| `backup_neato.py` | Read-only USB capture of device-specific configuration and calibration state |
 | `neato-driver-python/` | Vendored clone of [brannonvann/neato-driver-python](https://github.com/brannonvann/neato-driver-python) (MIT) for protocol reference |
 
 ## Hardware notes (hard-won)
@@ -45,6 +51,10 @@ See [DESIGN.md](DESIGN.md) for the full architecture and milestones.
   (`CONFIG_USB_HOST_HUBS_SUPPORTED=y` in `sdkconfig.defaults` enables it).
 - The Neato replies in ASCII, each response terminated by `0x1A` (Ctrl-Z).
   Full 360° lidar scan ≈ 14 KB — size read timeouts accordingly.
+- Native runtime speech needs a patch to the XV application's `PlaySound`
+  handler. For plaintext firmware capture, connect mainboard `P6.2` (robot RX)
+  to ESP32 GPIO17, `P6.3` (robot TX) to GPIO18, and `P6.4` to GND. The raw
+  115200-baud debug stream is then available at `nc <board-ip> 3334`.
 
 ## Firmware quick start
 
@@ -56,3 +66,8 @@ pio run -t upload   # first flash over USB; later flashes via OTA (POST /ota)
 
 Then: `http://<board-ip>/` (dashboard), `nc <board-ip> 2323` (logs),
 `nc <board-ip> 3333` (raw Neato commands).
+
+Native WAV relay is `POST http://<board-ip>/speak` with `Content-Type:
+audio/wav`. It accepts at most 512 KiB of mono signed 16-bit PCM at 22,050 Hz.
+Until the XV application patch is installed, it intentionally returns HTTP 409
+instead of reporting false success.

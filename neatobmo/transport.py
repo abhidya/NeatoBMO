@@ -4,11 +4,19 @@ Both expose: send(cmd) -> str  (full reply text, 0x1A terminator stripped)
 """
 import glob
 import socket
+import struct
 import time
 
 import serial
 
 TERM = b"\x1a"
+ENQ = b"\x05"
+ACK = b"\x06"
+NAK = b"\x15"
+
+
+class BinaryTransferError(RuntimeError):
+    """The robot rejected or did not enter a binary transfer."""
 
 
 class SerialTransport:
@@ -32,6 +40,52 @@ class SerialTransport:
                 if TERM in buf:
                     break
         return buf.split(TERM)[0].decode(errors="replace")
+
+    def send_binary(self, cmd, payload, timeout=15.0):
+        """Send a Neato-style binary transaction.
+
+        Patched XV firmware uses the updater's existing framing:
+
+          <cmd> Size <payload bytes + checksum bytes>\r
+          robot: ENQ
+          host:  payload + uint32_le(sum(payload))
+          robot: ACK
+
+        ``noburn``/firmware-upload commands use the same wire format, so the
+        host side can be tested independently of the PlaySound patch.
+        """
+        payload = bytes(payload)
+        self.ser.reset_input_buffer()
+        header = f"{cmd} Size {len(payload) + 4}\r".encode()
+        self.ser.write(header)
+
+        reply = self._read_until({ENQ, TERM, NAK}, timeout)
+        if ENQ not in reply:
+            text = reply.replace(TERM, b"").decode(errors="replace").strip()
+            raise BinaryTransferError(
+                f"robot did not request binary data for {cmd!r}: {text or reply.hex()}"
+            )
+
+        self.ser.write(payload)
+        self.ser.write(struct.pack("<I", sum(payload) & 0xFFFFFFFF))
+        self.ser.flush()
+
+        reply = self._read_until({ACK, NAK, TERM}, timeout)
+        if ACK not in reply:
+            reason = "NAK" if NAK in reply else "transfer ended without ACK"
+            raise BinaryTransferError(f"robot rejected {cmd!r}: {reason}")
+
+    def _read_until(self, markers, timeout):
+        buf = bytearray()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            chunk = self.ser.read(65536)
+            if not chunk:
+                continue
+            buf.extend(chunk)
+            if any(marker in chunk for marker in markers):
+                break
+        return bytes(buf)
 
     def close(self):
         self.ser.close()
@@ -65,6 +119,12 @@ class BridgeTransport:
             except socket.timeout:
                 pass
         return buf.split(TERM)[0].decode(errors="replace")
+
+    def send_binary(self, cmd, payload, timeout=15.0):
+        raise BinaryTransferError(
+            "binary PlaySound transfer needs direct USB; the ESP32 line bridge "
+            "does not expose a raw byte tunnel yet"
+        )
 
     def close(self):
         self.sock.close()

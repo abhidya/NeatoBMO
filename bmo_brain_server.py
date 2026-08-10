@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
-"""OpenAI-compatible HTTP wrapper around colibri's OLMoE chat engine.
+"""OpenAI-compatible HTTP wrapper around Colibri's OLMoE chat engine and TTS.
 
 The colibri release gateway can't serve OLMoE (its engine only speaks a
 stdin/stdout chat REPL), so this wraps `SNAP=<snap> CHAT=1 ./olmoe` with
 /v1/chat/completions + /v1/models. One generation at a time; requests queue.
+The server also exposes /v1/audio/speech so the robot receives its voice from
+the same Colibri service instead of synthesizing speech in the web client.
 
     python3 bmo_brain_server.py \
         --engine /Volumes/2TB/colibri-v1.5.0-macos-arm64/olmoe \
         --snap /Volumes/2TB/models/olmoe-snap --port 8000
 """
 import argparse
+import io
 import json
 import os
 import subprocess
 import threading
 import time
 import uuid
+import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ARGS = None
@@ -63,6 +67,43 @@ def ask(prompt):
         return read_until_prompt()
 
 
+def synthesize_speech(text, voice=None):
+    """Return a mono PCM WAV produced by the server-side TTS engine."""
+    if not text or not text.strip():
+        raise ValueError("input is required")
+    if len(text) > 1000:
+        raise ValueError("input is limited to 1000 characters")
+    cmd = [ARGS.tts_engine, "-v", voice or ARGS.tts_voice,
+           "-s", str(ARGS.tts_speed), "-p", str(ARGS.tts_pitch),
+           "--stdout", text]
+    proc = subprocess.run(cmd, capture_output=True, timeout=30, check=False)
+    if proc.returncode or not proc.stdout.startswith(b"RIFF"):
+        detail = proc.stderr.decode(errors="replace").strip()
+        raise RuntimeError(detail or "TTS engine did not return a WAV")
+    return normalize_wav(proc.stdout)
+
+
+def normalize_wav(wav_bytes):
+    """Rewrite streaming WAV lengths and enforce the XV playback format."""
+    try:
+        with wave.open(io.BytesIO(wav_bytes), "rb") as src:
+            fmt = (src.getnchannels(), src.getsampwidth(), src.getframerate())
+            frames = src.readframes(src.getnframes())
+    except (EOFError, wave.Error) as e:
+        raise RuntimeError(f"TTS engine returned an invalid WAV: {e}") from e
+    if fmt != (1, 2, 22050):
+        raise RuntimeError(
+            f"TTS WAV must be mono signed 16-bit PCM at 22050 Hz, got {fmt}"
+        )
+    out = io.BytesIO()
+    with wave.open(out, "wb") as dst:
+        dst.setnchannels(1)
+        dst.setsampwidth(2)
+        dst.setframerate(22050)
+        dst.writeframes(frames)
+    return out.getvalue()
+
+
 def flatten(messages):
     parts = []
     for m in messages:
@@ -90,6 +131,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _bytes(self, body, content_type, code=200):
+        self.send_response(code)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _authed(self):
         if not API_KEY:
             return True
@@ -106,6 +154,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._authed():
             return self._json({"error": "unauthorized"}, 401)
+        if self.path == "/v1/audio/speech":
+            n = int(self.headers.get("Content-Length", 0))
+            try:
+                req = json.loads(self.rfile.read(n))
+                wav = synthesize_speech(req.get("input", ""), req.get("voice"))
+            except Exception as e:
+                return self._json({"error": str(e)}, 500)
+            return self._bytes(wav, "audio/wav")
         if self.path != "/v1/chat/completions":
             return self._json({"error": "not found"}, 404)
         n = int(self.headers.get("Content-Length", 0))
@@ -134,6 +190,10 @@ def main():
     ap.add_argument("--bits", type=int, default=8)
     ap.add_argument("--max-new", type=int, default=300)
     ap.add_argument("--temp", type=float, default=0.7)
+    ap.add_argument("--tts-engine", default="espeak-ng")
+    ap.add_argument("--tts-voice", default="en+f4")
+    ap.add_argument("--tts-speed", type=int, default=160)
+    ap.add_argument("--tts-pitch", type=int, default=70)
     ap.add_argument("--api-key-file", default="~/.neatobmo/coli_api_key")
     ARGS = ap.parse_args()
     path = os.path.expanduser(ARGS.api_key_file)

@@ -85,6 +85,20 @@ class Robot:
             raise ValueError(f"unknown sound")
         self.cmd(f"PlaySound {sound}")
 
+    def play_file(self, wav):
+        """Stream a PCM WAV to firmware patched with ``PlaySound File``.
+
+        The command is deliberately separate from ``play`` so stock sound IDs
+        remain available and callers get a clear transfer error on unpatched
+        firmware instead of silently falling back to another speaker.
+        """
+        wav = bytes(wav)
+        if len(wav) < 44 or wav[:4] != b"RIFF" or wav[8:12] != b"WAVE":
+            raise ValueError("PlaySound File requires a WAV payload")
+        if len(wav) > 512 * 1024:
+            raise ValueError("PlaySound File WAV exceeds the 512 KiB transfer limit")
+        self.t.send_binary("PlaySound File", wav)
+
     # ---- light moods
     def led(self, mode):
         """mode: green|amber|red|green_dim|amber_dim|off|backlight_on|backlight_off"""
