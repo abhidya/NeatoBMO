@@ -92,5 +92,25 @@ class Drawing(unittest.TestCase):
         self.assert_full_span_grammar(r.sent)
 
 
+class FirmwareTableSyncTests(unittest.TestCase):
+    """The firmware's face tables are generated from neatobmo/faces.py —
+    this is the build-time replacement for the old "change faces.py *and*
+    faces.c" prose contract."""
+
+    def test_generated_header_matches_faces_py(self):
+        import importlib.util
+        from pathlib import Path
+        root = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location(
+            "gen_faces_table", root / "tools" / "gen_faces_table.py")
+        gen = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gen)
+        header = root / "esp32-body" / "src" / "faces_table.h"
+        self.assertTrue(header.exists(),
+                        "run tools/gen_faces_table.py to create the header")
+        self.assertEqual(header.read_text(), gen.generate(),
+                         "faces_table.h is stale — run tools/gen_faces_table.py")
+
+
 if __name__ == "__main__":
     unittest.main()

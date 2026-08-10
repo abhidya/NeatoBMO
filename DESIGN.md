@@ -56,6 +56,21 @@ The plan below predates the implementation; these decisions supersede it:
   itself (Adventure Time skin), with a canvas avatar playing the animated
   sprite faces — reply reactions, thinking scans, idle blinks/dozing. The
   projector head (§3) remains future work.
+- **The orchestrator is a thin router over deep modules (2026-08-10
+  architecture pass).** `bmo_web.py` is composition root + HTTP routing
+  only; behaviour lives in `neatobmo/`: `config.Config` (every
+  `NEATOBMO_*` knob), `body.BodyController` (robot handle + lock +
+  never-crash-chat policy), `brain.BrainClient`, `voice.VoiceSynth`
+  (neural→Colibri→espeak ladder), `speech.SpeechService` (speech-job
+  state machine + bank burns), `esp32.Esp32Client` (the four ESP32 HTTP
+  endpoints), and `cues.BurstBudget` (one soundbyte budget for both the
+  streaming and blocking reply paths). The frontend is
+  `static/console.html`. Face tables have a single source of truth in
+  `neatobmo/faces.py`; the firmware's `faces_table.h` is generated from
+  it (`tools/gen_faces_table.py`, sync-tested). Domain vocabulary lives
+  in CONTEXT.md. On the firmware side the Neato transport was extracted
+  into `src/neato_usb.c` (transaction-handle binary streams) with a
+  `src/neato_protocol.c` command vocabulary above it.
 - **On-MCU brain groundwork exists.** `esp32-body/components/coli_mcu/` builds
   into the S3 firmware: USB-MSC model storage, the BMOQ quantized-model
   format, and a streamed Q4 matrix-vector kernel that never assumes a tensor
