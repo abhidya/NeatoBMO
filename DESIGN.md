@@ -4,11 +4,11 @@
 It listens for a wake word, sees through a webcam, talks back, drives around on a Neato XV-12
 base, and thinks with a **local LLM** — everything open source, nothing leaving the LAN.
 
-**Status:** Draft v1 · 2026-08-09 — see §0 for where the build diverged from this plan.
+**Status:** Draft v1 · 2026-08-10 — see §0 for where the build diverged from this plan.
 
 ---
 
-## 0. As built (2026-08-09)
+## 0. As built (2026-08-10)
 
 The plan below predates the implementation; these decisions supersede it:
 
@@ -25,6 +25,25 @@ The plan below predates the implementation; these decisions supersede it:
 - **Native speech is gated.** The `PlaySound File` firmware patch path and the
   sound-flash write gates are tracked in FIRMWARE_SOUND_PATCH.md and
   SOUND_BANK_WRITE_GATES.md — no flash writes until every gate passes.
+- **Tool calling is stage cues, not a schema.** §5's `drive()`/`set_face()`
+  tool-calling plan assumed a model that can emit structured calls; OLMoE
+  can't, so the persona instead acts through inline bracketed cues
+  (`[happy] [wiggle] [sound:videogames]`) that `neatobmo/cues.py` parses
+  best-effort — any bracket style, fuzzy names, emoji fallback. The parser
+  yields cue-free speech for TTS, display text whose face cues become emojis
+  (feeding the existing cascade), and ordered sound/move steps the orchestrator
+  performs on the body. Same validation property as the plan: the LLM never
+  gets raw motor access — cues resolve only to a fixed vocabulary of
+  faces/moves/sounds.
+- **The web console is the face for now.** `bmo_web.py` is styled as BMO
+  itself (Adventure Time skin), with a canvas avatar playing the animated
+  sprite faces — reply reactions, thinking scans, idle blinks/dozing. The
+  projector head (§3) remains future work.
+- **On-MCU brain groundwork exists.** `esp32-body/components/coli_mcu/` builds
+  into the S3 firmware: USB-MSC model storage, the BMOQ quantized-model
+  format, and a streamed Q4 matrix-vector kernel that never assumes a tensor
+  fits in PSRAM. It is a storage/model-format foundation, not an OLMoE
+  runtime — attention, routing, expert scheduling, and KV state are still open.
 
 ---
 

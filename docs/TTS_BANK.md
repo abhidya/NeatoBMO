@@ -4,7 +4,8 @@ Type text → BMO says it. Long text is packed into ≈17 s banks at sentence
 boundaries and burned+spoken chunk by chunk. The speech bank **persists**
 (no restore write per utterance); "Bring back BMO sounds" reinstalls the
 BMO bank on demand. Chat replies speak the same way when the voice selector
-is set to 🤖 robot.
+is set to 🤖 robot — stage cues (`neatobmo/cues.py`) are stripped first, so
+only the cue-free speech text reaches the bank.
 
 > Each chunk is one 770,048-byte flash write. There is no per-utterance
 > confirmation — the gates are internal and automatic (below).

@@ -21,6 +21,16 @@ See [DESIGN.md](DESIGN.md) for the full architecture and milestones.
 - ✅ Web console consolidated into [bmo_web.py](bmo_web.py) (`:8485`): chat with the
   local brain, raw commands, lidar/battery, ESP32 OTA. The ESP32 serves its own
   embedded dashboard + WebSocket bridge ([esp32-body/src/web.c](esp32-body/src/web.c)).
+  The console wears an Adventure Time skin (teal BMO body, pale-green screen,
+  candy cartridge tabs) and the header is a mini BMO screen playing the animated
+  sprite faces live — reacting to replies, thinking, errors, and idling.
+- ✅ **Stage cues** — best-effort "tool calling" for the small OLMoE brain
+  ([neatobmo/cues.py](neatobmo/cues.py)): the persona prompts bracketed cues
+  (`[happy] [wiggle] [sound:videogames]`), a forgiving parser (any bracket
+  style, fuzzy names) splits each reply into cue-free speech for TTS, display
+  text whose face cues become emojis (riding the existing ESP32/USB cascade),
+  and ordered sound/move steps performed on the body. Wired into `/chat` and
+  `/emote`; demo: `tools/cue_demo.py [--live]`; tests: `tests/test_cues.py`.
 - ✅ Emoji faces work over **both** paths: the ESP32's `/emote`
   ([esp32-body/src/faces.c](esp32-body/src/faces.c)) and a 1:1 Python port
   ([neatobmo/emote.py](neatobmo/emote.py)) used automatically over USB when the
@@ -31,6 +41,11 @@ See [DESIGN.md](DESIGN.md) for the full architecture and milestones.
   [FIRMWARE_SOUND_PATCH.md](FIRMWARE_SOUND_PATCH.md); any sound-flash write is
   governed by [SOUND_BANK_WRITE_GATES.md](SOUND_BANK_WRITE_GATES.md) (several
   gates still failing — no writes until they pass).
+- 🚧 On-MCU brain groundwork —
+  [esp32-body/components/coli_mcu/](esp32-body/components/coli_mcu/README.md):
+  USB-MSC storage + the BMOQ quantized-model file format + a streamed Q4
+  matrix-vector kernel, verified building into the ESP32-S3 firmware. A storage
+  and model-format foundation only — **not** an OLMoE runtime yet.
 
 ## Repo layout
 
@@ -38,11 +53,12 @@ See [DESIGN.md](DESIGN.md) for the full architecture and milestones.
 |---|---|
 | `DESIGN.md` | Architecture design doc (body/head/brain split, OSS stack, milestones) + as-built notes |
 | `esp32-body/` | ESP32-S3 firmware (PlatformIO + ESP-IDF): USB CDC-ACM host ↔ Neato, embedded dashboard + WS bridge + `/emote` + `/speak` + OTA (`:80`), WiFi log mirror (`:2323`), raw command bridge (`:3333`), P6 debug-UART bridge (`:3334`) |
-| `bmo_web.py` | The one web console (`:8485`): chat, BMO sound metadata/playback, guarded bank install/restore, console, sensors, emote, OTA proxy |
+| `bmo_web.py` | The one web console (`:8485`, Adventure Time styling + live sprite-face avatar): chat with stage cues, TTS speech, BMO sound metadata/playback, guarded bank install/restore, console, sensors, emote, OTA proxy |
 | `bmo_brain_server.py` | OpenAI-compatible wrapper around Colibri's OLMoE + espeak-ng TTS |
 | `bmo_agent.py` | CLI tool-calling agent (drive/sounds/LED via any OpenAI-compatible LLM) |
-| `neatobmo/` | Robot library: transports, typed commands, sounds, behaviors, emoji faces (`emote.py`) |
-| `tools/` | Probe & archive utilities: `lidar_viewer.py`, `backup_neato.py`, `firmware_probe.py`, `neato_firmware.py`, offline `neato_cfw.py` version patch/verification, `neato_sound_bank.py`, `neato_sound_noburn_matrix.py` |
+| `neatobmo/` | Robot library: transports, typed commands, sounds, behaviors, emoji faces (`emote.py`), stage-cue parsing/performing (`cues.py`), TTS banks (`tts_bank.py`) |
+| `tools/` | Probe & archive utilities: `lidar_viewer.py`, `backup_neato.py`, `firmware_probe.py`, `neato_firmware.py`, offline `neato_cfw.py` version patch/verification, `neato_sound_bank.py`, `neato_sound_noburn_matrix.py`, stage-cue demo `cue_demo.py` |
+| `esp32-body/components/coli_mcu/` | On-MCU brain foundation: USB-MSC storage, BMOQ model format, streamed Q4 matvec kernel (host checks in `esp32-body/tools/`) — not an OLMoE runtime yet |
 | `tests/` | Unit tests (`PYTHONPATH=".:tools" python3 -m unittest discover -s tests` from the repo root) |
 | `assets/` | Captured sound-bank evidence, validated BMO bank/previews, and original recovery image |
 | `docs/SOUND_BANK_UPDATE.md` | Exact hashes and guarded web/CLI procedures for installing BMO sounds or restoring the original bank |
