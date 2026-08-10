@@ -28,7 +28,9 @@ repacker, plaintext application, or restorable full-flash backup.
 Known state:
 
 - Live robot: XV-12, P hardware family, mainboard `7.1`, firmware
-  `2.4.15667`.
+  `2.4.15667`. **Oldest Rev113 Cruz sub-variant: side charging jack present
+  (confirmed 2026-08-10) — hard-capped at firmware v3.1; v3.2+ uses a
+  different CPU and bricks this board.**
 - Public compatible P-family application images start at `2.5.15893`; none is
   known to match the installed `2.4.15667` bytes.
 - Public application updates are opaque `.enc` files with a 512-byte `neato`
