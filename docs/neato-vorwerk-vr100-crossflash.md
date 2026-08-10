@@ -4,11 +4,11 @@
 attempted on our robot. This documents a flashing path we had overlooked;
 read the **Why we missed it** and **Project risk** sections before acting.
 
-Source: myneatoxv.com, "The Forbidden Upgrade: Neato Firmware Update to
-Vorwerk VR100 (Offline Guide)" (simon, 2026-01-11). The site is an
-affiliate/SEO blog — treat capability claims skeptically and verify every
-download independently before use. Marketing claims ("increased suction —
-rumored") are omitted here as unverified.
+Source of the write-up: myneatoxv.com, "The Forbidden Upgrade" (simon,
+2026-01-11) — an affiliate/SEO blog; capability claims ("increased suction
+— rumored") omitted as unverified. Source of the actual files: the
+NoahJaehnert Cruz Rev113 GitHub repo we already archive locally (the blog
+just repackages these). We use the GitHub copy, not the blog's downloads.
 
 ## The path in one sentence
 
@@ -49,41 +49,71 @@ On the robot LCD: **Menu → Support → Show Revision**, read **Board Rev**.
 - **64 = Binky board** (newer XV-21 / XV Signature, ships Neato 3.4). Do
   NOT downgrade to Vorwerk 3.2 — reported to cause errors.
 
-## Tools / resources to archive
+## Tools / resources — already archived locally
 
-From myneatoxv.com "The Vault: Neato XV & Vorwerk VR100 Software
-Repository". **Not downloaded or hash-verified yet** — archive the pointers,
-verify before trusting.
+We do **not** need to download anything from the SEO blog. Everything it
+resells comes from the legitimate upstream we already cite,
+[NoahJaehnert/Neato-XV-Series-Cruz-Rev-113-Update](https://github.com/NoahJaehnert/Neato-XV-Series-Cruz-Rev-113-Update),
+and it is already cloned at
+`/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/`.
+The self-contained VR100 3.2 flasher lives in `XV-21_rev113_UpdateOfflineto32/`:
 
-- **Mini-USB cable** (the thick PS3-controller type, NOT micro-USB). The
-  port is under a rubber flap near the dust bin.
-- **Neato USB driver (x64)** — legacy Windows driver. Win10/11 may require
-  "Disable Driver Signature Enforcement" to install.
-- **NeatoControl** (classic) — the console tool that sends `SetConfig`.
-- **Neato/Vorwerk Offline Updater Tool v1.2.0** — the Rev113 flasher (the
-  original phone-home Neato Updater no longer works; servers down since
-  2019).
-- **Vorwerk VR100 v3.2 application image** — this is build 18755 in our
-  `FIRMWARE_ARCHIVE.md` P-image catalog (852,992 enc / 851,984 plaintext),
-  so we may already hold the payload the updater ships.
+- `NeatoUpgrader.exe` (231 KB) — the offline updater (the blog's "v1.2.0"
+  tool; runs a script, no phone-home).
+- `XV11App.18755.P.bin.enc` (833 KB) — **the VR100 3.2 P image**, encrypted;
+  the MCU decrypts it at flash time.
+- `neatousb.inf` + `neatousb.cat` — the legacy Windows USB driver.
+- `up.txt` — the flash script; `run.bat` = `NeatoUpgrader.exe /NoServer up.txt`.
+- `DfltSoundLib.Rev1.0.bin` (under `OriginalVorwerkFirmwareFiles/Firmware_3.2/`)
+  — the matching sound library.
 
-## Procedure (as published — clear steps, brick risk is real)
+Sibling dirs hold the 2.7 (16621) and 3.1 (17844) images the same way.
 
-1. **Driver:** install the legacy Neato USB driver; confirm a COM port
-   appears in Device Manager.
-2. **Prepare robot:** off the dock, battery ≥50%, connect Mini-USB. LCD
-   shows "firmware update mode" or blanks.
-3. **Mask as VR100:** in NeatoControl, Connect → Commands tab →
-   `SetConfig ModelID VR100`. Disconnect, reconnect — it should now
-   enumerate as a VR100. Disconnect, exit NeatoControl.
-4. **Flash:** run the Offline Updater Tool v1.2.0 **as Administrator**,
-   select the COM port, click Update. **Do not touch anything** — the bar
-   crawls, the robot may beep/twitch. Wait for "Update Complete", then
-   disconnect USB.
-5. **Restore model name:** run NeatoControl again →
-   `SetConfig ModelID XV12` (our model; the guide's generic form is
-   `XVXX` for 11/14/15/21).
-6. **Reboot:** the robot restarts on the new firmware.
+Still needed only if you use the masking variant below:
+
+- **NeatoControl** (heXor's classic console tool, GitHub) — not in this
+  archive; only required to send `SetConfig ModelID`.
+- A **Mini-USB cable** (thick PS3-controller type, NOT micro-USB); the port
+  is under a rubber flap near the dust bin.
+
+I did not download or run any of this — the archive already has it, and the
+`.exe`/driver are Windows-only (this is a Mac). Flash from a Windows box.
+
+## The actual flash script (upstream, no masking needed)
+
+The NoahJaehnert updater flashes the image directly — it does **not** need
+the blog's `SetConfig ModelID` masking. `up.txt` for VR100 3.2 is:
+
+```
+send SetLanguage None
+getlocal XV11App.18755.P.bin.enc
+wait 5000
+send testmode on
+send-nowait setsystemmode PowerCycleCDC
+wait 22000
+upload code reboot
+wait 22000
+send getversion
+send SetLanguage None
+```
+
+Run on Windows with the driver installed: `NeatoUpgrader.exe /NoServer up.txt`
+(from the `...UpdateOfflineto32` dir). `upload code reboot` is the flash
+primitive; the 22 s waits cover the power-cycle and the write.
+
+## Blog variant (NeatoControl masking) — alternative, not required
+
+The myneatoxv.com guide uses a different updater and masks the model first.
+Recorded for completeness; the scripted `NeatoUpgrader` above is simpler.
+
+1. Install the legacy Neato USB driver; confirm a COM port appears.
+2. Robot off the dock, battery ≥50%, Mini-USB connected.
+3. NeatoControl → Connect → `SetConfig ModelID VR100`; reconnect (now a
+   VR100); exit.
+4. Run the offline updater as Administrator, pick the COM port, Update.
+   **Do not touch anything.** Wait for "Update Complete", disconnect.
+5. NeatoControl → `SetConfig ModelID XV12` to restore the model name.
+6. Reboot.
 
 ### Recovery if it fails to boot
 
@@ -116,8 +146,10 @@ upside is low and the blast radius is the entire speech system.
 
 ## Follow-ups if we act
 
-- Download the four resources, record sizes + SHA-256, add to
-  `FIRMWARE_ARCHIVE.md` alongside the P-image catalog.
-- Confirm whether the updater's VR100 3.2 payload == our archived build
-  18755 image (compare hashes).
-- Add `SetConfig ModelID` to the NeatoControl/command reference.
+- The payload question is settled: the updater ships
+  `XV11App.18755.P.bin.enc`, which **is** our archived build-18755 P image
+  (same file, same repo). No separate download needed.
+- Only NeatoControl (heXor, GitHub) is not yet archived, and only the
+  masking variant needs it.
+- Before flashing anything: re-derive the sound-bank identity gates and
+  slot map against VR100 3.2, on a second robot (see Project risk).
