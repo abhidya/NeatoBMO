@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -108,6 +109,13 @@ typedef struct {
     size_t peak_workspace_bytes;
 } coli_olmoe_decode_stats_t;
 
+typedef struct {
+    coli_olmoe_decode_stats_t last_decode;
+    size_t prompt_tokens_consumed;
+    size_t generated_tokens;
+    bool stopped_on_eos;
+} coli_olmoe_generate_stats_t;
+
 size_t coli_olmoe_layer_required_workspace(size_t hidden_count,
                                            size_t intermediate_count,
                                            size_t expert_count,
@@ -140,6 +148,21 @@ coli_status_t coli_olmoe_decode_next_token(
     size_t workspace_bytes,
     uint32_t *out_token_id,
     coli_olmoe_decode_stats_t *stats);
+
+coli_status_t coli_olmoe_generate_greedy(
+    const coli_model_t *model,
+    const uint32_t *prompt_token_ids,
+    size_t prompt_token_count,
+    uint32_t *output_token_ids,
+    size_t output_token_capacity,
+    size_t max_new_tokens,
+    size_t *out_output_token_count,
+    uint8_t *kv_cache,
+    size_t kv_cache_bytes,
+    const coli_kv_cache_layout_t *kv_layout,
+    void *workspace,
+    size_t workspace_bytes,
+    coli_olmoe_generate_stats_t *stats);
 
 #ifdef __cplusplus
 }

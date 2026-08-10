@@ -276,6 +276,24 @@ int main(void)
     assert(decode_stats.embedding_q4.storage_reads > 0);
     assert(decode_stats.lm_head_q4.storage_reads > 0);
 
+    memset(kv_cache, 0, sizeof(kv_cache));
+    const uint32_t prompt_ids[] = {0};
+    uint32_t generated_ids[3] = {UINT32_MAX, UINT32_MAX, UINT32_MAX};
+    size_t generated_count = 0;
+    coli_olmoe_generate_stats_t generate_stats;
+    assert(coli_olmoe_generate_greedy(&model, prompt_ids, 1, generated_ids,
+                                      3, 2, &generated_count, kv_cache,
+                                      sizeof(kv_cache), &kv_layout, workspace,
+                                      sizeof(workspace),
+                                      &generate_stats) == COLI_OK);
+    assert(generated_count == 3);
+    assert(generated_ids[0] == 0);
+    assert(generated_ids[1] == 0);
+    assert(generated_ids[2] == 0);
+    assert(generate_stats.prompt_tokens_consumed == 1);
+    assert(generate_stats.generated_tokens == 2);
+    assert(!generate_stats.stopped_on_eos);
+
     coli_model_close(&model);
     coli_store_close(store);
     unlink(path);

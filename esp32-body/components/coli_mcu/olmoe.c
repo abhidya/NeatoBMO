@@ -337,3 +337,59 @@ coli_status_t coli_olmoe_decode_next_token(
         stats->peak_workspace_bytes = stats->last_layer.peak_workspace_bytes;
     return COLI_OK;
 }
+
+coli_status_t coli_olmoe_generate_greedy(
+    const coli_model_t *model,
+    const uint32_t *prompt_token_ids,
+    size_t prompt_token_count,
+    uint32_t *output_token_ids,
+    size_t output_token_capacity,
+    size_t max_new_tokens,
+    size_t *out_output_token_count,
+    uint8_t *kv_cache,
+    size_t kv_cache_bytes,
+    const coli_kv_cache_layout_t *kv_layout,
+    void *workspace,
+    size_t workspace_bytes,
+    coli_olmoe_generate_stats_t *stats)
+{
+    if (!model || !prompt_token_ids || prompt_token_count == 0 ||
+        !output_token_ids || !out_output_token_count || !kv_cache ||
+        !kv_layout || !workspace || !stats ||
+        output_token_capacity < prompt_token_count ||
+        max_new_tokens > output_token_capacity - prompt_token_count ||
+        prompt_token_count + max_new_tokens > kv_layout->max_tokens)
+        return COLI_ERR_ARGUMENT;
+
+    memset(stats, 0, sizeof(*stats));
+    for (size_t i = 0; i < prompt_token_count; ++i)
+        output_token_ids[i] = prompt_token_ids[i];
+    *out_output_token_count = prompt_token_count;
+
+    uint32_t next_token = prompt_token_ids[0];
+    for (size_t i = 0; i < prompt_token_count; ++i) {
+        coli_status_t status = coli_olmoe_decode_next_token(
+            model, prompt_token_ids[i], (uint32_t)i, kv_cache, kv_cache_bytes,
+            kv_layout, workspace, workspace_bytes, &next_token,
+            &stats->last_decode);
+        if (status != COLI_OK) return status;
+        ++stats->prompt_tokens_consumed;
+    }
+
+    for (size_t generated = 0; generated < max_new_tokens; ++generated) {
+        if (next_token == model->config.eos_token_id) {
+            stats->stopped_on_eos = true;
+            return COLI_OK;
+        }
+        output_token_ids[*out_output_token_count] = next_token;
+        ++*out_output_token_count;
+        ++stats->generated_tokens;
+
+        coli_status_t status = coli_olmoe_decode_next_token(
+            model, next_token, (uint32_t)(prompt_token_count + generated),
+            kv_cache, kv_cache_bytes, kv_layout, workspace, workspace_bytes,
+            &next_token, &stats->last_decode);
+        if (status != COLI_OK) return status;
+    }
+    return COLI_OK;
+}
