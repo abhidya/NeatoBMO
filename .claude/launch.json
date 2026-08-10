@@ -2,9 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "bmo-web",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["bmo_web.py"],
+      "port": 8485
+    },
+    {
       "name": "lidar-viewer",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["lidar_viewer.py"],
+      "runtimeArgs": ["tools/lidar_viewer.py"],
       "port": 8484
     }
   ]
