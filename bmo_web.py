@@ -200,6 +200,11 @@ def tts_start_speak(text, voice):
         return None, "body not attached"
     if tts_active():
         return None, "already speaking; stop first or wait"
+    # Emojis drive the LCD face, not the speaker: espeak reads them out as
+    # long Unicode names and wrecks the speech, so strip them here.
+    text = tts_bank.sanitize_speech_text(text)
+    if not text:
+        return None, "nothing speakable after removing emoji/symbols"
     job = {
         "id": f"tts-{int(time.time())}",
         "state": "synthesizing",
@@ -389,98 +394,145 @@ PAGE = """<!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BMO</title>
 <style>
- :root{--bg:#0e3b35;--panel:#0a2a26;--panel2:#175a50;--line:#2c6b5f;--accent:#2fbf9b;
-       --accent-soft:#7ce0c5;--ink:#e8f6ef;--ink-dim:#9fc4b8;--danger:#e06c75}
+ @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=VT323&display=swap');
+ /* BMO body palette: teal shell, dark-teal bezels, pale-green screen,
+    candy buttons (yellow / red / blue / green) like BMO's front panel. */
+ :root{--bmo:#5fc4b2;--bmo-deep:#48a996;--bezel:#1f5d51;--ink:#0c3b31;
+   --screen:#d8f3cd;--screen-ink:#1a4a35;--crt:#0d2b22;--phos:#9df5b8;
+   --cream:#fdf8e7;--yellow:#ffd23e;--red:#f2635a;--blue:#4d96ff;--green:#79c74f;
+   --shadow:rgba(12,59,49,.35)}
  *{box-sizing:border-box}
- body{margin:0;background:var(--bg);color:var(--ink);font:16px -apple-system,sans-serif;
+ body{margin:0;color:var(--ink);
+      font:16px/1.4 Fredoka,ui-rounded,'Trebuchet MS',-apple-system,sans-serif;
+      background:linear-gradient(180deg,#6dcfbc,#57bda9 55%,#4bb09c);
       display:flex;flex-direction:column;height:100vh;height:100dvh;align-items:center}
  ::-webkit-scrollbar{width:8px;height:8px}
- ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+ ::-webkit-scrollbar-thumb{background:var(--bezel);border-radius:4px}
  ::-webkit-scrollbar-track{background:transparent}
- #tabs{display:flex;gap:4px;width:min(680px,94vw);padding:10px 0 0;overflow-x:auto;
+ #tabs{display:flex;gap:6px;width:min(680px,94vw);padding:12px 2px 0;overflow-x:auto;
        scrollbar-width:none;flex:none}
  #tabs::-webkit-scrollbar{display:none}
- .tab{flex:1 0 auto;text-align:center;padding:9px 13px;border-radius:10px 10px 0 0;cursor:pointer;
-      background:var(--panel);border:1px solid var(--line);border-bottom:0;opacity:.6;font-weight:700;
-      font-size:14px;white-space:nowrap;user-select:none;transition:opacity .15s,background .15s;
-      box-shadow:inset 0 -2px 0 transparent}
- .tab:hover{opacity:.85}
- .tab.on{background:var(--panel2);opacity:1;box-shadow:inset 0 3px 0 var(--accent)}
+ .tab{flex:1 0 auto;text-align:center;padding:8px 14px;border-radius:14px 14px 0 0;cursor:pointer;
+      background:var(--bmo-deep);border:3px solid var(--bezel);border-bottom:0;color:#eafff7;
+      font-weight:600;font-size:14px;white-space:nowrap;user-select:none;
+      transition:filter .15s,background .15s;box-shadow:inset 0 3px 0 rgba(255,255,255,.14)}
+ .tab:hover{filter:brightness(1.08)}
+ .tab.on{background:var(--cream);color:var(--ink);box-shadow:inset 0 4px 0 var(--tabc,var(--yellow))}
+ #tabs .tab:nth-child(1){--tabc:var(--yellow)}
+ #tabs .tab:nth-child(2){--tabc:var(--red)}
+ #tabs .tab:nth-child(3){--tabc:var(--blue)}
+ #tabs .tab:nth-child(4){--tabc:var(--green)}
+ #tabs .tab:nth-child(5){--tabc:#c792ea}
+ #tabs .tab:nth-child(6){--tabc:#ff9f43}
  .pane{display:none;flex:1;flex-direction:column;align-items:center;width:100%;min-height:0}
  .pane.on{display:flex}
- #face{font-size:64px;margin:14px 0 2px;transition:transform .2s}
- #conn{font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);
-       background:var(--panel);color:var(--ink-dim);margin:4px 0}
- #conn::before{content:'●';margin-right:6px;color:var(--danger)}
- #conn.ok::before{color:var(--accent)}
- #status{opacity:.7;font-size:13px;margin:4px 0 8px;min-height:1.2em}
- #log{flex:1;overflow-y:auto;width:min(680px,94vw);padding:8px;scroll-behavior:smooth}
- #log:empty::before{content:'Say hi — BMO is listening 🎮';display:block;text-align:center;
-       opacity:.45;padding:36px 0;font-size:15px}
- .msg{margin:6px 0;padding:10px 14px;border-radius:14px;max-width:80%;line-height:1.35;
-      width:fit-content;animation:pop .18s ease-out}
+ #face{font-size:60px;margin:12px 0 2px;transition:transform .2s;
+       filter:drop-shadow(0 3px 0 var(--shadow))}
+ #conn{font-size:12px;padding:3px 12px;border-radius:99px;border:2px solid var(--bezel);
+       background:var(--cream);color:var(--ink);margin:4px 0;font-weight:600}
+ #conn::before{content:'●';margin-right:6px;color:var(--red)}
+ #conn.ok::before{color:#2f9e44}
+ #status{opacity:.85;font-size:13px;margin:4px 0 8px;min-height:1.2em;font-weight:500}
+ /* the chat log is BMO's pale-green screen */
+ #log{flex:1;overflow-y:auto;width:min(680px,94vw);padding:12px;scroll-behavior:smooth;
+      background:var(--screen);border:6px solid var(--bezel);border-radius:18px;
+      color:var(--screen-ink);
+      box-shadow:inset 0 4px 14px rgba(12,59,49,.28),0 4px 0 var(--shadow);
+      background-image:repeating-linear-gradient(0deg,rgba(26,74,53,.05) 0 1px,transparent 1px 3px)}
+ #log:empty::before{content:'Say hi — BMO wants to play! 🎮';display:block;text-align:center;
+       opacity:.55;padding:36px 0;font-size:15px;font-weight:500}
+ .msg{margin:7px 0;padding:9px 14px;border-radius:16px;max-width:80%;line-height:1.35;
+      width:fit-content;animation:pop .18s ease-out;border:2px solid var(--bezel)}
  @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
- .you{background:var(--panel2);margin-left:auto;border-bottom-right-radius:4px}
- .bmo{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:4px}
+ .you{background:var(--bezel);color:#eafff7;margin-left:auto;border-bottom-right-radius:5px}
+ .bmo{background:#fff;border-bottom-left-radius:5px;box-shadow:0 2px 0 rgba(12,59,49,.15)}
  .think span{display:inline-block;width:7px;height:7px;margin:0 2px;border-radius:50%;
-      background:var(--accent-soft);animation:blip 1s infinite}
+      background:var(--bmo-deep);animation:blip 1s infinite}
  .think span:nth-child(2){animation-delay:.15s}.think span:nth-child(3){animation-delay:.3s}
  @keyframes blip{0%,60%,100%{opacity:.25;transform:none}30%{opacity:1;transform:translateY(-3px)}}
- #bar{display:flex;gap:8px;width:min(680px,94vw);padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
- #txt{flex:1;min-width:0;padding:12px;border-radius:10px;border:1px solid var(--line);
-      background:var(--panel);color:var(--ink);font-size:16px}
- input,textarea,select{transition:border-color .15s,box-shadow .15s}
- input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);
-      box-shadow:0 0 0 2px rgba(47,191,155,.25)}
- button{border:0;border-radius:10px;padding:12px 16px;font-size:16px;cursor:pointer;
-      background:var(--accent);color:#04211c;font-weight:700;
-      transition:filter .15s,transform .06s,opacity .15s}
- button:hover{filter:brightness(1.1)}
- button:active{transform:scale(.96)}
- button:disabled{opacity:.5;cursor:default;transform:none;filter:none}
- button:focus-visible{outline:2px solid var(--accent-soft);outline-offset:2px}
- #mic.listening{background:var(--danger);color:#fff;animation:pulse 1.2s infinite}
- @keyframes pulse{50%{box-shadow:0 0 0 8px rgba(224,108,117,.18)}}
- .mini{padding:6px 10px;font-size:13px;background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
- .mini.playing{background:var(--accent);color:#04211c}
- #quick,#drive{width:min(680px,94vw);padding:6px 0}
- #drive{text-align:center}
- #clog{flex:1;overflow-y:auto;width:min(680px,94vw);padding:8px;font:12px ui-monospace,monospace;
-       white-space:pre-wrap;word-break:break-all;background:#0a2a26;border:1px solid #2c6b5f;border-radius:10px}
+ /* cartridge slot under the screen, like BMO's game slot */
+ .slot{width:150px;height:10px;border-radius:6px;background:var(--bezel);margin:10px 0 0;flex:none;
+       box-shadow:inset 0 2px 4px rgba(0,0,0,.45)}
+ #bar{display:flex;gap:10px;width:min(680px,94vw);align-items:center;
+      padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
+ #txt{flex:1;min-width:0;padding:11px 14px;border-radius:16px;border:3px solid var(--bezel);
+      background:#fff;color:var(--ink);font-size:16px}
+ input,textarea,select{font:inherit;transition:border-color .15s,box-shadow .15s}
+ input:focus,textarea:focus,select:focus{outline:none;border-color:#0f8a72;
+      box-shadow:0 0 0 3px rgba(255,210,62,.55)}
+ /* chunky pressable buttons, BMO front-panel style */
+ button{border:3px solid var(--bezel);border-radius:14px;padding:10px 16px;font:inherit;
+      font-weight:600;font-size:16px;cursor:pointer;background:var(--yellow);color:#4a3600;
+      box-shadow:0 4px 0 var(--bezel);
+      transition:filter .15s,transform .06s,box-shadow .06s,opacity .15s}
+ button:hover{filter:brightness(1.07)}
+ button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--bezel)}
+ button:disabled{opacity:.55;cursor:default;transform:none;filter:none}
+ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+ #mic{background:var(--red);color:#fff;border-radius:50%;width:50px;height:50px;padding:0;flex:none}
+ #sendbtn{border-radius:50%;width:50px;height:50px;padding:0;flex:none}
+ #voice{background:var(--blue);color:#fff;border:3px solid var(--bezel);border-radius:12px;
+        box-shadow:0 3px 0 var(--bezel);font-weight:600}
+ #mic.listening{animation:pulse 1.2s infinite}
+ @keyframes pulse{50%{box-shadow:0 4px 0 var(--bezel),0 0 0 9px rgba(242,99,90,.28)}}
+ .mini{padding:6px 12px;font-size:13px;background:var(--cream);color:var(--ink);
+       border-radius:12px;box-shadow:0 3px 0 var(--bezel)}
+ .mini.playing{background:var(--green);color:#12400a}
+ #quick{width:min(680px,94vw);padding:8px 0;display:flex;flex-wrap:wrap;gap:6px}
+ #drive{width:min(680px,94vw);padding:8px 0;text-align:center}
+ #drive .mini{width:48px;height:42px;padding:0;background:var(--green);color:#12400a;
+       font-size:15px;margin:2px}
+ #drive>button:nth-of-type(2){background:var(--red);color:#fff}
+ /* console: BMO's little CRT */
+ #clog{flex:1;overflow-y:auto;width:min(680px,94vw);padding:10px 12px;
+       font:17px/1.25 VT323,ui-monospace,monospace;letter-spacing:.3px;
+       white-space:pre-wrap;word-break:break-all;background:var(--crt);color:var(--phos);
+       border:6px solid var(--bezel);border-radius:16px;text-shadow:0 0 5px rgba(157,245,184,.35);
+       box-shadow:inset 0 4px 14px rgba(0,0,0,.5),0 4px 0 var(--shadow);
+       background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px)}
  #crow{display:flex;gap:8px;width:min(680px,94vw);padding:12px}
- #cmd{flex:1;padding:12px;border-radius:10px;border:1px solid #2c6b5f;background:#0a2a26;color:#e8f6ef;
-      font:14px ui-monospace,monospace}
- #hud{padding:8px;font-size:13px}
- .val{color:#2fbf9b;font-weight:700}
+ #cmd{flex:1;min-width:0;padding:10px 14px;border-radius:14px;border:3px solid var(--bezel);
+      background:var(--crt);color:var(--phos);font:17px VT323,ui-monospace,monospace}
+ #hud{padding:8px;font-size:14px;font-weight:500}
+ .val{color:#083f33;font-weight:700}
  canvas{flex:1;max-width:min(680px,94vw);min-height:0}
- #batt{width:min(680px,94vw);padding:8px;font-size:14px;line-height:1.6}
- .card{width:min(680px,94vw);margin:12px 0;padding:14px;background:#0a2a26;border:1px solid #2c6b5f;
-       border-radius:14px;line-height:1.6;overflow-wrap:anywhere}
+ #c{border:6px solid var(--bezel);border-radius:16px;background:#0e3b35;
+    box-shadow:0 4px 0 var(--shadow)}
+ #batt{width:min(680px,94vw);padding:8px;font-size:14px;line-height:1.6;font-weight:500}
+ .card{width:min(680px,94vw);margin:12px 0;padding:16px;background:var(--cream);
+       border:4px solid var(--bezel);border-radius:18px;line-height:1.6;
+       overflow-wrap:anywhere;box-shadow:0 4px 0 var(--shadow)}
+ .card b{color:#0b6e5d}
  #p-sounds{overflow-y:auto}
  #soundgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;
             width:min(680px,94vw);padding:0 0 16px}
- .soundcard{padding:12px;background:#0a2a26;border:1px solid #2c6b5f;border-radius:12px;
-            transition:border-color .15s}
- .soundcard:hover{border-color:var(--accent)}
- #ttsbar{height:6px;border-radius:3px;background:var(--panel2);margin:8px 0 2px;overflow:hidden;display:none}
+ .soundcard{padding:12px;background:var(--cream);border:3px solid var(--bezel);border-radius:16px;
+            transition:transform .12s,box-shadow .12s;box-shadow:0 3px 0 var(--shadow)}
+ .soundcard:hover{transform:translateY(-2px);box-shadow:0 5px 0 var(--shadow)}
+ .soundcard h3{margin:0 0 4px;color:#0b6e5d;font-size:16px}
+ #ttsbar{height:10px;border-radius:6px;background:#e7dfc2;margin:8px 0 2px;overflow:hidden;
+         display:none;border:2px solid var(--bezel)}
  #ttsbar.on{display:block}
- #ttsbar i{display:block;height:100%;width:0;background:var(--accent);border-radius:3px;
-           transition:width .4s ease}
- .soundcard h3{margin:0 0 4px;color:#7ce0c5;font-size:16px}
- .soundmeta{opacity:.75;font-size:12px;line-height:1.45;margin:5px 0 9px}
+ #ttsbar i{display:block;height:100%;width:0;background:var(--green);transition:width .4s ease}
+ .soundmeta{opacity:.8;font-size:12px;line-height:1.45;margin:5px 0 9px}
  #soundseq{display:flex;flex-wrap:wrap;gap:6px;width:min(680px,94vw);padding:0 0 10px}
- a{color:#2fbf9b}
- input[type=file]{color:#e8f6ef}
+ a{color:#0b6e5d;font-weight:600}
+ input[type=file]{color:var(--ink)}
  #facepanel{display:none;position:fixed;top:12px;right:12px;z-index:50;width:min(320px,90vw);
-       padding:14px;background:#0a2a26;border:1px solid #2c6b5f;border-radius:14px}
+       padding:14px;background:var(--cream);border:4px solid var(--bezel);border-radius:18px;
+       box-shadow:0 5px 0 var(--shadow)}
  #facepanel.on{display:block}
  #fphead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
  #lcd{display:block;width:100%;max-width:none;flex:none;image-rendering:pixelated;
-      background:#cdd5c0;border-radius:6px}
+      background:#cdd5c0;border:3px solid var(--bezel);border-radius:8px}
  #egrid{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0}
  #erow{display:flex;gap:6px}
- #etxt{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid #2c6b5f;
-       background:#0a2a26;color:#e8f6ef;font-size:16px}
+ #etxt{flex:1;min-width:0;padding:8px 10px;border-radius:12px;border:3px solid var(--bezel);
+       background:#fff;color:var(--ink);font-size:16px}
+ #ttsoplog{max-height:160px;overflow-y:auto;font:15px/1.25 VT323,ui-monospace,monospace;
+       white-space:pre-wrap;word-break:break-all;background:var(--crt);color:var(--phos);
+       border:3px solid var(--bezel);border-radius:12px;padding:8px 10px}
+ #ttsoplog:empty{display:none}
 </style>
 <div id="tabs">
  <div class="tab on" data-p="chat" onclick="show('chat')">💬 Chat</div>
@@ -495,6 +547,7 @@ PAGE = """<!doctype html>
 <div id="conn">checking body…</div>
 <div id="status">BMO · voice: espeak-ng → sound-bank speech</div>
 <div id="log"></div>
+<div class="slot" title="insert game cartridge"></div>
 <div id="bar">
   <button id="mic" title="hold to talk">🎤</button>
   <select id="voice" class="mini" title="where BMO's voice plays">
@@ -512,7 +565,7 @@ PAGE = """<!doctype html>
   <b>Sound-bank installation</b><br>
   <span class="soundmeta">Flash only the two locally validated exact images. Keep the robot powered and connected.</span><br>
   <select id="bankprofile" class="mini"><option value="bmo">BMO bank</option><option value="original">Original Neato bank</option></select>
-  <input id="bankconfirm" placeholder="type INSTALL BMO" style="margin:6px;padding:7px;border-radius:8px;border:1px solid #2c6b5f;background:#0e3b35;color:#e8f6ef">
+  <input id="bankconfirm" placeholder="type INSTALL BMO" style="margin:6px;padding:7px 10px;border-radius:10px;border:3px solid #1f5d51;background:#fff;color:#0c3b31">
   <button class="mini" onclick="installBank()">Write bank</button>
   <div id="bankmsg" class="soundmeta"></div>
   <a href="/sound-bank-file?profile=bmo">download BMO</a> ·
@@ -527,7 +580,7 @@ PAGE = """<!doctype html>
   sentence boundaries into ≈17 s chunks and spoken back to back — each chunk is one
   sound-flash write, and the speech stays installed until you bring the BMO sounds back.</span>
   <textarea id="ttstext" rows="3" placeholder="what should BMO say?"
-   style="width:100%;box-sizing:border-box;margin:8px 0;padding:10px;border-radius:10px;border:1px solid #2c6b5f;background:#0e3b35;color:#e8f6ef;font-size:16px"></textarea>
+   style="width:100%;box-sizing:border-box;margin:8px 0;padding:10px;border-radius:12px;border:3px solid #1f5d51;background:#fff;color:#0c3b31;font-size:16px"></textarea>
   <div style="display:flex;gap:8px;align-items:center">
    <select id="ttsvoice" class="mini"></select>
    <button onclick="ttsSpeak()" style="flex:1">🗣 Speak</button>
@@ -543,7 +596,7 @@ PAGE = """<!doctype html>
    <button class="mini" onclick="ttsRestore()">🎵 Bring back BMO sounds</button>
    <span class="soundmeta" id="ttsbank"></span>
   </div>
-  <pre id="ttsoplog" style="max-height:160px;overflow-y:auto;font:11px ui-monospace,monospace;white-space:pre-wrap;word-break:break-all"></pre>
+  <pre id="ttsoplog"></pre>
  </div>
 </div>
 <div class="pane" id="p-console">

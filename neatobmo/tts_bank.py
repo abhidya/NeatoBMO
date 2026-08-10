@@ -470,6 +470,18 @@ def required_confirmation(bank_sha256: str) -> str:
 # ---------------------------------------------------------------------------
 
 _SENTENCE_END = re.compile(r"(?<=[.!?;:])\s+")
+# Characters worth pronouncing: letters/digits/punctuation up to Latin-1.
+# Everything else (emoji, symbols, dingbats) drives the LCD face, not the
+# speaker — espeak reads emoji as long Unicode names and ruins the speech.
+_UNSPEAKABLE = re.compile("[^\\x20-\\x7e\\u00c0-\\u024f]+")
+
+
+def sanitize_speech_text(text: str) -> str:
+    """Drop emoji/symbols and collapse the whitespace they leave behind."""
+    cleaned = _UNSPEAKABLE.sub(" ", text)
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(r"\s+([.,!?;:])", r"\1", cleaned)
+    return cleaned.strip()
 
 
 def split_text_units(text: str) -> list[str]:

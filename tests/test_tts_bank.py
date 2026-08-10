@@ -332,6 +332,22 @@ class TextChunkingTests(unittest.TestCase):
                 text, self.synth_by_words(1.5), self.capacities, max_chunks=3)
 
 
+class SanitizeSpeechTextTests(unittest.TestCase):
+    def test_emoji_and_symbols_are_stripped(self):
+        self.assertEqual(
+            tts_bank.sanitize_speech_text(
+                "Hey there! \U0001F601 Super clean and fun! \U0001F6E0️ "
+                "Zoom next! \U0001F916\U0001F4A5"),
+            "Hey there! Super clean and fun! Zoom next!")
+
+    def test_plain_and_accented_text_is_untouched(self):
+        self.assertEqual(tts_bank.sanitize_speech_text("café naïve, ok?"),
+                         "café naïve, ok?")
+
+    def test_emoji_only_text_becomes_empty(self):
+        self.assertEqual(tts_bank.sanitize_speech_text("\U0001F916\U0001F4A5"), "")
+
+
 class WebGuardWiringTests(unittest.TestCase):
     """The web layer keeps the internal gates while staying automatic."""
 
