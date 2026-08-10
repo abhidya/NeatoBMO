@@ -12,6 +12,9 @@ Current evidence for understanding the XV-12 without further flash writes:
   SAM-BA, and JTAG options with non-erasing boundaries.
 - [CFW session handoff 2026-08-10](NEATO_CFW_SESSION_HANDOFF_2026-08-10.md):
   the latest readback/custom-firmware session record.
+- [Hardware access](neato-hardware-access.md): opening the case and reaching
+  the mainboard / AT91SAM9XE (U29); P6 serial + P10 JTAG pinouts, the J3
+  ERASE brick warning, and which header serves which attack.
 - [Envelope crypto analysis](neato-envelope-crypto.md): the `.enc` format is
   AES-CBC with a fixed key+IV starting at off 512; brute force and every
   weak-setup shortcut ruled out; CPU = Atmel AT91SAM9XE128; no public break;
