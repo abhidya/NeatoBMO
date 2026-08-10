@@ -99,6 +99,15 @@ typedef struct {
     size_t peak_workspace_bytes;
 } coli_olmoe_layer_stats_t;
 
+typedef struct {
+    coli_q4_stats_t embedding_q4;
+    coli_q4_stats_t lm_head_q4;
+    coli_olmoe_layer_stats_t last_layer;
+    uint32_t layers_executed;
+    float selected_logit;
+    size_t peak_workspace_bytes;
+} coli_olmoe_decode_stats_t;
+
 size_t coli_olmoe_layer_required_workspace(size_t hidden_count,
                                            size_t intermediate_count,
                                            size_t expert_count,
@@ -119,6 +128,18 @@ coli_status_t coli_olmoe_layer_decode(const coli_model_t *model,
                                       void *workspace,
                                       size_t workspace_bytes,
                                       coli_olmoe_layer_stats_t *stats);
+
+coli_status_t coli_olmoe_decode_next_token(
+    const coli_model_t *model,
+    uint32_t input_token_id,
+    uint32_t position,
+    uint8_t *kv_cache,
+    size_t kv_cache_bytes,
+    const coli_kv_cache_layout_t *kv_layout,
+    void *workspace,
+    size_t workspace_bytes,
+    uint32_t *out_token_id,
+    coli_olmoe_decode_stats_t *stats);
 
 #ifdef __cplusplus
 }

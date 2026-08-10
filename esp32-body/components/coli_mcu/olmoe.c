@@ -263,3 +263,77 @@ coli_status_t coli_olmoe_layer_decode(const coli_model_t *model,
         stats->peak_workspace_bytes = stats->moe.peak_workspace_bytes;
     return COLI_OK;
 }
+
+coli_status_t coli_olmoe_decode_next_token(
+    const coli_model_t *model,
+    uint32_t input_token_id,
+    uint32_t position,
+    uint8_t *kv_cache,
+    size_t kv_cache_bytes,
+    const coli_kv_cache_layout_t *kv_layout,
+    void *workspace,
+    size_t workspace_bytes,
+    uint32_t *out_token_id,
+    coli_olmoe_decode_stats_t *stats)
+{
+    if (!model || !kv_cache || !kv_layout || !workspace || !out_token_id ||
+        !stats || model->config.hidden_size == 0 ||
+        input_token_id >= model->config.vocab_size ||
+        position >= kv_layout->max_tokens)
+        return COLI_ERR_ARGUMENT;
+
+    memset(stats, 0, sizeof(*stats));
+    void *cursor = workspace;
+    size_t remaining = workspace_bytes;
+    float *state = NULL;
+    float *next = NULL;
+    const size_t hidden_count = model->config.hidden_size;
+    const size_t hidden_bytes = hidden_count * sizeof(float);
+    if (!carve(&cursor, &remaining, hidden_bytes, (void **)&state) ||
+        !carve(&cursor, &remaining, hidden_bytes, (void **)&next))
+        return COLI_ERR_RANGE;
+
+    const bmoq_tensor_t *embed =
+        coli_model_find(model, COLI_OLMOE_TENSOR_EMBED_TOKENS);
+    const bmoq_tensor_t *embed_scales = coli_model_find(
+        model, coli_olmoe_scale_id(COLI_OLMOE_TENSOR_EMBED_TOKENS));
+    coli_status_t status =
+        coli_q4_dequantize_row(model, embed, embed_scales, input_token_id,
+                               state, hidden_count, cursor, remaining,
+                               &stats->embedding_q4);
+    if (status != COLI_OK) return status;
+
+    for (uint32_t layer = 0; layer < model->config.num_hidden_layers; ++layer) {
+        coli_olmoe_layer_stats_t layer_stats;
+        status = coli_olmoe_layer_decode(model, layer, position, state,
+                                         hidden_count, next, hidden_count,
+                                         kv_cache, kv_cache_bytes, kv_layout,
+                                         cursor, remaining, &layer_stats);
+        if (status != COLI_OK) return status;
+        stats->last_layer = layer_stats;
+        ++stats->layers_executed;
+        float *swap = state;
+        state = next;
+        next = swap;
+    }
+
+    status = read_dense_f32(model, COLI_OLMOE_TENSOR_FINAL_NORM, next,
+                            hidden_count);
+    if (status != COLI_OK) return status;
+    status = coli_ops_rmsnorm(state, next, state, hidden_count, 1.0e-5f);
+    if (status != COLI_OK) return status;
+
+    const bmoq_tensor_t *lm_head =
+        coli_model_find(model, COLI_OLMOE_TENSOR_LM_HEAD);
+    const bmoq_tensor_t *lm_scales =
+        coli_model_find(model, coli_olmoe_scale_id(COLI_OLMOE_TENSOR_LM_HEAD));
+    status = coli_q4_argmax(model, lm_head, lm_scales, state, hidden_count,
+                            cursor, remaining, out_token_id,
+                            &stats->selected_logit, &stats->lm_head_q4);
+    if (status != COLI_OK) return status;
+
+    stats->peak_workspace_bytes = workspace_bytes - remaining;
+    if (stats->peak_workspace_bytes < stats->last_layer.peak_workspace_bytes)
+        stats->peak_workspace_bytes = stats->last_layer.peak_workspace_bytes;
+    return COLI_OK;
+}

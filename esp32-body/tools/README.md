@@ -52,8 +52,9 @@ cc -std=c11 -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L \
 ```
 
 It connects dense RMSNorm tensors, streamed Q/K/V/O Q4 projections, RoPE,
-KV-cache writes, causal single-token attention, residuals, and streamed MoE for
-one decoder layer against an independent identity-weight reference.
+KV-cache writes, causal single-token attention, residuals, streamed MoE,
+embedding row dequantization, final norm, and streamed LM-head argmax against
+an independent identity-weight reference.
 
 Run the streamed MoE golden test:
 

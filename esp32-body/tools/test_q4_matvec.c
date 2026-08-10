@@ -179,6 +179,32 @@ int main(void)
     assert(stats.page_boundary_crossings > 0);
     assert(stats.storage_reads == ROWS * 4u);
 
+    float dequantized[COLUMNS];
+    assert(coli_q4_dequantize_row(&model, weights, scales, 123, dequantized,
+                                  COLUMNS, workspace, sizeof(workspace),
+                                  &stats) == COLI_OK);
+    for (uint32_t column = 0; column < COLUMNS; ++column) {
+        float expected = (float)fixture_q(123, column) *
+                         fixture_scale(123, column / GROUP_SIZE);
+        assert(fabsf(dequantized[column] - expected) < 0.000001f);
+    }
+    uint32_t best_row = 0;
+    float best_value = 0.0f;
+    assert(coli_q4_argmax(&model, weights, scales, input, COLUMNS, workspace,
+                          sizeof(workspace), &best_row, &best_value,
+                          &stats) == COLI_OK);
+    uint32_t expected_row = 0;
+    float expected_value = reference_row(0, input);
+    for (uint32_t row = 1; row < ROWS; ++row) {
+        float value = reference_row(row, input);
+        if (value > expected_value) {
+            expected_value = value;
+            expected_row = row;
+        }
+    }
+    assert(best_row == expected_row);
+    assert(fabsf(best_value - expected_value) < 0.0005f);
+
     bmoq_tensor_t invalid = *weights;
     invalid.quant_group = 31;
     assert(coli_q4_matvec(&model, &invalid, scales, input, COLUMNS, output, ROWS,

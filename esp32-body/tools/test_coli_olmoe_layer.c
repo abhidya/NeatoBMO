@@ -13,6 +13,7 @@
 #define HEAD_DIM 2u
 #define EXPERTS 2u
 #define TOP_K 2u
+#define VOCAB 8u
 #define GROUP 2u
 #define DIRECTORY_OFFSET BMOQ_HEADER_BYTES
 
@@ -140,6 +141,11 @@ static void write_fixture(const char *path)
     entry_t entries[64];
     size_t count = 0;
     uint64_t offset = align_up(DIRECTORY_OFFSET + sizeof(entries));
+    append_q4_pair(entries, &count, COLI_OLMOE_TENSOR_EMBED_TOKENS, VOCAB,
+                   HIDDEN, &offset, "tok_emb");
+    append_dense(entries, &count, COLI_OLMOE_TENSOR_FINAL_NORM, &offset, "norm");
+    append_q4_pair(entries, &count, COLI_OLMOE_TENSOR_LM_HEAD, VOCAB, HIDDEN,
+                   &offset, "lm_head");
     append_dense(entries, &count, coli_olmoe_input_norm_id(0), &offset, "in_norm");
     append_dense(entries, &count, coli_olmoe_post_attention_norm_id(0), &offset,
                  "postnorm");
@@ -180,7 +186,7 @@ static void write_fixture(const char *path)
     put_u32(header + 56, HEADS);
     put_u32(header + 60, EXPERTS);
     put_u32(header + 64, TOP_K);
-    put_u32(header + 68, 32);
+    put_u32(header + 68, VOCAB);
     put_u32(header + 72, 8);
     put_u32(header + 76, 10000);
     put_u32(header + 80, 7);
@@ -257,6 +263,18 @@ int main(void)
     assert(stats.moe.selected_count == TOP_K);
     assert(stats.attention_q4.storage_reads > 0);
     assert(stats.moe.q4_calls == 1u + TOP_K * 3u);
+
+    memset(kv_cache, 0, sizeof(kv_cache));
+    uint32_t next_token = UINT32_MAX;
+    coli_olmoe_decode_stats_t decode_stats;
+    assert(coli_olmoe_decode_next_token(&model, 0, 0, kv_cache,
+                                        sizeof(kv_cache), &kv_layout,
+                                        workspace, sizeof(workspace),
+                                        &next_token, &decode_stats) == COLI_OK);
+    assert(next_token == 0);
+    assert(decode_stats.layers_executed == 1);
+    assert(decode_stats.embedding_q4.storage_reads > 0);
+    assert(decode_stats.lm_head_q4.storage_reads > 0);
 
     coli_model_close(&model);
     coli_store_close(store);
