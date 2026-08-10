@@ -945,6 +945,7 @@ async function send(text){
  const tick=setInterval(()=>{st.textContent='thinking… '+Math.floor((Date.now()-t0)/1000)+'s';},1000);
  add('you',text);faceThink();
  const think=thinkBubble();
+ startThinkingSounds();
  try{
   const r=await fetch('/chat',{method:'POST',body:JSON.stringify({text,
    speak:voiceSel.value==='robot'})});
@@ -961,10 +962,28 @@ async function send(text){
   faceSad();add('bmo','(brain unreachable)');
   st.textContent=STATUS_DEFAULT;
  }finally{
-  clearInterval(tick);pending=false;
+  clearInterval(tick);stopThinkingSounds();pending=false;
   txtEl.disabled=false;btn.disabled=false;txtEl.focus();
  }
 }
+// browser-side thinking sounds: the same blips/hum the robot's reserved
+// slots carry, played quietly while BMO thinks (muted when voice is off)
+const thinkAudio={};let thinkTimer=null,thinkStep=0;
+const THINK_PATTERN=[['blip-a',1600],['hum',2800],['blip-b',1800],['hum',3000]];
+function thinkSound(name){
+ if(!thinkAudio[name]){thinkAudio[name]=new Audio('/thinking-sound?name='+name);
+  thinkAudio[name].volume=0.5;}
+ thinkAudio[name].currentTime=0;
+ thinkAudio[name].play().catch(()=>{});}
+function startThinkingSounds(){
+ if(voiceSel.value==='off'||thinkTimer)return;
+ thinkStep=0;
+ const beat=()=>{const[name,wait]=THINK_PATTERN[thinkStep%THINK_PATTERN.length];
+  thinkSound(name);thinkStep++;thinkTimer=setTimeout(beat,wait);};
+ thinkTimer=setTimeout(beat,500);}
+function stopThinkingSounds(){
+ if(thinkTimer){clearTimeout(thinkTimer);thinkTimer=null;}
+ Object.values(thinkAudio).forEach(a=>{try{a.pause();}catch(e){}});}
 function sendTxt(){const t=document.getElementById('txt');if(t.value.trim()){send(t.value.trim());t.value='';}}
 document.getElementById('txt').addEventListener('keydown',e=>{if(e.key==='Enter')sendTxt();});
 // speech input (Chrome/Edge) + "hey BMO" wake word
@@ -1334,6 +1353,13 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             return self._json({"robot": robot is not None, "via": body_via,
                                "esp32": ESP32})
+        if self.path.startswith("/thinking-sound?"):
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            name = query.get("name", [""])[0]
+            path = THINKING_DIR / f"thinking-{name}.wav"
+            if name not in ("blip-a", "blip-b", "hum") or not path.exists():
+                return self._json({"error": "unknown thinking sound"})
+            return self._reply(path.read_bytes(), "audio/wav")
         if self.path == "/tts-bank/status":
             with tts_job_lock:
                 return self._json(tts_status_payload())
@@ -1615,11 +1641,19 @@ class Handler(BaseHTTPRequestHandler):
                         reply = None
                         err = str(e)
             else:
+                # No robot speech requested, but the body can still vocalize
+                # thinking sounds while the brain works.
+                think_stop = threading.Event()
+                if robot is not None:
+                    threading.Thread(target=tts_thinking_loop,
+                                     args=(think_stop,), daemon=True).start()
                 try:
                     reply = brain_chat(text)
                 except Exception as e:
                     reply = None
                     err = str(e)
+                finally:
+                    think_stop.set()
         if reply:
             # the reply is a little performance: cues out of the text, faces
             # to the cascade (as emojis), sounds/moves to the body, clean
