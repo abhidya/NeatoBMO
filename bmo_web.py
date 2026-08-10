@@ -413,7 +413,7 @@ PAGE = """<!doctype html>
  canvas{flex:1;max-width:min(680px,94vw);min-height:0}
  #batt{width:min(680px,94vw);padding:8px;font-size:14px;line-height:1.6}
  .card{width:min(680px,94vw);margin:12px 0;padding:14px;background:#0a2a26;border:1px solid #2c6b5f;
-       border-radius:14px;line-height:1.6}
+       border-radius:14px;line-height:1.6;overflow-wrap:anywhere}
  #p-sounds{overflow-y:auto}
  #soundgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;
             width:min(680px,94vw);padding:0 0 16px}
