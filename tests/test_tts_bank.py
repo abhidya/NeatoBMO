@@ -371,7 +371,7 @@ class WebGuardWiringTests(unittest.TestCase):
 
     def test_speak_flow_uses_validated_chunk_operation(self):
         self.assertIn("speak_chunks_operation", self.page)
-        self.assertIn("plan_speech_chunks", self.page)
+        self.assertIn("pack_audio_chunks", self.page)
 
     def test_bank_install_blocked_during_tts_operation(self):
         self.assertIn("a TTS bank operation is running", self.page)

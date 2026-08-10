@@ -64,17 +64,45 @@ def read_until_prompt(timeout=600):
 DIRTY = False   # a timed-out request left the REPL mid-generation
 
 
-def _exchange(prompt):
+def _exchange(prompt, on_text=None):
+    """Send one prompt; return the full reply.
+
+    With ``on_text`` each stdout fragment is forwarded as it arrives (token
+    streaming) — the engine already emits characters incrementally, so this
+    is just per-character reads with periodic flushes to the callback.
+    """
     PROC.stdin.write("/reset\n")
     PROC.stdin.flush()
     read_until_prompt(60)
     PROC.stdin.write(prompt.replace("\n", " ").strip() + "\n")
     PROC.stdin.flush()
-    return read_until_prompt()
+    if on_text is None:
+        return read_until_prompt()
+    buf = ""
+    emitted = 0
+    t0 = time.time()
+    while time.time() - t0 < 600:
+        ch = PROC.stdout.read(1)
+        if ch == "":
+            raise RuntimeError("engine died")
+        buf += ch
+        if buf.endswith("\n> ") or buf == "> ":
+            reply = buf[:-2].strip()
+            if len(reply) > emitted:
+                on_text(reply[emitted:])
+            return reply
+        # flush whole words to the callback; hold back the prompt tail
+        safe = len(buf) - 3
+        if safe > emitted and buf[safe - 1] in " \n.!?,;:":
+            on_text(buf[emitted:safe])
+            emitted = safe
+    raise TimeoutError("engine generation timeout")
 
 
-def ask(prompt):
+def ask(prompt, on_text=None):
     """One-shot: reset context, send flattened prompt, return reply.
+
+    ``on_text(fragment)`` streams the reply incrementally when provided.
 
     The engine is a shared stdin/stdout REPL, so a timeout leaves it
     desynchronized: its still-running generation later lands in front of
@@ -96,10 +124,10 @@ def ask(prompt):
                 print("chat: engine died; restarting")
                 start_engine()
             DIRTY = False
-        reply = _exchange(prompt)
+        reply = _exchange(prompt, on_text)
         if not reply.strip():
             print("chat: empty reply (stale prompt); resyncing and retrying")
-            reply = _exchange(prompt)
+            reply = _exchange(prompt, on_text)
         return reply
     except Exception:
         DIRTY = True
@@ -220,6 +248,31 @@ class Handler(BaseHTTPRequestHandler):
                           if m.get("role") == "user"), "")
         print(f"chat: start ({last_user[:60]!r})")
         t0 = time.time()
+        if req.get("stream"):
+            # OpenAI-style SSE: one delta chunk per engine flush, then [DONE].
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+
+            def emit(fragment):
+                event = {"id": "chatcmpl-stream", "object": "chat.completion.chunk",
+                         "choices": [{"index": 0,
+                                      "delta": {"content": fragment},
+                                      "finish_reason": None}]}
+                self.wfile.write(f"data: {json.dumps(event)}\n\n".encode())
+                self.wfile.flush()
+
+            try:
+                reply = ask(flatten(messages), on_text=emit)
+            except Exception as e:
+                self.wfile.write(
+                    f"data: {json.dumps({'error': str(e)})}\n\n".encode())
+                self.wfile.write(b"data: [DONE]\n\n")
+                return
+            print(f"chat: streamed in {time.time() - t0:.1f}s ({len(reply)} chars)")
+            self.wfile.write(b"data: [DONE]\n\n")
+            return
         try:
             reply = ask(flatten(messages))
         except Exception as e:

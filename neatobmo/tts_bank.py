@@ -53,6 +53,17 @@ FADE_SECONDS = 0.004
 SPLIT_MIN_FILL = 0.55           # cut search window starts at 55% of capacity
 SPLIT_RMS_WINDOW = 220          # ~10 ms energy window for boundary search
 SPLIT_RMS_STRIDE = 55
+# Slot padding is zero-valued silence, and a new PlaySound interrupting
+# silence is inaudible — so pacing waits content length + a safety margin,
+# not the full declared slot.  Cuts up to ~2 s of dead air per padded slot.
+PLAYBACK_MARGIN_SECONDS = 0.15
+# Inter-sentence gap inserted when packing solo-synthesized sentences into
+# one bank (streaming path), matching natural speech pauses.
+SENTENCE_GAP_SECONDS = 0.12
+# Post-burn identity polling: retry cadence and ceiling replacing the old
+# fixed 5 s stabilization sleep.
+VERIFY_POLL_SECONDS = 0.5
+VERIFY_MAX_SECONDS = 12.0
 
 
 def sha256(data: bytes) -> str:
@@ -566,6 +577,89 @@ def plan_speech_chunks(text: str, synthesize, capacities: list[tuple[int, int]],
     return chunks
 
 
+def pack_audio_chunks(units, synthesize, capacities: list[tuple[int, int]],
+                      max_chunks: int = 24, eager_first: bool = True):
+    """Yield bank-sized chunks from a (possibly live) stream of sentences.
+
+    ``units`` is any iterable of sentence strings — a list, or a generator
+    fed by a streaming LLM.  Each sentence is synthesized once, solo; chunk
+    audio is the concatenation of sentence PCM with SENTENCE_GAP_SECONDS of
+    silence between them, so nothing is ever re-synthesized and later
+    sentences can still be arriving while earlier chunks burn and play.
+
+    With ``eager_first`` the first chunk is flushed after its first sentence,
+    so speech starts as early as possible; later chunks pack maximally.
+    An over-long sentence splits at word boundaries.  Raises rather than
+    truncating.
+    """
+    total_capacity = sum(cap for _, cap in capacities)
+    gap = array("h", bytes(2 * int(SENTENCE_GAP_SECONDS * PCM_SAMPLE_RATE)))
+    yielded = 0
+    pending_texts: list[str] = []
+    pending_audio = array("h")
+    backlog: list[str] = []
+
+    def flush():
+        nonlocal pending_texts, pending_audio, yielded
+        if not pending_texts:
+            return None
+        if yielded >= max_chunks:
+            raise TtsBankError(
+                f"text needs more than {max_chunks} bank writes; shorten it")
+        segments = plan_segments(pending_audio, capacities)
+        chunk_text = " ".join(pending_texts)
+        attach_text_fragments(segments, chunk_text)
+        chunk = {"text": chunk_text, "samples": pending_audio,
+                 "segments": segments}
+        pending_texts, pending_audio = [], array("h")
+        yielded += 1
+        return chunk
+
+    source = iter(units)
+    while True:
+        if not backlog:
+            incoming = next(source, None)
+            if incoming is None:
+                break
+            backlog.append(incoming)
+        unit = backlog.pop(0).strip()
+        if not unit:
+            continue
+        samples = synthesize(unit)
+        if len(samples) > total_capacity:
+            words = unit.split()
+            if len(words) < 2:
+                raise TtsBankError(
+                    f"a single word renders longer than one bank: {unit!r}")
+            half = len(words) // 2
+            backlog[0:0] = [" ".join(words[:half]), " ".join(words[half:])]
+            continue
+        candidate = array("h", pending_audio)
+        if len(candidate):
+            candidate.extend(gap)
+        candidate.extend(samples)
+        fits = len(candidate) <= total_capacity
+        if fits:
+            try:
+                plan_segments(candidate, capacities)
+            except TtsBankError:
+                fits = False
+        if not fits:
+            chunk = flush()
+            if chunk is not None:
+                yield chunk
+            candidate = samples
+        pending_texts.append(unit)
+        pending_audio = array("h", candidate)
+        if eager_first and yielded == 0:
+            chunk = flush()
+            if chunk is not None:
+                yield chunk
+    chunk = flush()
+    if chunk is not None:
+        yield chunk
+
+
 # ---------------------------------------------------------------------------
 # Robot-facing controller (fully injectable; no hardware in unit tests)
 # ---------------------------------------------------------------------------
@@ -645,14 +739,23 @@ class BankBurner:
         self.log(f"burn {label}: {len(payload)} bytes sha256={digest}")
         reply = self.robot.t.send_binary("Upload sound", payload, timeout=45.0)
         self.log(f"burn {label}: receiver replied {reply.hex()}")
-        self.sleep(self.stabilize_seconds)
-        version = self.robot.cmd("GetVersion", timeout=5)
-        missing = [needle for needle in VERSION_REQUIRED_SUBSTRINGS
-                   if needle not in version]
-        if missing:
-            raise RobotVerificationError(
-                f"GetVersion identity check failed after {label} "
-                f"(missing {missing})")
+        # Poll for identity instead of a fixed stabilization sleep: the robot
+        # is usually back within 1-3 s, so this typically saves 2-4 s.
+        waited = 0.0
+        while True:
+            version = self.robot.cmd("GetVersion", timeout=5)
+            missing = [needle for needle in VERSION_REQUIRED_SUBSTRINGS
+                       if needle not in version]
+            if not missing:
+                break
+            if waited >= VERIFY_MAX_SECONDS:
+                raise RobotVerificationError(
+                    f"GetVersion identity check failed after {label} "
+                    f"(missing {missing} after {waited:.1f}s)")
+            self.sleep(VERIFY_POLL_SECONDS)
+            waited += VERIFY_POLL_SECONDS
+        if waited:
+            self.log(f"burn {label}: robot back after {waited:.1f}s")
         accepted = None
         if sweep:
             accepted = self.sweep_sound_ids()
@@ -676,10 +779,12 @@ class BankBurner:
 
     def play_paced(self, segments: list[SlotSegment],
                    progress: PlaybackProgress, stop_event=None) -> dict:
-        """PlaySound each segment, waiting its full declared slot duration.
+        """PlaySound each segment, waiting its content length plus a margin.
 
         The firmware does not queue commands and a new PlaySound interrupts
-        the current clip, so the wait between commands is mandatory.
+        the current clip — but a slot's zero-padding tail is silence, and
+        interrupting silence is inaudible, so the wait is the *content*
+        duration plus PLAYBACK_MARGIN_SECONDS, not the declared slot length.
         """
         progress.state = "speaking"
         progress.total_segments = len(segments)
@@ -697,10 +802,11 @@ class BankBurner:
                     f"slot {seg.sound_id} rejected after burn: the installed "
                     f"bank does not expose the expected live map")
             replies.append(reply)
+            wait = seg.content_seconds + PLAYBACK_MARGIN_SECONDS
             self.log(f"play segment {seg.index}: slot {seg.sound_id}, "
-                     f"waiting {seg.slot_seconds}s")
-            self.sleep(seg.slot_seconds)
-            progress.elapsed_seconds += seg.slot_seconds
+                     f"waiting {wait:.3f}s (content-paced)")
+            self.sleep(wait)
+            progress.elapsed_seconds += wait
             progress.remaining_segments -= 1
         return {"replies": replies, "stopped": progress.stopped}
 
@@ -766,25 +872,34 @@ def run_speech_operation(burner: BankBurner, bank_bytes: bytes,
 
 
 def speak_chunks_operation(burner: BankBurner, baseline: bytes,
-                           chunks: list[dict],
+                           chunks,
                            unused_slots: str = "silence",
                            progress: PlaybackProgress | None = None,
-                           stop_event=None) -> dict:
+                           stop_event=None,
+                           installed_sha256: str | None = None) -> dict:
     """Fully automatic speech: build+validate+burn+play each chunk in order.
 
+    ``chunks`` may be a list or a live generator (streaming pipeline): while
+    one chunk burns and plays, the producer can still be synthesizing the
+    next.  A chunk whose bank hashes identically to ``installed_sha256``
+    (repeated phrase) skips the flash write entirely and just plays.
     The last chunk's bank stays installed (persistent mode — no restore
     write).  Validation still gates every burn internally: an image that
     fails byte-exact validation is never sent.  Playback verifies each slot
     via its command reply, so no audible sweep interrupts the speech.
     """
     progress = progress or PlaybackProgress()
-    progress.total_chunks = len(chunks)
-    report: dict = {"chunks": [], "persisted": True}
+    chunk_list = chunks if isinstance(chunks, list) else None
+    if chunk_list is not None:
+        progress.total_chunks = len(chunk_list)
+    report: dict = {"chunks": [], "persisted": True, "reused_burns": 0}
     for index, chunk in enumerate(chunks):
         if stop_event is not None and stop_event.is_set():
             progress.stopped = True
             break
         progress.chunk_index = index
+        if chunk_list is None:
+            progress.total_chunks = index + 1
         progress.current_text = chunk["text"]
         progress.state = "building"
         built, manifest = build_tts_bank(baseline, chunk["segments"],
@@ -795,10 +910,17 @@ def speak_chunks_operation(burner: BankBurner, baseline: bytes,
             failed = [c["check"] for c in validation["checks"] if not c["ok"]]
             raise BankValidationError(
                 f"chunk {index} failed validation ({failed}); burn blocked")
-        progress.state = "burning"
-        burn = burner.burn_and_verify(built, validation["sha256"],
-                                      f"speech chunk {index + 1}/{len(chunks)}",
-                                      sweep=False)
+        if validation["sha256"] == installed_sha256:
+            burner.log(f"chunk {index}: identical bank already installed "
+                       f"({installed_sha256[:12]}…) — skipping flash write")
+            report["reused_burns"] += 1
+            burn = {"sha256": installed_sha256, "skipped": True}
+        else:
+            progress.state = "burning"
+            burn = burner.burn_and_verify(built, validation["sha256"],
+                                          f"speech chunk {index + 1}",
+                                          sweep=False)
+            installed_sha256 = validation["sha256"]
         playback = burner.play_paced(chunk["segments"], progress, stop_event)
         report["chunks"].append({
             "index": index,

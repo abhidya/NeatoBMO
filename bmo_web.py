@@ -13,6 +13,9 @@ Open http://localhost:8485 in Chrome (mic needs Chrome/Edge).
 import hashlib
 import json
 import os
+import queue
+import queue
+import re
 import subprocess
 import tempfile
 import threading
@@ -85,6 +88,8 @@ SOUND_BANK_PROFILES = {
     },
 }
 installed_sound_profile = "bmo"
+installed_bank_sha256 = None   # sha of whatever bank is in the sound flash
+tts_flash_writes = 0           # session flash-write (wear) counter
 
 # ---- automatic TTS-to-sound-bank speech ----------------------------------
 # Type text -> robot talks.  Long text is packed into ~17 s banks at sentence
@@ -190,7 +195,8 @@ def tts_active():
 def tts_status_payload():
     if tts_job is None:
         return {"state": "idle", "voices": TTS_VOICES,
-                "installed_profile": installed_sound_profile}
+                "installed_profile": installed_sound_profile,
+                "flash_writes": tts_flash_writes}
     job = tts_job
     progress = job["progress"].snapshot()
     return {
@@ -202,6 +208,7 @@ def tts_status_payload():
         "progress": progress,
         "installed_profile": installed_sound_profile,
         "installed_bank_sha256": job.get("installed_sha"),
+        "flash_writes": tts_flash_writes,
         "error": job.get("error"),
         "log": job["log"][-40:],
         "voices": TTS_VOICES,
@@ -214,11 +221,15 @@ def tts_capacities(baseline):
 
 
 def tts_run_speak(job):
-    """Background thread: synthesize -> chunk -> burn+speak each chunk.
+    """Background thread: streaming synth pipeline -> burn+speak per chunk.
 
-    The finished bank persists; BMO restore is an explicit action.
+    Sentences (from the job text, or arriving live from a streaming LLM via
+    job["units"]) are solo-synthesized and packed into bank-sized chunks;
+    while a chunk burns and plays, later sentences keep synthesizing.  The
+    finished bank persists; BMO restore is an explicit action.  Banks whose
+    hash matches the installed one skip the flash write.
     """
-    global installed_sound_profile
+    global installed_sound_profile, installed_bank_sha256, tts_flash_writes
     try:
         baseline = SOUND_BANK_PROFILES["bmo"]["path"].read_bytes()
         if hashlib.sha256(baseline).hexdigest() != tts_bank.BMO_BANK_SHA256:
@@ -226,60 +237,152 @@ def tts_run_speak(job):
         capacities = tts_capacities(baseline)
         job["state"] = "synthesizing"
         synth = lambda t: tts_bank.prepare_speech_pcm(synthesize_tts(t, job["voice"]))
-        chunks = tts_bank.plan_speech_chunks(job["text"], synth, capacities)
-        job["chunk_summaries"] = [{
-            "index": i, "text": c["text"],
-            "seconds": round(len(c["samples"]) / tts_bank.PCM_SAMPLE_RATE, 3),
-            "segments": len(c["segments"]),
-        } for i, c in enumerate(chunks)]
-        tts_log(job, f"planned {len(chunks)} chunk(s) for "
-                     f"{sum(s['seconds'] for s in job['chunk_summaries']):.1f}s of speech")
+        units = job.get("units") or tts_bank.split_text_units(job["text"])
+
+        def tracked_chunks():
+            for chunk in tts_bank.pack_audio_chunks(units, synth, capacities):
+                job["chunk_summaries"].append({
+                    "index": len(job["chunk_summaries"]), "text": chunk["text"],
+                    "seconds": round(len(chunk["samples"])
+                                     / tts_bank.PCM_SAMPLE_RATE, 3),
+                    "segments": len(chunk["segments"]),
+                })
+                tts_log(job, f"chunk {len(job['chunk_summaries'])} ready: "
+                             f"{job['chunk_summaries'][-1]['seconds']}s "
+                             f"“{chunk['text'][:60]}”")
+                yield chunk
+
         burner = tts_bank.BankBurner(robot, log=lambda m: tts_log(job, m))
+        job["chunk_summaries"] = []
+
+        # Producer thread: synthesis keeps running while chunks burn/play.
+        import queue as queue_mod
+        chunk_queue = queue_mod.Queue(maxsize=2)
+
+        def produce():
+            try:
+                for chunk in tracked_chunks():
+                    chunk_queue.put(("chunk", chunk))
+                chunk_queue.put(("done", None))
+            except Exception as exc:
+                chunk_queue.put(("error", exc))
+
+        threading.Thread(target=produce, daemon=True).start()
+
+        def queued_chunks(first_item):
+            item = first_item
+            while True:
+                kind, value = item
+                if kind == "done":
+                    return
+                if kind == "error":
+                    raise value
+                yield value
+                item = chunk_queue.get()
+
+        # Wait for the first chunk before taking the robot lock, so other
+        # robot commands aren't blocked during the initial synthesis.
+        first = chunk_queue.get()
         with rlock:
             report = tts_bank.speak_chunks_operation(
-                burner, baseline, chunks, "silence",
-                progress=job["progress"], stop_event=job["stop"])
+                burner, baseline, queued_chunks(first), "silence",
+                progress=job["progress"], stop_event=job["stop"],
+                installed_sha256=installed_bank_sha256)
         job["report"] = report
+        burns = sum(1 for c in report["chunks"]
+                    if not c["burn"].get("skipped"))
+        tts_flash_writes += burns
         job["installed_sha"] = report.get("installed_bank_sha256")
         if job["installed_sha"]:
+            installed_bank_sha256 = job["installed_sha"]
             installed_sound_profile = "tts"
         job["state"] = job["progress"].state
-        tts_log(job, f"speech finished: state={job['state']}")
+        tts_log(job, f"speech finished: state={job['state']} "
+                     f"({burns} flash writes, "
+                     f"{report['reused_burns']} reused)")
     except Exception as exc:
         job["error"] = str(exc)
         job["state"] = "error"
         tts_log(job, f"speech failed: {exc}")
 
 
-def tts_start_speak(text, voice):
-    """Create and launch a speech job; returns (job, error)."""
+def tts_start_speak(text, voice, units=None):
+    """Create and launch a speech job; returns (job, error).
+
+    ``units``: optional live iterable of sentences (streaming LLM) — speech
+    starts on the first sentence while later ones are still being generated.
+    """
     global tts_job
     if robot is None:
         return None, "body not attached"
     if tts_active():
         return None, "already speaking; stop first or wait"
-    # Emojis drive the LCD face, not the speaker: espeak reads them out as
-    # long Unicode names and wrecks the speech, so strip them here.
-    text = tts_bank.sanitize_speech_text(text)
-    if not text:
-        return None, "nothing speakable after removing emoji/symbols"
+    if units is None:
+        # Emojis drive the LCD face, not the speaker: espeak reads them out
+        # as long Unicode names and wrecks the speech, so strip them here.
+        text = tts_bank.sanitize_speech_text(text)
+        if not text:
+            return None, "nothing speakable after removing emoji/symbols"
     job = {
         "id": f"tts-{int(time.time())}",
         "state": "synthesizing",
         "text": text,
         "voice": voice,
+        "units": units,
         "progress": tts_bank.PlaybackProgress(),
         "stop": threading.Event(),
         "log": [],
     }
     tts_job = job
-    tts_log(job, f"speak: voice={voice} text={text!r}")
+    tts_log(job, f"speak: voice={voice} "
+                 f"{'streaming units' if units else repr(text)}")
     threading.Thread(target=tts_run_speak, args=(job,), daemon=True).start()
     return job, None
 
 
+def brain_chat_stream(text, on_sentence):
+    """Streaming chat: emit each completed sentence while the LLM still runs.
+
+    Returns the full reply (history updated like brain_chat).  Raises if the
+    brain doesn't answer; the caller falls back to the non-streaming path.
+    """
+    history.append({"role": "user", "content": text})
+    req = urllib.request.Request(
+        BRAIN + "/chat/completions",
+        data=json.dumps({"model": "olmoe", "stream": True,
+                         "messages": history[-9:]}).encode(),
+        headers={"Content-Type": "application/json",
+                 **({"Authorization": f"Bearer {API_KEY}"} if API_KEY else {})})
+    reply = ""
+    emitted = 0
+    with urllib.request.urlopen(req, timeout=300) as resp:
+        for raw_line in resp:
+            line = raw_line.decode(errors="replace").strip()
+            if not line.startswith("data: "):
+                continue
+            payload = line[6:]
+            if payload == "[DONE]":
+                break
+            event = json.loads(payload)
+            if "error" in event:
+                raise RuntimeError(event["error"])
+            reply += event["choices"][0]["delta"].get("content", "")
+            # flush every completed sentence in the unemitted tail
+            while True:
+                match = re.search(r"[.!?;:]\s", reply[emitted:])
+                if not match:
+                    break
+                end = emitted + match.end()
+                on_sentence(reply[emitted:end].strip())
+                emitted = end
+    if reply[emitted:].strip():
+        on_sentence(reply[emitted:].strip())
+    history.append({"role": "assistant", "content": reply})
+    return reply
+
+
 def tts_run_restore(job):
-    global installed_sound_profile
+    global installed_sound_profile, installed_bank_sha256, tts_flash_writes
     burner = tts_bank.BankBurner(robot, log=lambda m: tts_log(job, m))
     try:
         with rlock:
@@ -288,6 +391,8 @@ def tts_run_restore(job):
                 SOUND_BANK_PROFILES["bmo"]["path"],
                 tts_bank.BMO_BANK_SHA256, "persistent BMO bank")
         installed_sound_profile = "bmo"
+        installed_bank_sha256 = tts_bank.BMO_BANK_SHA256
+        tts_flash_writes += 1
         job["installed_sha"] = None
         job["state"] = "restored"
         tts_log(job, f"BMO restore verified: {result['accepted_ids']}")
@@ -1096,9 +1201,9 @@ function ttsRender(j){
  ttsRenderVoices(j.voices);
  const prog=document.getElementById('ttsprogress'),oplog=document.getElementById('ttsoplog'),
        chunks=document.getElementById('ttschunks'),bank=document.getElementById('ttsbank');
- bank.textContent=j.installed_profile==='tts'
+ bank.textContent=(j.installed_profile==='tts'
   ?'speech is installed in the sound flash — BMO chirps are paused'
-  :'BMO sounds are installed';
+  :'BMO sounds are installed')+' · '+(j.flash_writes||0)+' flash writes this session';
  const bar=document.getElementById('ttsbar'),fill=bar.firstElementChild;
  if(j.state==='idle'){prog.textContent='no speech yet';bar.classList.remove('on');return;}
  const p=j.progress||{};
@@ -1214,7 +1319,7 @@ class Handler(BaseHTTPRequestHandler):
         self._reply(PAGE.replace("__ESP32__", ESP32).encode(), "text/html")
 
     def do_POST(self):
-        global tts_job, installed_sound_profile
+        global tts_job, installed_sound_profile, installed_bank_sha256, tts_flash_writes
         n = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(n)
         if self.path == "/cmd":
@@ -1321,6 +1426,8 @@ class Handler(BaseHTTPRequestHandler):
                 if set(accepted_ids) != set(LIVE_SOUND_IDS):
                     return self._json({"error": f"post-write slot map mismatch: {accepted_ids}"})
                 installed_sound_profile = profile_name
+                installed_bank_sha256 = digest
+                tts_flash_writes += 1
                 return self._json({"ok": True, "profile": profile_name,
                                    "label": profile["label"], "sha256": digest,
                                    "accepted_ids": accepted_ids,
@@ -1371,6 +1478,7 @@ class Handler(BaseHTTPRequestHandler):
         # answers with choreography skip the tens-of-seconds LLM round-trip;
         # anything unmatched falls through to the brain.
         routine = None
+        streamed_speech = False
         hit = routines.match(text, convo_state, {"robot": robot})
         if hit:
             reply, routine = hit.reply, hit.routine
@@ -1381,11 +1489,86 @@ class Handler(BaseHTTPRequestHandler):
         else:
             body(lambda: (robot.led("amber"),
                           faces.scanline(robot, range(20, 110, 30), 0.08)))
-            try:
-                reply = brain_chat(text)
-            except Exception as e:
-                reply = None
-                err = str(e)
+            if speak_on_robot:
+                # Streaming pipeline: each completed LLM sentence flows into
+                # the speech synthesizer while later sentences are still
+                # generating — BMO starts talking before the reply is done.
+                unit_queue = queue.Queue()
+
+                def unit_iter():
+                    while True:
+                        unit = unit_queue.get()
+                        if unit is None:
+                            return
+                        yield unit
+
+                with tts_job_lock:
+                    stream_job, stream_err = tts_start_speak(
+                        text, TTS_DEFAULT_VOICE, units=unit_iter())
+
+                # Soundbyte-first budget applies while streaming too: whole
+                # sentences are admitted until the burst is full (the first
+                # sentence is hard-trimmed if it alone overflows), mirroring
+                # cues.condense. Cues fire per sentence, so wiggles and
+                # soundbytes land beside the words instead of after the
+                # whole generation.
+                budget = (max(1, round(cues.SPEECH_WORDS_PER_SECOND
+                                       * SPEECH_BURST))
+                          if SPEECH_MODE == "soundbyte" else None)
+                progress = {"words": 0, "faced": False}
+
+                def on_sentence(sentence):
+                    plan = cues.parse(sentence)
+                    if plan.actions():
+                        body(lambda a=plan.actions(): cues.perform(robot, a))
+                    if not progress["faced"] and plan.display:
+                        progress["faced"] = True
+                        emote_react(plan.display)
+                    speech = tts_bank.sanitize_speech_text(plan.speech)
+                    if not speech:
+                        return
+                    words = speech.split()
+                    if budget is not None:
+                        if progress["words"] and \
+                                progress["words"] + len(words) > budget:
+                            return
+                        if len(words) > budget:
+                            words = words[:budget]
+                            speech = " ".join(words).rstrip(",;:.")
+                            if speech[-1:] not in ("!", "?"):
+                                speech += "!"
+                    progress["words"] += len(words)
+                    unit_queue.put(speech)
+
+                if stream_err is None:
+                    try:
+                        reply = brain_chat_stream(text, on_sentence)
+                        streamed_speech = True
+                    except Exception as e:
+                        reply = None
+                        err = f"stream: {e}"
+                    finally:
+                        unit_queue.put(None)
+                    if reply is None:
+                        stream_job["stop"].set()
+                        try:
+                            reply = brain_chat(text)
+                            err = None
+                        except Exception as e:
+                            reply = None
+                            err = str(e)
+                else:
+                    try:
+                        reply = brain_chat(text)
+                    except Exception as e:
+                        reply = None
+                        err = str(e)
+            else:
+                try:
+                    reply = brain_chat(text)
+                except Exception as e:
+                    reply = None
+                    err = str(e)
         if reply:
             # the reply is a little performance: cues out of the text, faces
             # to the cascade (as emojis), sounds/moves to the body, clean
@@ -1393,20 +1576,27 @@ class Handler(BaseHTTPRequestHandler):
             plan = cues.parse(reply)
             if routine is None and SPEECH_MODE == "soundbyte":
                 plan = cues.condense(plan, burst_seconds=SPEECH_BURST)
-            emote_react(plan.display)
-            if plan.actions():
-                body(lambda: (robot.led("green"),
-                              cues.perform(robot, plan.actions())))
             voice_error = None
-            if speak_on_robot:
-                # BMO's actual voice: the reply is flashed into the sound
-                # bank and spoken (skip the chirp so speech starts clean).
-                with tts_job_lock:
-                    _, voice_error = tts_start_speak(plan.speech, TTS_DEFAULT_VOICE)
-            elif not plan.actions():
-                # no cue sounds: keep the old tone-guessed chirp fallback
-                body(lambda: (robot.led("green"), robot.play(chirp_for(reply)),
-                              faces.blink(robot, 2, 0.1)))
+            if streamed_speech:
+                # the performance already ran sentence by sentence while the
+                # reply generated; replay the complete face cascade only
+                emote_react(plan.display)
+            else:
+                emote_react(plan.display)
+                if plan.actions():
+                    body(lambda: (robot.led("green"),
+                                  cues.perform(robot, plan.actions())))
+                if speak_on_robot:
+                    # BMO's actual voice: the reply is flashed into the
+                    # sound bank and spoken (no chirp; speech starts clean).
+                    with tts_job_lock:
+                        _, voice_error = tts_start_speak(plan.speech,
+                                                         TTS_DEFAULT_VOICE)
+                elif not plan.actions():
+                    # no cue sounds: keep the tone-guessed chirp fallback
+                    body(lambda: (robot.led("green"),
+                                  robot.play(chirp_for(reply)),
+                                  faces.blink(robot, 2, 0.1)))
             out = {"reply": plan.display, "cues": plan.steps,
                    "spoke": speak_on_robot and voice_error is None}
             if routine:

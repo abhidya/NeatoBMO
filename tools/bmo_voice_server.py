@@ -34,6 +34,7 @@ os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -50,6 +51,7 @@ DEFAULT_TRANSPOSE = int(os.environ.get("BMO_VOICE_TRANSPOSE", "6"))
 PORT = int(os.environ.get("BMO_VOICE_PORT", "8486"))
 
 rvc = None
+_synth_lock = threading.Lock()  # rvc set_params/infer are not thread-safe
 
 
 def load_rvc():
@@ -105,7 +107,32 @@ def rvc_convert(input_path: str, output_path: str) -> None:
     wavfile.write(output_path, rvc.vc.tgt_sr, wav_opt)
 
 
+CACHE_DIR = VOICES_DIR / "cache"
+# Warmed at startup so BMO's most common lines answer instantly.
+WARM_PHRASES = [p.strip() for p in os.environ.get(
+    "BMO_VOICE_WARM",
+    "Hi daddy!|Hello!|Okay!|Yes!|No!|I love you!|"
+    "Who wants to play video games?|I am Beemo!").split("|") if p.strip()]
+
+
+def _cache_path(text: str, transpose: int) -> Path:
+    import hashlib
+    key = hashlib.sha256(f"{transpose}|{text}".encode()).hexdigest()[:24]
+    return CACHE_DIR / f"{key}.wav"
+
+
 def synth_bmo(text: str, transpose: int | None = None) -> bytes:
+    effective = DEFAULT_TRANSPOSE if transpose is None else transpose
+    cached = _cache_path(text, effective)
+    if cached.exists():
+        return cached.read_bytes()
+    with _synth_lock:
+        if cached.exists():
+            return cached.read_bytes()
+        return _synth_bmo_locked(text, transpose, cached)
+
+
+def _synth_bmo_locked(text, transpose, cached) -> bytes:
     base = piper_synth(text)
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as src, \
          tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as dst:
@@ -115,7 +142,10 @@ def synth_bmo(text: str, transpose: int | None = None) -> bytes:
             if transpose is not None and transpose != rvc.f0up_key:
                 rvc.set_params(f0up_key=transpose)
             rvc_convert(src.name, dst.name)
-            return Path(dst.name).read_bytes()
+            wav = Path(dst.name).read_bytes()
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            cached.write_bytes(wav)
+            return wav
         finally:
             Path(src.name).unlink(missing_ok=True)
             Path(dst.name).unlink(missing_ok=True)
@@ -171,6 +201,18 @@ def main():
     if args.once is not None:
         sys.stdout.buffer.write(synth_bmo(args.once, args.transpose))
         return
+
+    def warm():
+        for phrase in WARM_PHRASES:
+            try:
+                started = time.time()
+                synth_bmo(phrase)
+                print(f"warm: {phrase!r} ({time.time() - started:.1f}s)",
+                      flush=True)
+            except Exception as exc:
+                print(f"warm failed for {phrase!r}: {exc}", flush=True)
+
+    threading.Thread(target=warm, daemon=True).start()
     print(f"BMO voice server on http://127.0.0.1:{args.port}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
 

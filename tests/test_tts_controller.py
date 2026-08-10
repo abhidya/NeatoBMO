@@ -109,12 +109,49 @@ class BurnVerifyTests(unittest.TestCase):
             BankBurner(robot, sleep=FakeSleep()).burn_and_verify(
                 self.bank, self.sha, "temporary TTS bank")
 
-    def test_stabilization_wait_before_getversion(self):
+    def test_verification_polls_instead_of_fixed_sleep(self):
+        # robot answers immediately: no stabilization sleep at all
         robot = FakeRobot()
         sleep = FakeSleep()
-        BankBurner(robot, sleep=sleep, stabilize_seconds=5.0).burn_and_verify(
-            self.bank, self.sha, "x")
-        self.assertEqual(sleep.calls[0], 5.0)
+        BankBurner(robot, sleep=sleep).burn_and_verify(self.bank, self.sha, "x")
+        self.assertNotIn(5.0, sleep.calls)
+
+    def test_verification_retries_until_robot_returns(self):
+        class SlowRobot(FakeRobot):
+            def __init__(self):
+                super().__init__()
+                self.version_calls = 0
+
+            def cmd(self, text, timeout=None):
+                if text == "GetVersion":
+                    self.version_calls += 1
+                    # pre-burn check answers; after the burn the robot needs
+                    # three polls before it identifies again
+                    if 1 < self.version_calls < 4:
+                        return ""
+                return super().cmd(text, timeout)
+
+        robot = SlowRobot()
+        sleep = FakeSleep()
+        BankBurner(robot, sleep=sleep).burn_and_verify(self.bank, self.sha, "x")
+        self.assertEqual(sleep.calls.count(tts_bank.VERIFY_POLL_SECONDS), 2)
+
+    def test_verification_gives_up_after_ceiling(self):
+        class DeadAfterBurn(FakeRobot):
+            def __init__(self):
+                super().__init__()
+                self.version_calls = 0
+
+            def cmd(self, text, timeout=None):
+                if text == "GetVersion":
+                    self.version_calls += 1
+                    if self.version_calls > 1:
+                        return ""
+                return super().cmd(text, timeout)
+
+        with self.assertRaisesRegex(RobotVerificationError, "identity check"):
+            BankBurner(DeadAfterBurn(), sleep=FakeSleep()).burn_and_verify(
+                self.bank, self.sha, "x")
 
 
 class PlaybackTests(unittest.TestCase):
@@ -125,11 +162,15 @@ class PlaybackTests(unittest.TestCase):
         result = BankBurner(robot, sleep=sleep).play_paced(
             segments, PlaybackProgress())
         self.assertFalse(result["stopped"])
-        # strict alternation: PlaySound, full declared slot wait, next command
+        # strict alternation: PlaySound, content-length wait, next command
+        # (padding is silence, so interrupting it is inaudible — pacing waits
+        # content + margin, not the declared slot length)
         self.assertEqual([e[1] for e in robot.events],
                          ["PlaySound 0", "PlaySound 1", "PlaySound 19"])
-        self.assertEqual(sleep.calls,
-                         [seg.slot_seconds for seg in segments])
+        self.assertEqual(
+            sleep.calls,
+            [seg.content_seconds + tts_bank.PLAYBACK_MARGIN_SECONDS
+             for seg in segments])
         for command in robot.events:
             self.assertNotIn("-", command[1])  # never combined-ID syntax
 
@@ -323,6 +364,98 @@ class SilentModeAndAutoSpeechTests(unittest.TestCase):
         finally:
             tts_bank.build_tts_bank = saved
         self.assertEqual([e for e in robot.events if e[0] == "upload"], [])
+
+
+class StreamingPipelineTests(unittest.TestCase):
+    """pack_audio_chunks + skip-identical-burn: the low-latency path."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.baseline = BMO_ARTIFACT.read_bytes()
+        records = {r.sound_id: r for r in
+                   tts_bank.record_ranges_from_bytes(cls.baseline)}
+        cls.capacities = [(sid, records[sid].sample_count)
+                          for sid in tts_bank.SLOT_SEQUENCE]
+
+    @staticmethod
+    def synth_seconds(seconds_per_word):
+        from array import array
+
+        def synth(text):
+            n = int(len(text.split()) * seconds_per_word
+                    * tts_bank.PCM_SAMPLE_RATE)
+            return array("h", [1000] * n)
+        return synth
+
+    def test_eager_first_chunk_flushes_on_first_sentence(self):
+        chunks = list(tts_bank.pack_audio_chunks(
+            ["First one.", "Second one.", "Third one."],
+            self.synth_seconds(0.4), self.capacities))
+        self.assertEqual(chunks[0]["text"], "First one.")
+        self.assertEqual(" ".join(c["text"] for c in chunks),
+                         "First one. Second one. Third one.")
+
+    def test_later_chunks_pack_maximally(self):
+        # 6 sentences x 2 words x 2s = 4s each; after the eager first chunk,
+        # ~4 sentences (incl. gaps) fit per bank
+        units = [f"s{i} words." for i in range(6)]
+        chunks = list(tts_bank.pack_audio_chunks(
+            units, self.synth_seconds(2.0), self.capacities))
+        self.assertEqual(chunks[0]["text"], units[0])
+        self.assertGreater(len(chunks[1]["text"].split(".")[0:-1]), 1)
+        self.assertEqual(" ".join(c["text"] for c in chunks), " ".join(units))
+
+    def test_live_generator_units_are_consumed_lazily(self):
+        synth_calls = []
+        base = self.synth_seconds(0.5)
+
+        def synth(text):
+            synth_calls.append(text)
+            return base(text)
+
+        def units():
+            yield "One two."
+            yield "Three four."
+
+        gen = tts_bank.pack_audio_chunks(units(), synth, self.capacities)
+        first = next(gen)
+        self.assertEqual(first["text"], "One two.")
+        self.assertEqual(synth_calls, ["One two."])  # second not synthesized yet
+        rest = list(gen)
+        self.assertEqual(rest[0]["text"], "Three four.")
+
+    def test_overlong_final_sentence_word_splits_and_drains(self):
+        units = ["short one.", " ".join(f"w{i}" for i in range(40))]
+        chunks = list(tts_bank.pack_audio_chunks(
+            units, self.synth_seconds(1.0), self.capacities))
+        joined = " ".join(c["text"] for c in chunks)
+        self.assertEqual(joined.split()[-1], "w39")  # nothing lost at the end
+
+    def test_identical_bank_skips_the_flash_write(self):
+        from array import array
+        samples = array("h", [1000] * 4000)
+        segments = tts_bank.plan_segments(samples, self.capacities)
+        tts_bank.attach_text_fragments(segments, "same words")
+        chunk = {"text": "same words", "samples": samples,
+                 "segments": segments}
+        robot = FakeRobot()
+        burner = BankBurner(robot, sleep=FakeSleep())
+        first = tts_bank.speak_chunks_operation(
+            burner, self.baseline, [chunk])
+        uploads = [e for e in robot.events if e[0] == "upload"]
+        self.assertEqual(len(uploads), 1)
+        second = tts_bank.speak_chunks_operation(
+            burner, self.baseline, [chunk],
+            installed_sha256=first["installed_bank_sha256"])
+        uploads = [e for e in robot.events if e[0] == "upload"]
+        self.assertEqual(len(uploads), 1)  # no second write
+        self.assertEqual(second["reused_burns"], 1)
+        self.assertEqual(second["installed_bank_sha256"],
+                         first["installed_bank_sha256"])
+        # but it still spoke
+        plays = [e for e in robot.events if e[0] == "cmd"
+                 and e[1].startswith("PlaySound")]
+        self.assertGreaterEqual(len(plays), 2)
 
 
 class BridgeRelayTests(unittest.TestCase):
