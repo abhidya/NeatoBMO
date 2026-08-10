@@ -33,8 +33,13 @@ Known state:
   known to match the installed `2.4.15667` bytes.
 - Public application updates are opaque `.enc` files with a 512-byte `neato`
   format-2 envelope and high-entropy, 512-byte-aligned payloads.
+- Pairwise comparison of the same 2.5 build for B/D/M/P hardware matches the
+  random 1/256 byte-equality baseline, ruling out a reused aligned keystream
+  that could be attacked by simple ciphertext differencing.
 - `NeatoUpgrader.exe` shows the `Upload code reboot Size %d` transport path,
-  but no identified host-side decrypt/repack implementation.
+  but no identified host-side decrypt/repack implementation. Static
+  disassembly confirms that its upload path sends the caller-provided image
+  buffer unchanged, followed by the transport checksum.
 - `Upload code noburn` accepted a 3.1 encrypted image into the updater receive
   path, but later `dump` returned no application payload. Treat that as a
   transport observation, not cryptographic validation or readback.
@@ -55,6 +60,11 @@ Known state:
   on this firmware: raw `readflash` returns only its terminator and its XMODEM
   form never starts. See
   [sound-readback-probe-20260810.md](/Volumes/2TB/neato-firmware-archive/work/logs/sound-readback-probe-20260810.md).
+- The proposed USB bootloader transition was directly tested on 2026-08-10:
+  after `TestMode On`, `SetSystemMode PowerCycleCDC` is rejected as an
+  unrecognized option. This stock 2.4.15667 console exposes only Shutdown,
+  Hibernate, and Standby, so that updater-era entry route is unavailable from
+  the current application.
 
 Corrected assumptions:
 
@@ -107,18 +117,18 @@ Create another read-only snapshot (logs are omitted because 2.4 may reset its
 USB connection while reading them):
 
 ```bash
-python3 backup_neato.py
+python3 tools/backup_neato.py
 ```
 
 Rebuild the archive catalog or inspect an encrypted image:
 
 ```bash
-python3 neato_firmware.py catalog \
+python3 tools/neato_firmware.py catalog \
   /Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update \
   --output /Volumes/2TB/neato-firmware-archive/analysis/catalog.json
 
-python3 neato_firmware.py inspect /path/to/XV11App.bin.enc
-python3 neato_firmware.py validate-unlock /path/to/XV11App.bin.enc /path/to/plaintext.bin
+python3 tools/neato_firmware.py inspect /path/to/XV11App.bin.enc
+python3 tools/neato_firmware.py validate-unlock /path/to/XV11App.bin.enc /path/to/plaintext.bin
 ```
 
 `validate-unlock` exits with status 2 when the proposed plaintext does not pass

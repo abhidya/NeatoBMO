@@ -7,7 +7,7 @@ quiet. Only ever sends read-oriented commands (dump/readflash); never sends
 data, never burns.
 
     python3 firmware_probe.py "Upload dump"
-    python3 firmware_probe.py "Upload readflash" -o dumps/region.bin
+    python3 tools/firmware_probe.py "Upload readflash" -o region.bin
 """
 import argparse
 import glob

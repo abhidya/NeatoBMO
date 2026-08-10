@@ -1,0 +1,23 @@
+{
+  "sequence": [
+    0,
+    19,
+    0
+  ],
+  "pre_roll_seconds": 10,
+  "capture": "/Users/abdulrehmanbhidya/Documents/neato/assets/neato-xv12-sound-capture-20260810/raw/separators/slot-19-separated.wav",
+  "responses": [
+    {
+      "sound_id": 0,
+      "reply": "PlaySound 0"
+    },
+    {
+      "sound_id": 19,
+      "reply": "PlaySound 19"
+    },
+    {
+      "sound_id": 0,
+      "reply": "PlaySound 0"
+    }
+  ]
+}

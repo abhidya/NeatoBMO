@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from neatobmo import Robot
+from neatobmo import emote
 from neatobmo import faces
 
 BRAIN = os.environ.get("NEATOBMO_BRAIN", "http://127.0.0.1:8000/v1").rstrip("/")
@@ -28,11 +29,14 @@ API_KEY = open(KEY_FILE).read().strip() if os.path.exists(KEY_FILE) else None
 PORT = 8485
 ESP32 = os.environ.get("NEATOBMO_ESP32", "http://10.0.0.106")
 
+# The persona's emoji palette is generated from the face engine's table so
+# the LLM can only emit emojis the LCD knows how to draw.
 PERSONA = ("You are BMO, a cheerful little robot buddy living inside a Neato robot "
            "vacuum. You are playful, curious, and love your human. Keep replies to "
            "1-3 short spoken-style sentences. Express your feelings with LOTS of "
-           "emojis sprinkled through every reply — pick from 😊 😄 😂 😍 💖 😢 😭 "
-           "😮 😱 😉 😴 💤 😠 🎉 🎮 ✨ 🤖 — your face screen plays them in order!")
+           "emojis sprinkled through every reply — pick from "
+           + " ".join(emote.EMOJI_FACES)
+           + " — your face screen plays them in order!")
 
 robot = None
 rlock = threading.Lock()
@@ -99,14 +103,25 @@ def chirp_for(reply):
     return "hello"
 
 
-def emote_on_esp32(reply):
-    """Fire-and-forget: ESP32 draws the reply's emojis as an LCD face cascade."""
+def emote_react(reply):
+    """Fire-and-forget LCD face cascade: prefer the ESP32, fall back to USB.
+
+    Both paths draw the identical faces — the ESP32 runs faces.c, the USB
+    fallback runs neatobmo/emote.py (a 1:1 port of the same tables).
+    """
     def push():
         try:
             req = urllib.request.Request(ESP32 + "/emote", data=reply.encode())
             urllib.request.urlopen(req, timeout=5).read()
+            return
         except Exception:
             pass
+        if robot is not None:
+            try:
+                with rlock:
+                    emote.cascade(robot, reply)
+            except Exception:
+                pass
     threading.Thread(target=push, daemon=True).start()
 
 
@@ -188,6 +203,7 @@ PAGE = """<!doctype html>
  <button class="mini" onclick="cmd('GetDigitalSensors')">Digital</button>
  <button class="mini" onclick="cmd('PlaySound 1')">Beep</button>
  <button class="mini" onclick="cmd('Help')">Help</button>
+ <button class="mini" onclick="fetch('/emote',{method:'POST',body:'😍🎉'})">Faces 😍🎉</button>
 </div>
 <div id="clog"></div>
 <div id="drive">
@@ -353,6 +369,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
             except Exception as e:
                 return self._json({"error": str(e)})
+        if self.path == "/emote":
+            text = raw.decode(errors="replace")
+            faces_n = len(emote.parse_emojis(text)) or 1
+            emote_react(text)
+            return self._json({"ok": True, "faces": faces_n})
         if self.path == "/ota":
             try:
                 req = urllib.request.Request(ESP32 + "/ota", data=raw,
@@ -372,7 +393,7 @@ class Handler(BaseHTTPRequestHandler):
         if reply:
             body(lambda: (robot.led("green"), robot.play(chirp_for(reply)),
                           faces.blink(robot, 2, 0.1)))
-            emote_on_esp32(reply)
+            emote_react(reply)
             voice_error = None
             try:
                 wav = colibri_tts(reply)

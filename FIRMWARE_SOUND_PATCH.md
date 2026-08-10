@@ -60,7 +60,7 @@ host-side unlock path. See
 
 The patch therefore needs a plaintext application produced by one of these
 paths: a verified decrypt/repack implementation, an authenticated hardware
-debug read, or a known-good unencrypted developer image. `neato_firmware.py
+debug read, or a known-good unencrypted developer image. `tools/neato_firmware.py
 validate-unlock` requires size coverage, multiple Neato command markers,
 substantial strings, lower entropy than ciphertext, and—when available—an
 exact repack hash before any candidate is trusted.
@@ -104,7 +104,7 @@ per-`PlaySound` slot command. The public default module is an unencrypted,
 the application, but a successful custom upload still requires knowing the
 module's integrity fields and the mapping from its records to sound IDs.
 
-`neato_sound_bank.py` is intentionally analysis-only: it validates the page
+`tools/neato_sound_bank.py` is intentionally analysis-only: it validates the page
 layout, makes byte-identical staging copies, extracts the inferred raw PCM,
 and exports conservative candidate clips. Its ten candidate boundaries are
 explicitly not sound IDs. The generated evidence is retained on the 2TB work

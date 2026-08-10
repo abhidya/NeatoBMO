@@ -9,3 +9,6 @@ esp32-body/dependencies.lock
 __pycache__/
 *.pyc
 .DS_Store
+
+# tool state
+.omx/

@@ -4,7 +4,27 @@
 It listens for a wake word, sees through a webcam, talks back, drives around on a Neato XV-12
 base, and thinks with a **local LLM** — everything open source, nothing leaving the LAN.
 
-**Status:** Draft v1 · 2026-08-09
+**Status:** Draft v1 · 2026-08-09 — see §0 for where the build diverged from this plan.
+
+---
+
+## 0. As built (2026-08-09)
+
+The plan below predates the implementation; these decisions supersede it:
+
+- **No MQTT.** The body's transport is the ESP32's own HTTP server (`web.c`):
+  embedded dashboard at `/`, WebSocket `/ws` raw serial bridge for browsers,
+  raw TCP `:3333` for programmatic clients, plus `/emote` (emoji → LCD face
+  cascades, `faces.c`) and `/speak` (WAV relay). No broker on the LAN.
+- **No Wyoming stack yet.** Voice is Colibri: `bmo_brain_server.py` wraps the
+  OLMoE chat engine and espeak-ng TTS behind an OpenAI-compatible API;
+  `bmo_web.py` (`:8485`) is the orchestrator (browser mic for STT for now).
+- **The face lives on the Neato's own LCD first.** `faces.c` on the ESP32 and
+  its 1:1 Python port `neatobmo/emote.py` draw the same emoji faces over WiFi
+  or USB; the projector head (§3) remains future work.
+- **Native speech is gated.** The `PlaySound File` firmware patch path and the
+  sound-flash write gates are tracked in FIRMWARE_SOUND_PATCH.md and
+  SOUND_BANK_WRITE_GATES.md — no flash writes until every gate passes.
 
 ---
 
@@ -164,4 +184,4 @@ touches MQTT (the LLM never gets raw motor access).
 MrChromebox firmware · Debian/Alpine · Mosquitto · ESP-IDF (`cdc_acm_host`) ·
 wyoming-satellite · openWakeWord · faster-whisper / whisper.cpp · Piper · Silero VAD ·
 Ollama / llama.cpp · Qwen3 / Llama 3.x / Moondream weights · Chromium kiosk face ·
-this repo's `neato-driver-python` + `lidar_viewer.py` for protocol reference and debugging.
+this repo's `neato-driver-python` + `tools/lidar_viewer.py` for protocol reference and debugging.
