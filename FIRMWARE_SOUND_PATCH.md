@@ -235,7 +235,10 @@ sound bank.
 An intentionally one-bit-corrupted module completes identically under
 `noburn`, confirming that it is not an integrity/compatibility validator. The
 new P6 failure status explains why identical USB termination cannot distinguish
-valid from corrupted content.
+valid from corrupted content. A controlled one-bit mutation at payload offset
+4108 also produced the exact same P6 `NoWrite`, receive-complete, and
+`nandflashWrite() fail - -1` sequence; see
+`captures/20260811_B03_sound_noburn_onebit_p6.log`.
 
 A direct USB `PlaySound 0..20` sweep now validates the public header's
 slot-presence map on the live XV-12: only `0–3`, `6–10`, and `19` are accepted;

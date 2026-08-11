@@ -126,7 +126,23 @@ our only robot sample (below).
   without source or a flash readback, do not infer whether the write routine was
   called and deliberately blocked or rejected for another reason.
 
+## One-bit-corrupted sound-bank `noburn` control (2026-08-11 15:20 PDT)
+
+- Raw P6 evidence: `20260811_B03_sound_noburn_onebit_p6.log`.
+- Starting from the exact vendor bank, one bit was flipped at byte offset 4108
+  inside the first sound record. Length remained 770,048 bytes; mutated SHA-256
+  was `befe3a3832b221050fef0192877991929e1d26135cd48195bb3405d0db703de1`.
+- The outer transfer checksum was recomputed. USB again returned only `0x1A`;
+  post-transfer identity remained software `2.4.15667`.
+- P6 produced the same diagnostic sequence as the exact bank: `NoWrite`, full
+  770052-byte receive, then `nandflashWrite() fail - -1`.
+- **Conclusion:** neither USB completion nor the captured internal no-write path
+  distinguishes this one-bit content change. `noburn` is a transport exercise,
+  not a sound-bank integrity or compatibility validator.
+
 ## Files here
+- `20260811_B03_sound_noburn_onebit_p6.log` — one-bit-corrupted sound-bank
+  `noburn`; internal result matches exact vendor bank.
 - `20260811_B02_sound_noburn_exact_p6.log` — exact vendor sound-bank `noburn`;
   internal NoWrite/receive-complete/NAND-write-failure diagnostics.
 - `20260811_B01_usb_readonly_snapshot_p6.log` — P6 during USB GetVersion and

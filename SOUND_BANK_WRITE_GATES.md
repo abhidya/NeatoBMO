@@ -9,7 +9,7 @@ that might rewrite the same region.
 | Target identity recorded | XV-12 `WTD41611DD-0037829-P`, software `2.4.15667`, mainboard `7.1`; read-only snapshot on 2TB volume. | Pass |
 | Live slot map known | `PlaySound 0..20` accepts `0–3`, `6–10`, `19`; exactly matches the public bank's non-empty header entries. | Pass |
 | Upload receiver behavior characterized | `Upload sound noburn` reaches ENQ; P6 shows `NoWrite`, full receive, then `nandflashWrite() fail - -1`. | Pass |
-| No-burn validates an edited bank | One-bit-corrupted module completes identically under `noburn`. | **Fail: it is transport-only** |
+| No-burn validates an edited bank | One-bit mutation at offset 4108 completes identically over USB and P6 (`NoWrite`, full receive, NAND failure). | **Fail: it is transport-only** |
 | Exact installed-bank backup | USB readback remains unavailable; the archived vendor default is not proof of the former installed bytes. | Gap remains |
 | Edited-module format/integrity rules | Live experiments proved a narrow safe envelope: preserve directory, page table, starts, headers, declared lengths, and non-PCM bytes; replace PCM spans only. | **Pass for PCM-only builds** |
 | Recovery path for a failed sound write | Exact vendor default SHA `d3969779…b64a` restored all ten slots after a failed custom write. | **Pass** |

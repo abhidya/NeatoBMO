@@ -53,6 +53,12 @@
 > `../captures/20260811_B02_sound_noburn_exact_p6.log`. Do not treat a no-burn
 > USB terminator as validation or success.
 
+> **Corruption control:** a one-bit mutation at sound-bank byte 4108 produced
+> the same USB `0x1A` and the same P6 `NoWrite`/receive-complete/NAND-failure
+> sequence; post-transfer identity remained healthy. Evidence:
+> `../captures/20260811_B03_sound_noburn_onebit_p6.log`. Thus `noburn` does not
+> validate content integrity or compatibility.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible

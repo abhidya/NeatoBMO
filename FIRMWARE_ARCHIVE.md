@@ -163,6 +163,10 @@ Known state:
   not validation or a success verdict. See
   [sound-upload-noburn-20260810.md](/Volumes/2TB/neato-firmware-archive/work/logs/sound-upload-noburn-20260810.md)
   and `captures/20260811_B02_sound_noburn_exact_p6.log`.
+- A controlled one-bit sound-bank mutation at byte 4108 produced the identical
+  USB terminator and P6 `NoWrite`/receive-complete/NAND-failure sequence. This
+  directly confirms that `noburn` is not a content-integrity validator. See
+  `captures/20260811_B03_sound_noburn_onebit_p6.log`.
 - A no-write `PlaySound 0..20` sweep exactly matches the ten non-empty page
   entries in the public sound-bank header: `0–3`, `6–10`, and `19` play; all
   other IDs report out of range. See
