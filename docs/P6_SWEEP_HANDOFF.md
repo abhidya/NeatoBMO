@@ -29,6 +29,13 @@
 > undecoded interval at initial power transition remained, supporting
 > startup/contact noise rather than firmware content.
 
+> **Runtime UI finding:** controlled capture
+> `../captures/20260811_A04R1_normal_back_start.log` showed no P6 text for LCD
+> idle timeout, a BACK click, or START waking the LCD and playing a sound. On the
+> stripped motherboard/LCD/button-panel bench setup, P6 appears boot/reset
+> focused rather than a live UI-event log. Repeat on an assembled robot before
+> generalizing this negative result.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible

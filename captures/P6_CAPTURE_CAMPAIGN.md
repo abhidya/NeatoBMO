@@ -27,9 +27,9 @@ The tap is receive-only. Keep Neato power off while changing wires.
 | A01 | Boot while holding Start | Passive | Complete: `20260811_A01_hold_start_cold_boot.log`; 1 PowerUp boot followed by 3 Software-reset boots while START was held |
 | A02 | Boot while holding Back | Passive | Complete: `20260811_A02_hold_back_cold_boot.log`; bootloader selected `Loading factory application` |
 | A03 | Boot while holding Start + Back; observe only, do not confirm reset/menu actions | Passive until a menu action is selected | Complete: initial `20260811_A03_hold_start_back_cold_boot.log`; controlled repeat `20260811_A03R1_hold_start_back_repeat.log`. Repeat showed factory selected while buttons were held, then installed selected on a software reset after release. |
-| A04 | Normal menu navigation and each harmless button | Passive | Pending |
+| A04 | Normal menu navigation and each harmless button | Passive | Complete for available START/BACK panel: initial `20260811_A04_normal_menu_buttons.log`; controlled `20260811_A04R1_normal_back_start.log`. BACK emitted nothing; START woke LCD and played sound but emitted nothing on P6. |
 | A05 | Start cleaning, pause, resume, return to base/stop | Robot motion | Pending |
-| A06 | Sleep/standby, wake, ordinary shutdown/restart | Passive | Pending |
+| A06 | Sleep/standby, wake, ordinary shutdown/restart | Passive | Partial: idle LCD-off and START wake/sound captured within A04R1; neither emitted P6 text. Explicit shutdown/restart remains pending. |
 | B01 | Play/upload known sound with no firmware change | Low; validate command first | Pending |
 | B02 | Exact known-good sound package, no-burn/validation path | Low; uploader-dependent | Pending |
 | B03 | One-bit-corrupt copy of B02 through no-burn/validation path | Low; uploader-dependent | Pending |

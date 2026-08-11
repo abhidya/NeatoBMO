@@ -70,7 +70,29 @@ our only robot sample (below).
   boot path that may be useful for recovery after a bad installed-application
   update. It does not prove the factory image can repair the installed image.
 
+## Runtime buttons and display standby (2026-08-11 14:57–15:06 PDT)
+
+- Bench configuration contained the motherboard, power, LCD, and button panel;
+  most robot peripherals were absent. Results therefore describe this stripped
+  setup and should not be generalized to a fully assembled robot without a
+  repeat.
+- `20260811_A04_normal_menu_buttons.log`: initial run had one `PowerUp` boot and
+  three installed-application `Software` boots. Individual BACK/START clicks
+  emitted no additional P6 text.
+- `20260811_A04R1_normal_back_start.log`: controlled run remained stable after
+  one installed-application `PowerUp` boot. The LCD timed out/off with no P6
+  message. A BACK click caused no observed display or UART change. A START click
+  woke the LCD and played a sound; the LCD remained on after 30 seconds, but P6
+  emitted no corresponding runtime message.
+- **Conclusion:** on this build/setup, P6 is valuable for boot/reset selection
+  and early initialization but does not trace ordinary UI button, sound, or LCD
+  standby/wake events.
+
 ## Files here
+- `20260811_A04R1_normal_back_start.log` — controlled normal boot, idle LCD
+  timeout, BACK click, and START wake/sound; no runtime UART events.
+- `20260811_A04_normal_menu_buttons.log` — initial normal button session with
+  three software-reset boots.
 - `20260811_A03R1_hold_start_back_repeat.log` — controlled START+BACK repeat;
   factory selected while held, installed selected after release.
 - `20260811_A03_hold_start_back_cold_boot.log` — START+BACK-held cold boot;
