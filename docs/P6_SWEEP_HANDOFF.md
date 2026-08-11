@@ -45,6 +45,14 @@
 > `../captures/20260811_B01_usb_readonly_snapshot_p6.log`, and
 > `../captures/usb-snapshots/`.
 
+> **Upload-path finding:** exact vendor-bank `Upload sound noburn` produced P6
+> diagnostics `SOUND`, `BLAST`, `Size 770052`, and `NoWrite`, followed by
+> `Upload complete - 770052 bytes received` and `Upload fail -
+> nandflashWrite() fail - -1`. USB exposed only a `0x1A` terminator and the
+> post-transfer identity remained unchanged. See
+> `../captures/20260811_B02_sound_noburn_exact_p6.log`. Do not treat a no-burn
+> USB terminator as validation or success.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible

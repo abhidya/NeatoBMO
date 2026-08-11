@@ -157,9 +157,12 @@ Known state:
 - `Upload sound noburn` accepts the public sound-module command through its
   ENQ binary-receive stage, then returns an empty terminal response rather than
   ACK/NAK—the same completion pattern as a previously captured successful
-  `Upload code noburn`. The robot remained responsive with the same version
-  afterward; this is not a validation of the module or any flash operation. See
-  [sound-upload-noburn-20260810.md](/Volumes/2TB/neato-firmware-archive/work/logs/sound-upload-noburn-20260810.md).
+  `Upload code noburn`. A simultaneous P6 capture now shows the hidden status:
+  `NoWrite`, receive complete, then `nandflashWrite() fail - -1`. The robot
+  remained responsive with the same version afterward; the USB terminator is
+  not validation or a success verdict. See
+  [sound-upload-noburn-20260810.md](/Volumes/2TB/neato-firmware-archive/work/logs/sound-upload-noburn-20260810.md)
+  and `captures/20260811_B02_sound_noburn_exact_p6.log`.
 - A no-write `PlaySound 0..20` sweep exactly matches the ten non-empty page
   entries in the public sound-bank header: `0–3`, `6–10`, and `19` play; all
   other IDs report out of range. See

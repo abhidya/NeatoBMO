@@ -107,7 +107,28 @@ our only robot sample (below).
 - **Conclusion:** P6 exposes USB link state but does not mirror ordinary USB CDC
   commands or responses.
 
+## Exact vendor sound-bank `noburn` (2026-08-11 15:17 PDT)
+
+- Raw P6 evidence: `20260811_B02_sound_noburn_exact_p6.log`.
+- Target identity was checked immediately before transfer: XV-12
+  `WTD41611DD-0037829-P`, software `2.4.15667`.
+- Payload was the exact 770,048-byte vendor bank with SHA-256
+  `d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a`.
+- USB command was exactly `Upload sound noburn Size 770052`; USB returned only
+  terminator `0x1A`, and post-transfer `GetVersion` was unchanged/healthy.
+- P6 exposed the hidden updater path: `Type : SOUND`, `Protocol : BLAST`,
+  `Size : 770052`, `Options : NoWrite`, `Upload complete - 770052 bytes
+  received`, then **`Upload fail - nandflashWrite() fail - -1`**. The operator
+  heard one sound at completion.
+- **Conclusion:** `noburn` definitely sets the internal `NoWrite` option and
+  receives the entire payload, but the empty USB terminator is not a success or
+  compatibility verdict. The internal terminal status is a NAND-write failure;
+  without source or a flash readback, do not infer whether the write routine was
+  called and deliberately blocked or rejected for another reason.
+
 ## Files here
+- `20260811_B02_sound_noburn_exact_p6.log` — exact vendor sound-bank `noburn`;
+  internal NoWrite/receive-complete/NAND-write-failure diagnostics.
 - `20260811_B01_usb_readonly_snapshot_p6.log` — P6 during USB GetVersion and
   read-only recovery snapshot.
 - `20260811_B00_neato_usb_attach.log` — Neato USB attachment; `USB Connected`.

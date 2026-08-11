@@ -41,7 +41,7 @@ Scope: static, repo-local evidence only. All paths are repo files.
 
 | Experiment/tool | Result | Implication |
 |---|---|---|
-| `/Users/abdulrehmanbhidya/Documents/neato/tools/neato_sound_noburn_matrix.py` + logs referenced by `FIRMWARE_SOUND_PATCH.md` | `Upload sound noburn` reaches ENQ and ends with terminator (no ACK/NAK), robot remains responsive | Command accepts payload path, but does not prove integrity/flash write |
+| `/Users/abdulrehmanbhidya/Documents/neato/tools/neato_sound_noburn_matrix.py` + logs referenced by `FIRMWARE_SOUND_PATCH.md` + `captures/20260811_B02_sound_noburn_exact_p6.log` | `Upload sound noburn` reaches ENQ and ends with terminator (no ACK/NAK); P6 shows `NoWrite`, full receive, then `nandflashWrite() fail - -1`; robot remains responsive | USB terminator marks completion only and does not prove integrity, acceptance, or a successful flash operation |
 | `tools/neato_sound_burn_exact.py` | 8-byte checksum framing for `Upload sound` | `Upload sound` can be sent with ACK requirement and post-write validation in destructive workflows |
 | `FIRMWARE_ARCHIVE.md` + `FIRMWARE_SOUND_PATCH.md` | `Upload sound readflash`/`sound dump` return no XMODEM payload; terminator only | Read/export of application/sound region over USB is blocked at current stock layer |
 

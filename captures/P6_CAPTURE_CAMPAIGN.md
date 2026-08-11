@@ -33,7 +33,7 @@ The tap is receive-only. Keep Neato power off while changing wires.
 | U00 | Attach Neato USB while P6 records | Passive | Complete: `20260811_B00_neato_usb_attach.log`; P6 printed `USB Connected`, with no reset/sound/LCD change attributable to attachment. |
 | U01 | Read-only USB identity/configuration/help snapshot while P6 records | Read-only | Complete: `20260811_B01_usb_readonly_snapshot_p6.log` plus `usb-snapshots/WTD41611DD-0037829-P_sw-2-4-15667_20260811T221515Z/`; LCD woke, no sound, no P6 command trace. |
 | B01 | Play/upload known sound with no firmware change | Low; validate command first | Pending |
-| B02 | Exact known-good sound package, no-burn/validation path | Low; uploader-dependent | Pending |
+| B02 | Exact known-good sound package, no-burn/validation path | Low; uploader-dependent | Complete: `20260811_B02_sound_noburn_exact_p6.log`; P6 showed SOUND/BLAST/770052/NoWrite, receive complete, then `nandflashWrite() fail - -1`; USB returned only `0x1A`; health check unchanged. |
 | B03 | One-bit-corrupt copy of B02 through no-burn/validation path | Low; uploader-dependent | Pending |
 | B04 | Known Cruz-P 2.5 application through no-burn/validation path | Low only if no-burn is verified | Pending |
 | B05 | Known Cruz-P 2.7 application through no-burn/validation path | Low only if no-burn is verified | Pending |

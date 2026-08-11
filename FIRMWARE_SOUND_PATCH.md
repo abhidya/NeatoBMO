@@ -221,14 +221,21 @@ the robot's current library. No write/upload is authorized by this tooling.
 That `noburn` probe is now complete: the XV-12 emitted ENQ, received the
 byte-identical module, then returned an empty command terminator rather than
 ACK or NAK. That is the same completion pattern captured from an earlier
-`Upload code noburn` test, so it is consistent with no-burn completion rather
-than a rejection. `GetVersion` immediately succeeded afterward. The full record is
+`Upload code noburn` test. A later simultaneous P6 capture revealed the hidden
+terminal status: the updater reported `Options : NoWrite`, completed receipt of
+all 770052 framed bytes, then printed `Upload fail - nandflashWrite() fail -
+-1`. Therefore the USB terminator is **not** evidence of successful validation
+or acceptance; it only marks command completion. `GetVersion` immediately
+succeeded afterward. The original USB record is
 [on the 2TB work volume](/Volumes/2TB/neato-firmware-archive/work/logs/sound-upload-noburn-20260810.md).
+The P6 record is `captures/20260811_B02_sound_noburn_exact_p6.log`.
 It proves receiver entry and no-burn completion only; it does not prove that
 the public module is accepted by this 2.4 firmware or matches the installed
 sound bank.
 An intentionally one-bit-corrupted module completes identically under
-`noburn`, confirming that it is not an integrity/compatibility validator.
+`noburn`, confirming that it is not an integrity/compatibility validator. The
+new P6 failure status explains why identical USB termination cannot distinguish
+valid from corrupted content.
 
 A direct USB `PlaySound 0..20` sweep now validates the public header's
 slot-presence map on the live XV-12: only `0–3`, `6–10`, and `19` are accepted;
