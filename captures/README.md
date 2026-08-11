@@ -52,12 +52,20 @@ our only robot sample (below).
 - `20260811_A02_hold_back_cold_boot.log`: holding BACK during power-on made the
   bootloader print **`Loading factory application`** instead of `Loading
   installed application`. It then started the same reported NEROS build 15667.
+- `20260811_A03_hold_start_back_cold_boot.log`: holding START+BACK also selected
+  the factory application. Four clean boot banners were observed: two reported
+  `PowerUp`, then two reported `Software`. One high-bit/undecoded interval
+  appeared between clean factory boots. Preserve it as raw evidence; a transient
+  contact, temporary UART-mode change, or genuine binary output is not yet
+  distinguished.
 - Neither path entered `RomBOOT>` or SAM-BA.
 - The BACK result establishes a non-destructive, button-selected factory-image
   boot path that may be useful for recovery after a bad installed-application
   update. It does not prove the factory image can repair the installed image.
 
 ## Files here
+- `20260811_A03_hold_start_back_cold_boot.log` — START+BACK-held cold boot;
+  repeated factory-application boots and one undecoded high-bit interval.
 - `20260811_A02_hold_back_cold_boot.log` — BACK-held cold boot selecting
   `Loading factory application`.
 - `20260811_A01_hold_start_cold_boot.log` — START-held cold boot showing

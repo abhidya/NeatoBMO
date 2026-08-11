@@ -15,6 +15,12 @@
 > see `../captures/20260811_A01_hold_start_cold_boot.log`. Neither entered
 > `RomBOOT>` or SAM-BA.
 
+> **Combined-button finding:** holding START+BACK also selected the factory
+> application. `../captures/20260811_A03_hold_start_back_cold_boot.log`
+> contains four boot banners (two `PowerUp`, two `Software`) and one intervening
+> undecoded high-bit interval. Do not interpret that interval as firmware data
+> without reproducing it or independently validating the electrical signal.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible
