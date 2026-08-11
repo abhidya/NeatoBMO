@@ -42,3 +42,15 @@ explanations that are NOT yet ruled out:
 
 Do not treat "baud mismatch" as established. It is a hypothesis with one lost,
 contaminated data point.
+
+## Review outcome (2026-08-11) — see `analysis/`
+Three adversarial reviewers converged: **baud IS 115200** (RECESSIM captured
+readable text off this exact header; reproducible silence is evidence *against*
+a baud mismatch), the blocker is a **channel fault** (loose/floating RX or lifted
+GND, the AT91 not printing, or the rig reading the **lossy USB-JTAG secondary
+console** while UART0 is the unrecorded primary), and the lone 8377-byte sample
+was likely a **self-test TX-injection artifact**, not robot output. Strategically,
+cold-boot P6 yields the **app/bootloader banner, not the SAM-BA ROM monitor**, so
+P6 alone is not a key-extraction route on a healthy board. **Next step: prove a
+signal exists on P6.3 (scope/DMM, or the GPIO17→GPIO18 loopback self-test) before
+any reflash or baud change.** Details: `analysis/{at91-baud-research,hypothesis-review,methodology-review}.md`.

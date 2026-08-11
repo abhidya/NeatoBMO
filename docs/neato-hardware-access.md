@@ -57,6 +57,17 @@ LCD/button panel. To reach it:
   window at reset. (The robot's normal USB port reaches the *application*
   console, which is a different, later mode.)
 
+  > **Correction (2026-08-11, adversarial review — see
+  > `../captures/analysis/at91-baud-research.md`):** on a *healthy* board there
+  > is **no such pre-lock window at cold boot.** AT91 RomBOOT finds a valid boot
+  > image and jumps straight into the Neato bootloader → app; the `RomBOOT>`
+  > SAM-BA prompt appears **only if boot fails**, which on this board means
+  > erasing flash via **J3 (permanent brick)**. RECESSIM's capture off this exact
+  > header shows the **app boot log** (NEROS), not a ROM prompt. So passive P6
+  > capture (**115200 8N1**, confirmed) identifies the board and proves the tap,
+  > but is **not** itself the key-extraction route on a working board. SAM-BA
+  > read access requires the destructive GPNVM-glitch path, not a plain reset.
+
 - **`P10` — JTAG header.** Verbatim layout:
   ```
   Bottom row: VDDIO (square pin), TRST, TDI, TMS, TCK
@@ -72,9 +83,11 @@ LCD/button panel. To reach it:
 
 ## Which header for which attack
 
-- **SAM-BA ROM probe → `P6` serial.** Cheap, non-destructive, try first:
-  attach the 3.3 V UART, hold/trigger reset, watch for a ROM boot prompt
-  before the app takes over. This is step 1 of the key-extraction plan.
+- **Passive P6 capture → `P6` serial (115200 8N1).** Cheap, non-destructive, do
+  first: attach the 3.3 V UART, power-cycle, capture the boot log. **Expect the
+  Neato bootloader/app banner, NOT a SAM-BA `RomBOOT>` prompt** — see the
+  correction above; a healthy board never drops to the ROM monitor at reset.
+  Value here is confirming the tap and reading the app boot log, not key readout.
 - **JTAG dump → `P10`,** but only *after* glitching the GPNVM security bit to
   re-enable it. Hard: Atmel debounced the ERASE line specifically to resist
   glitching (ATSAM4C32 is the nearest public precedent).

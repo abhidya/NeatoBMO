@@ -74,8 +74,14 @@ SAM-BA ROM, but the exploit itself does not transfer.
 
 ## Attack surface, ranked by effort/risk
 
-1. **Probe the AT91SAM9XE SAM-BA ROM over the P6 serial header** for a
-   pre-lock window (cheap, non-destructive — try first).
+1. **Passively capture P6 (115200 8N1) — cheap, non-destructive, do first —
+   BUT it is not itself a key readout.** *Correction (2026-08-11 review, see
+   `../captures/analysis/at91-baud-research.md`):* a healthy board's RomBOOT
+   jumps straight to a valid image, so P6 at cold boot shows the **app boot log,
+   not a SAM-BA `RomBOOT>` prompt.** There is **no pre-lock window** to catch at
+   reset; SAM-BA read access only exists after the destructive GPNVM glitch
+   (#3). P6 capture confirms the tap and the board — treat it as reconnaissance,
+   not extraction.
 2. **Analysis-only** — diff more `.enc` builds from the Vault corpus
    (largely done here).
 3. **Voltage-glitch the GPNVM security bit** to re-enable JTAG and dump
