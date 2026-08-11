@@ -35,7 +35,17 @@ else:
     os.makedirs(root, exist_ok=True)
     OUT = os.path.normpath(os.path.join(root, f"p6_{int(time.time())}.log"))
 
-p = serial.Serial(PORT, 115200, timeout=0.2)
+# Configure BEFORE opening so the open() doesn't assert DTR/RTS and reset the
+# ESP32 (that would drop the Neato's one-time boot burst). exclusive=True takes
+# TIOCEXCL so a second capturer can't silently attach and split the byte stream.
+p = serial.Serial()
+p.port = PORT
+p.baudrate = 115200
+p.timeout = 0.2
+p.dtr = False
+p.rts = False
+p.exclusive = True
+p.open()
 stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
 print(f"[capture] {PORT} -> {OUT} (append)  started {stamp}   (Ctrl-C to stop)",
       file=sys.stderr)
