@@ -149,6 +149,27 @@ our only robot sample (below).
   distinguishes this one-bit content change. `noburn` is a transport exercise,
   not a sound-bank integrity or compatibility validator.
 
+## Original sound-bank destructive write (2026-08-11 16:09 PDT)
+
+- User selected the exact original/vendor-default bank and explicitly requested
+  the destructive test. Raw P6 evidence:
+  `20260811_C01_original_sound_burn_p6.log`; structured USB/P6 result:
+  `20260811_C01_original_sound_burn_result.json`.
+- Image: 770,048 bytes, SHA-256
+  `d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a`.
+- USB: ENQ received; payload+checksum transferred in 3.017 seconds; closing
+  response was ACK+TERM (`061a`); USB recovered on the same port; firmware
+  identity remained `2.4.15667`.
+- P6 exposed the physical write: `Type : SOUND`, `Protocol : BLAST`, no
+  `NoWrite` option, `Upload complete - 770052 bytes received`, then
+  `nandflashWrite() - region=0x400000 offset=0 bytes=770052` and
+  `Upload - nandFlashWrite() OK`.
+- Post-write sweep passed the exact expected original slot map: accepted
+  `0–3,6–10,19`; all other IDs from 0–20 returned out of range.
+- **Conclusion:** the sound-bank region begins at NAND region address
+  `0x400000`, and the updater writes the entire 770052-byte framed blob at
+  offset zero. Unlike `noburn`, a successful write returns ACK and P6 `OK`.
+
 ## Cruz-P 2.5 application `noburn` (2026-08-11 15:28–15:31 PDT)
 
 - An initial P6 recorder file,
@@ -199,6 +220,10 @@ our only robot sample (below).
   exact archived hash and every unknown image before opening the serial port.
 
 ## Files here
+- `20260811_C01_original_sound_burn_p6.log` — successful original sound-bank
+  destructive write; NAND region/address/length and OK status.
+- `20260811_C01_original_sound_burn_result.json` — structured USB, P6, identity,
+  and slot-sweep result.
 - `20260811_B01_playsound_accept_reject_p6.log` — accepted/rejected PlaySound
   comparison; no runtime P6 output.
 - `20260811_B06_code_3.1_17844P_noburn_p6.log` — guarded ceiling-version

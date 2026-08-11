@@ -12,7 +12,7 @@ that might rewrite the same region.
 | No-burn validates an edited bank | One-bit mutation at offset 4108 completes identically over USB and P6 (`NoWrite`, full receive, NAND failure). | **Fail: it is transport-only** |
 | Exact installed-bank backup | USB readback remains unavailable; the archived vendor default is not proof of the former installed bytes. | Gap remains |
 | Edited-module format/integrity rules | Live experiments proved a narrow safe envelope: preserve directory, page table, starts, headers, declared lengths, and non-PCM bytes; replace PCM spans only. | **Pass for PCM-only builds** |
-| Recovery path for a failed sound write | Exact vendor default SHA `d3969779…b64a` restored all ten slots after a failed custom write. | **Pass** |
+| Recovery path for a failed sound write | Exact vendor default SHA `d3969779…b64a` restored all ten slots; 2026-08-11 P6 recapture showed NAND region `0x400000`, offset 0, 770052 bytes, write OK. | **Pass** |
 | Custom BMO write validation | PCM-only BMO SHA `9d3d82d9…1159` returned ACK, retained firmware identity, and activated all ten expected IDs. | **Pass** |
 
 Evidence links:

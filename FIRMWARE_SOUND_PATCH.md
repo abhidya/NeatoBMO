@@ -248,6 +248,13 @@ not 21. The result is captured in
 It also makes the unpatched speech-bank ceiling clear: arbitrary speech cannot
 be assembled faithfully from ten fixed clips, although they are enough for a
 small set of expressive cues or pre-recorded phrases.
+
+A later simultaneous P6 capture of an explicitly authorized original-bank
+write resolved the updater's physical target: it received 770052 framed bytes,
+then printed `nandflashWrite() - region=0x400000 offset=0 bytes=770052` and
+`nandFlashWrite() OK`. USB returned ACK+TERM, firmware identity remained
+2.4.15667, and the expected ten-slot sweep passed. See
+`captures/20260811_C01_original_sound_burn_p6.log` and its adjacent result JSON.
 The host runtime now filters its sound vocabulary to these live-verified IDs,
 so personality behaviors do not send documented-but-invalid commands to this
 specific XV-12.

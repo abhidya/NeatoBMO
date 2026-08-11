@@ -1,0 +1,32 @@
+{
+  "command": "Upload sound",
+  "image_bytes": 770048,
+  "image_profile": "vendor-default",
+  "image_sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+  "target": {
+    "serial": "WTD41611DD-0037829-P",
+    "software_before": "2.4.15667",
+    "software_after": "2.4.15667"
+  },
+  "usb": {
+    "port_before": "/dev/cu.usbmodem1431201",
+    "port_after": "/dev/cu.usbmodem1431201",
+    "checksum": "0x05d6caf9",
+    "transfer_seconds": 3.017,
+    "closing_hex": "061a"
+  },
+  "p6": {
+    "type": "SOUND",
+    "protocol": "BLAST",
+    "framed_bytes": 770052,
+    "options": "",
+    "nand_region": "0x400000",
+    "nand_offset": 0,
+    "nand_bytes": 770052,
+    "status": "nandFlashWrite() OK"
+  },
+  "sound_sweep": {
+    "accepted": [0, 1, 2, 3, 6, 7, 8, 9, 10, 19],
+    "rejected_out_of_range": [4, 5, 11, 12, 13, 14, 15, 16, 17, 18, 20]
+  }
+}

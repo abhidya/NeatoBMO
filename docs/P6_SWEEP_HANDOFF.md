@@ -84,6 +84,13 @@
 > see `../captures/20260811_B01_playsound_accept_reject_p6.log`. Use the USB
 > command channel, not P6, for sound-slot validation.
 
+> **Destructive sound-write finding:** an explicitly requested write of the
+> exact vendor-default bank succeeded with USB ACK+TERM and unchanged firmware
+> identity. P6 exposed `region=0x400000 offset=0 bytes=770052` followed by
+> `nandFlashWrite() OK`; the expected ten-slot sweep passed. Evidence:
+> `../captures/20260811_C01_original_sound_burn_p6.log` and
+> `../captures/20260811_C01_original_sound_burn_result.json`.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible

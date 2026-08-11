@@ -13,6 +13,13 @@ validated BMO baseline — see `docs/BMO_REMOTE_SOUNDBOARD.md`):
 Both images have been burned successfully and verified with the expected live
 slot map `0,1,2,3,6,7,8,9,10,19`.
 
+The 2026-08-11 original-profile restore was captured simultaneously on P6.
+The updater wrote the 770052-byte framed blob to NAND region `0x400000` at
+offset 0 and reported `nandFlashWrite() OK`; USB returned ACK+TERM and the
+complete slot verification passed. Raw evidence is
+`../captures/20260811_C01_original_sound_burn_p6.log` with structured results in
+the adjacent JSON file.
+
 The BMO image is the day-to-day baseline. TTS-generated speech banks are
 **persistent by design**: after BMO speaks, the last speech bank stays in the
 sound flash (`installed profile: tts`) until "🎵 Bring back BMO sounds" —
