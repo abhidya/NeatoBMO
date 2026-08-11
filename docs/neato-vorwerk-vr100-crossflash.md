@@ -171,10 +171,13 @@ Recorded for completeness; the scripted `NeatoUpgrader` above is simpler.
 - **Directly verified on this board:** hold the UI **BACK** button during cold
   power-on to select `Loading factory application`. The factory image enumerates
   over USB and its `GetVersion`, `Help`, `Help Upload`, and `Help SetSystemMode`
-  responses are byte-identical to the installed application. This provides a
-  plausible fallback updater surface, although an actual write from factory
-  mode has not been tested. See
-  `../captures/20260811_U02_factory_app_usb_readonly_p6.log`.
+  responses are byte-identical to the installed application. An exact vendor
+  sound-bank `noburn` then completed its full receive/dispatch path in factory
+  mode: P6 showed `NoWrite`, 770052 bytes received, and the expected NAND
+  failure while USB/health remained responsive. This verifies a functioning
+  fallback receiver without programming NAND; an actual factory-mode write is
+  still untested. See `../captures/20260811_U02_factory_app_usb_readonly_p6.log`
+  and `../captures/20260811_U03_factory_sound_noburn_p6.log`.
 - **Hard reset:** hold Power ~15 s until fully off.
 - **Safe/recovery mode:** hold the **left bumper** while pressing Power —
   forces a recovery mode to retry the flash. **Caveat (glnc222):** the

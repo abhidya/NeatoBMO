@@ -171,8 +171,13 @@ Known state:
 - Holding UI BACK at cold power directly selected the factory application. Its
   USB `GetVersion`, `Help`, `Help Upload`, and `Help SetSystemMode` replies were
   byte-identical to the installed application's responses. This is a plausible
-  fallback updater path, but no factory-mode write has been tested. See
-  `captures/20260811_U02_factory_app_usb_readonly_p6.log` and adjacent JSON.
+  fallback updater path. A subsequent exact vendor sound-bank `noburn` in the
+  same factory session received all 770052 framed bytes and produced the same
+  P6 `NoWrite`/NAND-failure result as the installed application, with a healthy
+  USB result afterward. This verifies the fallback receiver without programming
+  NAND; a real factory-mode write remains untested. See
+  `captures/20260811_U02_factory_app_usb_readonly_p6.log`,
+  `captures/20260811_U03_factory_sound_noburn_p6.log`, and adjacent JSON files.
 - ESP32 Wi-Fi was observed at `10.0.0.106` with ports `2323` and `3333` open.
   The P6 debug-UART bridge on `3334` was closed, and the ESP32 and Neato were
   not cabled together at that observation point.

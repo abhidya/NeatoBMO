@@ -1,0 +1,33 @@
+{
+  "experiment": "U03",
+  "factory_mode_basis": {
+    "boot_selector": "BACK held during cold power-on",
+    "boot_evidence": "captures/20260811_U02_factory_app_usb_readonly_p6.log",
+    "session_continuity": "Robot remained powered in the confirmed factory application through U03"
+  },
+  "command": "Upload sound noburn",
+  "image_bytes": 770048,
+  "image_profile": "vendor-default",
+  "image_sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+  "target": {
+    "serial": "WTD41611DD-0037829-P",
+    "software": "2.4.15667"
+  },
+  "usb": {
+    "port": "/dev/cu.usbmodem1431201",
+    "transfer_reply_hex": "1a",
+    "post_transfer_healthy": true
+  },
+  "p6": {
+    "capture": "captures/20260811_U03_factory_sound_noburn_p6.log",
+    "capture_sha256": "ee618d0ad6e4043144c47c72bf20d7cf1a179c07efb35688d3c8af714fcee8c1",
+    "type": "SOUND",
+    "protocol": "BLAST",
+    "framed_bytes": 770052,
+    "options": "NoWrite",
+    "receive_status": "Upload complete - 770052 bytes received",
+    "terminal_status": "Upload fail - nandflashWrite() fail - -1"
+  },
+  "writes_performed": false,
+  "limitations": "Confirms factory-mode receive and no-write dispatch only; does not prove a real NAND write or application recovery."
+}

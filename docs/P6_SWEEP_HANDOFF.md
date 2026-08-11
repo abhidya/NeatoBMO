@@ -98,6 +98,15 @@
 > attempted in factory mode. Evidence:
 > `../captures/20260811_U02_factory_app_usb_readonly_p6.log` and adjacent JSON.
 
+> **Factory updater finding:** while still running the BACK-selected factory
+> application, the exact vendor sound bank was sent with `Upload sound noburn`.
+> USB returned `0x1A`; P6 showed `SOUND`, `BLAST`, `Size 770052`, `NoWrite`, a
+> complete receive, then the expected `nandflashWrite() fail - -1`. The health
+> check passed and no NAND programming occurred. This proves the factory image
+> has a functioning fallback upload receiver, but not that a real write would
+> succeed. Evidence: `../captures/20260811_U03_factory_sound_noburn_p6.log` and
+> adjacent JSON.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible

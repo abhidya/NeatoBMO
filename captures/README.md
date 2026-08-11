@@ -120,7 +120,26 @@ our only robot sample (below).
 - **Conclusion:** the factory image does not expose an additional documented USB
   command surface, but it does expose the same normal updater help. This makes
   it a plausible fallback updater if the installed application stops booting;
-  an actual write from factory mode remains untested.
+  an actual programming operation from factory mode remains untested.
+
+## Factory-application sound `noburn` (2026-08-11 16:48 PDT)
+
+- Factory mode was established immediately beforehand by the BACK-selected boot
+  recorded in U02, and the robot remained powered in that mode for this test.
+- Raw P6 evidence: `20260811_U03_factory_sound_noburn_p6.log`; structured result:
+  `20260811_U03_factory_sound_noburn_result.json`.
+- Payload was the exact 770,048-byte vendor bank with SHA-256
+  `d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a`.
+- USB sent exactly `Upload sound noburn Size 770052`, returned terminal byte
+  `0x1A`, and the post-transfer health check succeeded.
+- P6 reported `SOUND`, `BLAST`, `Size : 770052`, `Options : NoWrite`, full
+  receive, then `Upload fail - nandflashWrite() fail - -1`—the same result as
+  the installed-application B02 test.
+- **Conclusion:** the factory application is not merely USB-enumerable; its
+  fallback updater receives and dispatches a complete upload through the same
+  no-write path. This strengthens the recovery case without programming NAND.
+  It does not prove that a real factory-mode application or sound write would
+  succeed.
 
 ## Exact vendor sound-bank `noburn` (2026-08-11 15:17 PDT)
 
@@ -235,6 +254,10 @@ our only robot sample (below).
   exact archived hash and every unknown image before opening the serial port.
 
 ## Files here
+- `20260811_U03_factory_sound_noburn_p6.log` — exact vendor sound bank through
+  the BACK-selected factory application's no-write upload path.
+- `20260811_U03_factory_sound_noburn_result.json` — payload identity, USB/P6
+  terminal results, and explicit no-write record for U03.
 - `20260811_U02_factory_app_usb_readonly_p6.log` — BACK-selected factory boot,
   USB attach, and read-only command comparison.
 - `20260811_U02_factory_app_usb_readonly_result.json` — exact response hashes
