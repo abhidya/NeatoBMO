@@ -1,0 +1,27 @@
+{
+  "boot_selector": "BACK held during cold power-on",
+  "p6_boot_path": "Loading factory application",
+  "p6_usb_event": "USB Connected",
+  "target_serial": "WTD41611DD-0037829-P",
+  "software": "2.4.15667",
+  "comparison_source": "usb-snapshots/WTD41611DD-0037829-P_sw-2-4-15667_20260811T221515Z/snapshot.json",
+  "responses": {
+    "GetVersion": {
+      "exact_match": true,
+      "sha256": "cfd1eb4c05811f2586965208e1d2290075d9245a770122fad5d0f5dc6c3a094e"
+    },
+    "Help": {
+      "exact_match": true,
+      "sha256": "1704c9611ee5abb6102bbc88c7d6779011c42768d8d8aff53a667f43720736f2"
+    },
+    "Help Upload": {
+      "exact_match": true,
+      "sha256": "412fa066ad78e7229600e4f297e159ca5891f10301147a09037f1dbc8f13c7cd"
+    },
+    "Help SetSystemMode": {
+      "exact_match": true,
+      "sha256": "7d3d1800eec90a337801109cafc3bf6615ebcc7dd1f813e188a07d196f2b3079"
+    }
+  },
+  "writes_performed": false
+}

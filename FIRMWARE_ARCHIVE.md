@@ -168,6 +168,11 @@ Known state:
 - Incompatible 3.2 build 18755 was not transmitted. The checked-in no-burn
   harness explicitly rejects its archived SHA-256 and every unknown image
   before opening the serial port.
+- Holding UI BACK at cold power directly selected the factory application. Its
+  USB `GetVersion`, `Help`, `Help Upload`, and `Help SetSystemMode` replies were
+  byte-identical to the installed application's responses. This is a plausible
+  fallback updater path, but no factory-mode write has been tested. See
+  `captures/20260811_U02_factory_app_usb_readonly_p6.log` and adjacent JSON.
 - ESP32 Wi-Fi was observed at `10.0.0.106` with ports `2323` and `3333` open.
   The P6 debug-UART bridge on `3334` was closed, and the ESP32 and Neato were
   not cabled together at that observation point.

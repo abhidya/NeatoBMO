@@ -107,6 +107,21 @@ our only robot sample (below).
 - **Conclusion:** P6 exposes USB link state but does not mirror ordinary USB CDC
   commands or responses.
 
+## Factory-application USB surface (2026-08-11 16:31 PDT)
+
+- Raw P6 evidence: `20260811_U02_factory_app_usb_readonly_p6.log`; structured
+  comparison: `20260811_U02_factory_app_usb_readonly_result.json`.
+- Holding the UI BACK button during cold power-on produced `Loading factory
+  application`. Connecting Neato USB then produced `USB Connected` on P6.
+- Factory-mode `GetVersion`, `Help`, `Help Upload`, and `Help SetSystemMode`
+  responses were byte-for-byte identical to the earlier installed-application
+  snapshot; the result JSON records each response SHA-256.
+- No upload, test mode, reset, or write command was sent.
+- **Conclusion:** the factory image does not expose an additional documented USB
+  command surface, but it does expose the same normal updater help. This makes
+  it a plausible fallback updater if the installed application stops booting;
+  an actual write from factory mode remains untested.
+
 ## Exact vendor sound-bank `noburn` (2026-08-11 15:17 PDT)
 
 - Raw P6 evidence: `20260811_B02_sound_noburn_exact_p6.log`.
@@ -220,6 +235,10 @@ our only robot sample (below).
   exact archived hash and every unknown image before opening the serial port.
 
 ## Files here
+- `20260811_U02_factory_app_usb_readonly_p6.log` — BACK-selected factory boot,
+  USB attach, and read-only command comparison.
+- `20260811_U02_factory_app_usb_readonly_result.json` — exact response hashes
+  versus the installed-application snapshot.
 - `20260811_C01_original_sound_burn_p6.log` — successful original sound-bank
   destructive write; NAND region/address/length and OK status.
 - `20260811_C01_original_sound_burn_result.json` — structured USB, P6, identity,

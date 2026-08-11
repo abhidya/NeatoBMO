@@ -91,6 +91,13 @@
 > `../captures/20260811_C01_original_sound_burn_p6.log` and
 > `../captures/20260811_C01_original_sound_burn_result.json`.
 
+> **Factory USB finding:** holding UI BACK at cold power selected the factory
+> application, which enumerated normally over USB. `GetVersion`, `Help`, `Help
+> Upload`, and `Help SetSystemMode` were byte-identical to installed-application
+> responses. This is a plausible fallback updater surface, but no write was
+> attempted in factory mode. Evidence:
+> `../captures/20260811_U02_factory_app_usb_readonly_p6.log` and adjacent JSON.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible

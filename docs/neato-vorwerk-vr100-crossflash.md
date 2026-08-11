@@ -168,6 +168,13 @@ Recorded for completeness; the scripted `NeatoUpgrader` above is simpler.
 
 ### Recovery if it fails to boot
 
+- **Directly verified on this board:** hold the UI **BACK** button during cold
+  power-on to select `Loading factory application`. The factory image enumerates
+  over USB and its `GetVersion`, `Help`, `Help Upload`, and `Help SetSystemMode`
+  responses are byte-identical to the installed application. This provides a
+  plausible fallback updater surface, although an actual write from factory
+  mode has not been tested. See
+  `../captures/20260811_U02_factory_app_usb_readonly_p6.log`.
 - **Hard reset:** hold Power ~15 s until fully off.
 - **Safe/recovery mode:** hold the **left bumper** while pressing Power —
   forces a recovery mode to retry the flash. **Caveat (glnc222):** the
