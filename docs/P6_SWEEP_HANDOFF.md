@@ -18,8 +18,16 @@
 > **Combined-button finding:** holding START+BACK also selected the factory
 > application. `../captures/20260811_A03_hold_start_back_cold_boot.log`
 > contains four boot banners (two `PowerUp`, two `Software`) and one intervening
-> undecoded high-bit interval. Do not interpret that interval as firmware data
-> without reproducing it or independently validating the electrical signal.
+> undecoded high-bit interval. The operator reported likely releasing and
+> retrying the buttons near that interval. Do not interpret it as firmware data
+> without a controlled reproduction or independent electrical validation.
+
+> **Controlled repeat:**
+> `../captures/20260811_A03R1_hold_start_back_repeat.log` showed three
+> factory-application boots while START+BACK remained held, followed by an
+> installed-application software boot after button release. Only a small
+> undecoded interval at initial power transition remained, supporting
+> startup/contact noise rather than firmware content.
 
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)

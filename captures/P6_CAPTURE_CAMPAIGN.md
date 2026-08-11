@@ -26,7 +26,7 @@ The tap is receive-only. Keep Neato power off while changing wires.
 | A00 | Ordinary cold boot, no buttons | Passive | Complete: `p6_1786482063.log` |
 | A01 | Boot while holding Start | Passive | Complete: `20260811_A01_hold_start_cold_boot.log`; 1 PowerUp boot followed by 3 Software-reset boots while START was held |
 | A02 | Boot while holding Back | Passive | Complete: `20260811_A02_hold_back_cold_boot.log`; bootloader selected `Loading factory application` |
-| A03 | Boot while holding Start + Back; observe only, do not confirm reset/menu actions | Passive until a menu action is selected | Complete: `20260811_A03_hold_start_back_cold_boot.log`; 4 factory-application boots (2 PowerUp, 2 Software) plus one undecoded high-bit interval |
+| A03 | Boot while holding Start + Back; observe only, do not confirm reset/menu actions | Passive until a menu action is selected | Complete: initial `20260811_A03_hold_start_back_cold_boot.log`; controlled repeat `20260811_A03R1_hold_start_back_repeat.log`. Repeat showed factory selected while buttons were held, then installed selected on a software reset after release. |
 | A04 | Normal menu navigation and each harmless button | Passive | Pending |
 | A05 | Start cleaning, pause, resume, return to base/stop | Robot motion | Pending |
 | A06 | Sleep/standby, wake, ordinary shutdown/restart | Passive | Pending |

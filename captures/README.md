@@ -55,15 +55,24 @@ our only robot sample (below).
 - `20260811_A03_hold_start_back_cold_boot.log`: holding START+BACK also selected
   the factory application. Four clean boot banners were observed: two reported
   `PowerUp`, then two reported `Software`. One high-bit/undecoded interval
-  appeared between clean factory boots. Preserve it as raw evidence; a transient
-  contact, temporary UART-mode change, or genuine binary output is not yet
-  distinguished.
+  appeared between clean factory boots. The operator later reported likely
+  releasing the buttons accidentally and retrying at that point. This makes a
+  transition/contact artifact more plausible; the raw bytes remain preserved
+  and uninterpreted. The controlled repeat below tests the surrounding behavior.
+- `20260811_A03R1_hold_start_back_repeat.log`: controlled repeat. It produced
+  three factory-application boots (`PowerUp`, then two `Software`) while the
+  buttons were held. After the timed release, the next `Software` boot selected
+  the installed application. A much smaller high-bit interval occurred only at
+  initial power transition, supporting startup/contact noise rather than an
+  exposed firmware payload.
 - Neither path entered `RomBOOT>` or SAM-BA.
 - The BACK result establishes a non-destructive, button-selected factory-image
   boot path that may be useful for recovery after a bad installed-application
   update. It does not prove the factory image can repair the installed image.
 
 ## Files here
+- `20260811_A03R1_hold_start_back_repeat.log` — controlled START+BACK repeat;
+  factory selected while held, installed selected after release.
 - `20260811_A03_hold_start_back_cold_boot.log` — START+BACK-held cold boot;
   repeated factory-application boots and one undecoded high-bit interval.
 - `20260811_A02_hold_back_cold_boot.log` — BACK-held cold boot selecting
