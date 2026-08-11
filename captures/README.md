@@ -88,7 +88,31 @@ our only robot sample (below).
   and early initialization but does not trace ordinary UI button, sound, or LCD
   standby/wake events.
 
+## Neato USB attachment and read-only commands (2026-08-11 15:12–15:16 PDT)
+
+- Mac device mapping: ESP/P6 recorder `/dev/cu.usbmodem5C381965721`, WCH
+  `1A86:55D3`; Neato USB CDC `/dev/cu.usbmodem1431201`, `2108:780B`.
+- `20260811_B00_neato_usb_attach.log`: attaching Neato USB produced the P6 line
+  `USB Connected`. The operator observed no attachment-related sound or LCD
+  transition; earlier sound/idle behavior was corrected as ordinary inactivity.
+- `20260811_B01_usb_readonly_snapshot_p6.log`: a single `GetVersion` followed
+  by the guarded read-only snapshot woke the LCD without sound. P6 emitted no
+  command-level trace.
+- Snapshot identity: XV-12 `WTD41611DD-0037829-P`, software `2.4.15667`,
+  mainboard `7.1`; LDS `V2.6.15295`, serial `WTD41411AA-0061795`.
+- Snapshot files and checksums:
+  `usb-snapshots/WTD41611DD-0037829-P_sw-2-4-15667_20260811T221515Z/`.
+  Both recorded SHA-256 checks pass. Live `Help Upload` explicitly advertises
+  `noburn - test option -- do NOT burn the flash after the upload.`
+- **Conclusion:** P6 exposes USB link state but does not mirror ordinary USB CDC
+  commands or responses.
+
 ## Files here
+- `20260811_B01_usb_readonly_snapshot_p6.log` — P6 during USB GetVersion and
+  read-only recovery snapshot.
+- `20260811_B00_neato_usb_attach.log` — Neato USB attachment; `USB Connected`.
+- `usb-snapshots/WTD41611DD-0037829-P_sw-2-4-15667_20260811T221515Z/` —
+  read-only robot configuration/calibration/help snapshot with SHA-256 manifest.
 - `20260811_A04R1_normal_back_start.log` — controlled normal boot, idle LCD
   timeout, BACK click, and START wake/sound; no runtime UART events.
 - `20260811_A04_normal_menu_buttons.log` — initial normal button session with

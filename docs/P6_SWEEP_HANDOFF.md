@@ -36,6 +36,15 @@
 > focused rather than a live UI-event log. Repeat on an assembled robot before
 > generalizing this negative result.
 
+> **USB observability finding:** Neato enumerated separately as USB CDC
+> `/dev/cu.usbmodem1431201` (`2108:780B`). P6 printed `USB Connected` on cable
+> attachment, but did not mirror `GetVersion` or the guarded read-only snapshot
+> commands. The snapshot confirmed XV-12 `WTD41611DD-0037829-P`, software
+> `2.4.15667`, mainboard `7.1`, and live help advertising the `noburn` upload
+> option. See `../captures/20260811_B00_neato_usb_attach.log`,
+> `../captures/20260811_B01_usb_readonly_snapshot_p6.log`, and
+> `../captures/usb-snapshots/`.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible

@@ -30,6 +30,8 @@ The tap is receive-only. Keep Neato power off while changing wires.
 | A04 | Normal menu navigation and each harmless button | Passive | Complete for available START/BACK panel: initial `20260811_A04_normal_menu_buttons.log`; controlled `20260811_A04R1_normal_back_start.log`. BACK emitted nothing; START woke LCD and played sound but emitted nothing on P6. |
 | A05 | Start cleaning, pause, resume, return to base/stop | Robot motion | Pending |
 | A06 | Sleep/standby, wake, ordinary shutdown/restart | Passive | Partial: idle LCD-off and START wake/sound captured within A04R1; neither emitted P6 text. Explicit shutdown/restart remains pending. |
+| U00 | Attach Neato USB while P6 records | Passive | Complete: `20260811_B00_neato_usb_attach.log`; P6 printed `USB Connected`, with no reset/sound/LCD change attributable to attachment. |
+| U01 | Read-only USB identity/configuration/help snapshot while P6 records | Read-only | Complete: `20260811_B01_usb_readonly_snapshot_p6.log` plus `usb-snapshots/WTD41611DD-0037829-P_sw-2-4-15667_20260811T221515Z/`; LCD woke, no sound, no P6 command trace. |
 | B01 | Play/upload known sound with no firmware change | Low; validate command first | Pending |
 | B02 | Exact known-good sound package, no-burn/validation path | Low; uploader-dependent | Pending |
 | B03 | One-bit-corrupt copy of B02 through no-burn/validation path | Low; uploader-dependent | Pending |
