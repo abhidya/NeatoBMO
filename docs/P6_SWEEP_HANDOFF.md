@@ -59,6 +59,13 @@
 > `../captures/20260811_B03_sound_noburn_onebit_p6.log`. Thus `noburn` does not
 > validate content integrity or compatibility.
 
+> **Application no-burn finding (2.5):** verified Cruz-P build 15893 produced
+> `CODE`, `BLAST`, `Size 805892`, `NoWrite`, full receive, then the same
+> `nandflashWrite() fail - -1`. USB returned `0x1A`; installed identity remained
+> 2.4.15667. Evidence:
+> `../captures/20260811_B04R1_code_2.5_15893P_noburn_p6.log`. This path does not
+> establish decryption or compatibility validation.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible

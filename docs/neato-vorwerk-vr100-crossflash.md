@@ -29,6 +29,13 @@ image, then set the ModelID back — no decryption or RE required.
 > cleaning time for NiMH), so for the BMO project the upside is zero and
 > the only outcome on offer is a brick.
 
+This boundary is enforced by `tools/neato_code_noburn.py`. The harness accepts
+only the exact verified hashes for Cruz-P 2.5 build 15893, 2.7 build 16621, and
+3.1 build 17844; hardcodes `Upload code noburn`; requires the target robot's
+2.4 identity; explicitly rejects the archived 3.2 build 18755 hash; and rejects
+every unknown image before opening the serial port. This guard applies to
+no-burn diagnostics only and does not authorize an application flash write.
+
 ## Why we missed it
 
 Our firmware docs (`FIRMWARE_ARCHIVE.md`, `FIRMWARE_SOUND_PATCH.md`) framed

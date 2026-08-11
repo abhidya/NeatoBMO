@@ -151,6 +151,11 @@ Known state:
 - `Upload code noburn` accepted a 3.1 encrypted image into the updater receive
   path, but later `dump` returned no application payload. Treat that as a
   transport observation, not cryptographic validation or readback.
+- A simultaneous P6 capture of verified Cruz-P 2.5 build 15893 now shows what
+  the USB terminator hides: `CODE`, `BLAST`, `NoWrite`, full 805892-byte receive,
+  then `nandflashWrite() fail - -1`. Installed identity stayed 2.4.15667. This
+  remains transport/dispatch evidence, not decryption or compatibility proof.
+  See `captures/20260811_B04R1_code_2.5_15893P_noburn_p6.log`.
 - ESP32 Wi-Fi was observed at `10.0.0.106` with ports `2323` and `3333` open.
   The P6 debug-UART bridge on `3334` was closed, and the ESP32 and Neato were
   not cabled together at that observation point.

@@ -35,7 +35,7 @@ The tap is receive-only. Keep Neato power off while changing wires.
 | B01 | Play/upload known sound with no firmware change | Low; validate command first | Pending |
 | B02 | Exact known-good sound package, no-burn/validation path | Low; uploader-dependent | Complete: `20260811_B02_sound_noburn_exact_p6.log`; P6 showed SOUND/BLAST/770052/NoWrite, receive complete, then `nandflashWrite() fail - -1`; USB returned only `0x1A`; health check unchanged. |
 | B03 | One-bit-corrupt copy of B02 through no-burn/validation path | Low; uploader-dependent | Complete: `20260811_B03_sound_noburn_onebit_p6.log`; bit flipped at offset 4108, payload SHA `befe3a38…de1`; USB and P6 outcomes identical to exact bank, health unchanged. |
-| B04 | Known Cruz-P 2.5 application through no-burn/validation path | Low only if no-burn is verified | Pending |
+| B04 | Known Cruz-P 2.5 application through no-burn/validation path | Residual NAND-path risk explicitly authorized | Complete: `20260811_B04R1_code_2.5_15893P_noburn_p6.log`; CODE/BLAST/805892/NoWrite, full receive, NAND failure, USB `0x1A`, identity unchanged. Pre-authorization recorder preserved as `20260811_B04_code_2.5_15893P_noburn_p6.log`; no image bytes were sent in it. |
 | B05 | Known Cruz-P 2.7 application through no-burn/validation path | Low only if no-burn is verified | Pending |
 | B06 | Known Cruz-P 3.1 application through no-burn/validation path | Low only if no-burn is verified | Pending |
 | C01 | Program a known sound bank | Writes flash; separate approval/recovery check | Gated |

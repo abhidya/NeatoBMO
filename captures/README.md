@@ -140,7 +140,29 @@ our only robot sample (below).
   distinguishes this one-bit content change. `noburn` is a transport exercise,
   not a sound-bank integrity or compatibility validator.
 
+## Cruz-P 2.5 application `noburn` (2026-08-11 15:28–15:31 PDT)
+
+- An initial P6 recorder file,
+  `20260811_B04_code_2.5_15893P_noburn_p6.log`, was stopped after the application
+  transfer was blocked pending explicit risk approval. No image bytes were sent.
+- After approval, raw evidence was captured in
+  `20260811_B04R1_code_2.5_15893P_noburn_p6.log`.
+- Payload: Cruz-P 2.5 build 15893, 805,888 bytes, SHA-256
+  `e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697`.
+- USB command: `Upload code noburn Size 805892`; USB returned `0x1A` and the
+  robot remained software `2.4.15667` afterward.
+- P6: `Type : CODE`, `Protocol : BLAST`, `Options : NoWrite`, full 805892-byte
+  receive, then `Upload fail - nandflashWrite() fail - -1`.
+- Operator observation: LCD turned on; no sound or visible message.
+- **Conclusion:** the application no-burn path behaves like sound no-burn at
+  this layer. It exercises transport and updater dispatch but does not validate
+  compatibility, decryptability, or a successful application write.
+
 ## Files here
+- `20260811_B04R1_code_2.5_15893P_noburn_p6.log` — approved Cruz-P 2.5 code
+  no-burn transfer and internal updater diagnostics.
+- `20260811_B04_code_2.5_15893P_noburn_p6.log` — pre-authorization recorder;
+  transfer blocked before any image bytes were sent.
 - `20260811_B03_sound_noburn_onebit_p6.log` — one-bit-corrupted sound-bank
   `noburn`; internal result matches exact vendor bank.
 - `20260811_B02_sound_noburn_exact_p6.log` — exact vendor sound-bank `noburn`;
