@@ -1,5 +1,15 @@
 # Methodology review — bugs & confounds in the P6 capture pipeline
 
+> **Post-review field correction (2026-08-11 13:50 PDT):** finding 1's device
+> identification was disproven by direct enumeration. `pio device list` reports
+> `/dev/cu.usbmodem5C381965721` as WCH `VID:PID=1A86:55D3`, `USB Single Serial`,
+> and the captured boot log confirms primary console UART0 on GPIO44/43. The
+> pathname alone did not identify USB-JTAG; this connector is not subject to the
+> secondary-console FIFO theory. The GPIO17→GPIO18 self-test also passed in
+> `../p6_1786481459.log` (counters 47–70), proving the ESP32 RX/capture chain.
+> Noise with GPIO18 floating became clean ASCII immediately after loopback,
+> strongly supporting a floating-input explanation for the old gibberish.
+
 **Scope:** firmware (`esp32-body/src/debug_uart.c`, `main.c`, `neato_usb.c`),
 host (`tools/p6_capture.py`), build/console config (`sdkconfig.esp32s3`,
 `platformio.ini`), and the documented procedure (`docs/P6_SWEEP_HANDOFF.md`,

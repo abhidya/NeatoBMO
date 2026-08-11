@@ -6,7 +6,49 @@ for the P6 pinout. **Capture rule: never truncate. `tools/p6_capture.py` now
 appends to timestamped files** — an earlier reused-filename truncation destroyed
 our only robot sample (below).
 
+## Field update — GPIO17→GPIO18 loopback PASSED (2026-08-11 13:50 PDT)
+
+- Flashed `-DP6_SELFTEST` after removing an accidental jumper between the
+  board pins labelled `TX` and `RX` (UART0/programming pins, not GPIO17/18).
+- With GPIO18 floating, the capture produced a large noisy/high-bit burst.
+  Connecting the numeric header pins **GPIO17→GPIO18** made the same live
+  capture immediately become clean consecutive ASCII: `P6-SELFTEST 47` through
+  `P6-SELFTEST 70`.
+- Raw evidence: `p6_1786481459.log` (8016 bytes, append-only).
+- **Conclusion:** ESP32 UART1 TX GPIO17, RX GPIO18, the firmware echo path, the
+  host serial reader, and file persistence all work. The prior lost 8377-byte
+  "gibberish" sample is now strongly explained by a floating GPIO18/contact
+  state rather than Neato output.
+- **Console correction:** `pio device list` identifies
+  `/dev/cu.usbmodem5C381965721` as WCH `VID:PID=1A86:55D3`, `USB Single Serial`.
+  The captured boot log confirms console UART0 on GPIO44/43. This connector
+  therefore carries the primary UART0 console despite its misleading pathname;
+  it is not the USB-Serial-JTAG secondary console assumed by the methodology
+  review.
+
+## Goal achieved — clean P6 cold-boot capture (2026-08-11 14:01 PDT)
+
+- Raw evidence: `p6_1786482063.log` (7247 bytes, append-only).
+- Passive wiring: P6.4→ESP32 GND and P6.3 AT91_TXD→GPIO18; P6.2/GPIO17 was
+  deliberately left disconnected.
+- Normal fixed-115200 bridge, one exclusive host reader, capture armed before
+  Neato power-on.
+- Clean decoded identifiers include:
+  - `Neato Robotics XV-11/XEB V10:45:23`
+  - `NEROS Build 15667 Oct 28 2011 11:25:50`
+  - `Power On reset: 0 :PowerUp`
+  - LDS `Loader V2.5.14010`, serial `WTD41411AA-0061795`, and
+    `Runtime V2.6.15295`
+- This proves the P6.3 signal, shared ground, GPIO18 receive path, 115200 8N1
+  decode, ESP32 bridge, primary UART0 USB capture, and cold-boot timing end to
+  end. The captured stream is the expected Neato bootloader/application log,
+  not a SAM-BA `RomBOOT>` monitor.
+
 ## Files here
+- `p6_1786482063.log` — **successful clean Neato P6 cold-boot capture** at
+  115200 8N1 through the normal ESP32 bridge.
+- `p6_1786481459.log` — successful GPIO17→GPIO18 loopback proof; also contains
+  the preceding floating-GPIO18 noise interval.
 - `2026-08-11T1229_p6_sweep_bannersonly.txt` — output of the `-DP6_BAUDSWEEP`
   build. **All `==== BAUD N ====` banners, ZERO robot bytes** (0 high-bit bytes).
 - `2026-08-11_esp32_bootlog_flash_sweep.log` — esptool/PlatformIO log from the

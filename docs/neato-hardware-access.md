@@ -94,6 +94,11 @@ LCD/button panel. To reach it:
 
 ## Reminder
 
+**Field result (2026-08-11):** passive P6 capture succeeded at 115200 8N1 using
+P6.4→ESP32 GND and P6.3→ESP32 GPIO18, with P6.2 left disconnected. The preserved
+log is `../captures/p6_1786482063.log` and identifies NEROS Build 15667. As
+expected, it is a Neato boot/application log and contains no SAM-BA prompt.
+
 This is only worth doing to extract the fused AES key — the sole route left
 (no public break exists; see [neato-envelope-crypto.md](neato-envelope-crypto.md)).
 It has **nothing to do with running BMO**: the sound bank is unencrypted and

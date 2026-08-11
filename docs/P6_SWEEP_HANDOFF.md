@@ -1,10 +1,25 @@
 # P6 capture — handoff (baud sweep SUPERSEDED by the 2026-08-11 review)
 
+> **GOAL ACHIEVED (2026-08-11 14:01 PDT):** a clean AT91 cold-boot log was
+> captured over P6 at 115200 8N1 in `../captures/p6_1786482063.log`. It contains
+> `Neato Robotics XV-11/XEB V10:45:23`, `NEROS Build 15667 Oct 28 2011
+> 11:25:50`, and LDS runtime `V2.6.15295`. The successful passive wiring was
+> P6.4→ESP32 GND and P6.3→GPIO18, with P6.2/GPIO17 disconnected. No additional
+> sweep or capture-rig change is needed.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible
 > silence is a **channel/wiring/capture-rig fault, not a baud mismatch.** This
 > doc now reflects those conclusions. Do not resume sweeping.
+
+> **Field update (2026-08-11 13:50 PDT):** GPIO17→GPIO18 loopback passed.
+> `../captures/p6_1786481459.log` contains clean `P6-SELFTEST 47` through `70`,
+> proving UART1 RX/TX and the host capture path. Noise immediately before the
+> correct jumper was attached occurred with GPIO18 floating. The active Mac tty
+> is also a WCH USB-to-UART bridge (`1A86:55D3`) carrying primary UART0, not the
+> USB-JTAG secondary console. Next: remove loopback, flash the normal 115200
+> bridge, wire P6.4→GND and P6.3→GPIO18, arm capture, and power-cycle Neato once.
 
 ## Goal
 Tap the Neato XV-12 **P6 debug UART** (AT91SAM9XE, Cruz Rev113) with an
@@ -33,9 +48,20 @@ Tap the Neato XV-12 **P6 debug UART** (AT91SAM9XE, Cruz Rev113) with an
   So **P6 alone is not a key-extraction route on a healthy board** — it confirms
   the tap and identifies the board, nothing more.
 
-## THE NEXT STEP (before any reflash or baud change)
-**Prove a signal physically exists on P6.3 (AT91_TXD) vs P6.4 GND during a
-power-cycle.**
+## Completed procedure (loopback and cold boot captured)
+
+The successful passive fixed-115200 procedure was:
+
+1. Remove the GPIO17→GPIO18 loopback jumper.
+2. Flash the normal bridge build (no diagnostic build flag).
+3. With Neato power disconnected, wire P6.4→ESP32 GND and
+   P6.3→ESP32 GPIO18. Leave P6.2/GPIO17 disconnected for this passive test.
+4. Start one exclusive `p6_capture.py` reader, then power-cycle the Neato once.
+5. Preserve `../captures/p6_1786482063.log`; the expected Neato application
+   banner was captured cleanly.
+
+The original discriminator was to **prove a signal physically exists on P6.3
+(AT91_TXD) vs P6.4 GND during a power-cycle.**
 - **Best:** scope / logic analyzer / DMM on P6.3 vs GND. Live toggling → signal
   exists, read the bit period directly (expect ~8.68 µs/bit = 115200). Static
   idle-high → the AT91 isn't transmitting. Contact-dependent noise → loose wire.
@@ -43,11 +69,13 @@ power-cycle.**
   `-DP6_SELFTEST`, jumper `GPIO17→GPIO18`, confirm `P6-SELFTEST N` appears. That
   finally proves the ESP32 RX path works at all — which we have never verified.
 
-## Recommended firmware change (pair with the signal check, needs a reflash)
-Make USB-Serial-JTAG the **primary** console (`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y`)
-or capture UART0 (GPIO43/44) — so we stop reading the lossy secondary FIFO. Also
-consider guarding the USB host stack (`neato_usb_install`/`coli_mcu_start` in
-`main.c`) out of the diagnostic build; it shares the USB PHY with the capture port.
+## Console-path correction
+
+The active Mac tty is a WCH USB-to-UART bridge (VID:PID `1A86:55D3`) connected
+to primary UART0 GPIO43/44. Its `cu.usbmodem...` name was misleading. Making
+USB-Serial-JTAG primary is not required for this physical connector. Guarding
+the USB host stack out of diagnostic builds remains useful cleanup, but it is
+not a prerequisite for the P6 capture.
 
 ## Wiring (proven correct — do NOT swap)
 ```
