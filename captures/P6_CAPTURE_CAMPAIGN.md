@@ -1,0 +1,53 @@
+# P6 UART Capture Campaign — 2026-08-11
+
+## Fixed wiring
+
+- Neato P6.4 GND -> ESP32 GND
+- Neato P6.3 AT91_TXD -> ESP32 GPIO18 (numeric pin 18)
+- Leave P6.1, P6.2, ESP32 GPIO17, board pins labelled TX/RX, and all voltage pins disconnected.
+- ESP32 UART/COM USB connector -> Mac.
+- Never touch J3 ERASE.
+
+The tap is receive-only. Keep Neato power off while changing wires.
+
+## Capture rules
+
+- 115200 8N1 only.
+- Start the capture before powering, resetting, pressing buttons, or uploading.
+- Use one append-only capture file per experiment; never overwrite a prior capture.
+- Say the experiment ID aloud/in notes and record exact button timing and visible LCD result.
+- Do not run two serial readers on the ESP32 port.
+- Stop before any firmware command that actually erases or programs application flash unless that destructive step is explicitly authorized.
+
+## Sequence
+
+| ID | Experiment | Risk | Status |
+|---|---|---:|---|
+| A00 | Ordinary cold boot, no buttons | Passive | Complete: `p6_1786482063.log` |
+| A01 | Boot while holding Start | Passive | Complete: `20260811_A01_hold_start_cold_boot.log`; 1 PowerUp boot followed by 3 Software-reset boots while START was held |
+| A02 | Boot while holding Back | Passive | Complete: `20260811_A02_hold_back_cold_boot.log`; bootloader selected `Loading factory application` |
+| A03 | Boot while holding Start + Back; observe only, do not confirm reset/menu actions | Passive until a menu action is selected | Pending |
+| A04 | Normal menu navigation and each harmless button | Passive | Pending |
+| A05 | Start cleaning, pause, resume, return to base/stop | Robot motion | Pending |
+| A06 | Sleep/standby, wake, ordinary shutdown/restart | Passive | Pending |
+| B01 | Play/upload known sound with no firmware change | Low; validate command first | Pending |
+| B02 | Exact known-good sound package, no-burn/validation path | Low; uploader-dependent | Pending |
+| B03 | One-bit-corrupt copy of B02 through no-burn/validation path | Low; uploader-dependent | Pending |
+| B04 | Known Cruz-P 2.5 application through no-burn/validation path | Low only if no-burn is verified | Pending |
+| B05 | Known Cruz-P 2.7 application through no-burn/validation path | Low only if no-burn is verified | Pending |
+| B06 | Known Cruz-P 3.1 application through no-burn/validation path | Low only if no-burn is verified | Pending |
+| C01 | Program a known sound bank | Writes flash; separate approval/recovery check | Gated |
+| D01 | Program application firmware | High risk; requires verified image, backup/recovery plan | HARD STOP |
+
+Do not test 3.2+, L1000, Vorwerk, or unidentified images on this Cruz Rev113 board. “No-burn” must be confirmed from the exact uploader command before submitting any image.
+
+## Expected evidence
+
+For every sequence, preserve the raw UART log and record:
+
+- Neato starting state and power source
+- buttons held and when released
+- USB/upload command, if any
+- LCD/menu behavior
+- UART messages, reset reason, addresses, sizes, validation/decryption/checksum results
+- whether the robot remained functional afterward

@@ -44,7 +44,24 @@ our only robot sample (below).
   end. The captured stream is the expected Neato bootloader/application log,
   not a SAM-BA `RomBOOT>` monitor.
 
+## Button-held cold boots (2026-08-11 14:42–14:47 PDT)
+
+- `20260811_A01_hold_start_cold_boot.log`: holding START during power-on first
+  loaded the installed application, then produced three observed
+  `Power On reset: 8 :Software` reboot cycles before capture was stopped.
+- `20260811_A02_hold_back_cold_boot.log`: holding BACK during power-on made the
+  bootloader print **`Loading factory application`** instead of `Loading
+  installed application`. It then started the same reported NEROS build 15667.
+- Neither path entered `RomBOOT>` or SAM-BA.
+- The BACK result establishes a non-destructive, button-selected factory-image
+  boot path that may be useful for recovery after a bad installed-application
+  update. It does not prove the factory image can repair the installed image.
+
 ## Files here
+- `20260811_A02_hold_back_cold_boot.log` — BACK-held cold boot selecting
+  `Loading factory application`.
+- `20260811_A01_hold_start_cold_boot.log` — START-held cold boot showing
+  repeated software-reset cycles.
 - `p6_1786482063.log` — **successful clean Neato P6 cold-boot capture** at
   115200 8N1 through the normal ESP32 bridge.
 - `p6_1786481459.log` — successful GPIO17→GPIO18 loopback proof; also contains

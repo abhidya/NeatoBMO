@@ -7,6 +7,14 @@
 > P6.4→ESP32 GND and P6.3→GPIO18, with P6.2/GPIO17 disconnected. No additional
 > sweep or capture-rig change is needed.
 
+> **Recovery-path finding (2026-08-11 14:47 PDT):** holding BACK through a
+> cold power-on makes the bootloader print `Loading factory application` rather
+> than `Loading installed application`; raw evidence is
+> `../captures/20260811_A02_hold_back_cold_boot.log`. Holding START instead
+> loaded the installed application and then caused repeated software resets;
+> see `../captures/20260811_A01_hold_start_cold_boot.log`. Neither entered
+> `RomBOOT>` or SAM-BA.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible
