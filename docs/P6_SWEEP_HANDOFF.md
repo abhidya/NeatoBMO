@@ -79,6 +79,11 @@
 > 2.5/2.7/3.1, P6 exposed no decryption, signature, or compatibility stage.
 > Version 3.2+ is forbidden and was not transmitted.
 
+> **Sound playback finding:** `PlaySound 1` was accepted and audible while
+> `PlaySound 4` returned `out of range` over USB. P6 emitted nothing for either;
+> see `../captures/20260811_B01_playsound_accept_reject_p6.log`. Use the USB
+> command channel, not P6, for sound-slot validation.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible

@@ -126,6 +126,15 @@ our only robot sample (below).
   without source or a flash readback, do not infer whether the write routine was
   called and deliberately blocked or rejected for another reason.
 
+## Accepted/rejected `PlaySound` comparison (2026-08-11 15:43 PDT)
+
+- Raw P6 evidence: `20260811_B01_playsound_accept_reject_p6.log`.
+- Direct USB accepted `PlaySound 1`; the corresponding stock sound played.
+- Direct USB rejected `PlaySound 4` with `SoundID '4' is out of range.`
+- P6 emitted no runtime text for either result; post-command identity remained
+  healthy on software `2.4.15667`.
+- **Conclusion:** USB command responses, not P6, expose sound-slot validation.
+
 ## One-bit-corrupted sound-bank `noburn` control (2026-08-11 15:20 PDT)
 
 - Raw P6 evidence: `20260811_B03_sound_noburn_onebit_p6.log`.
@@ -190,6 +199,8 @@ our only robot sample (below).
   exact archived hash and every unknown image before opening the serial port.
 
 ## Files here
+- `20260811_B01_playsound_accept_reject_p6.log` — accepted/rejected PlaySound
+  comparison; no runtime P6 output.
 - `20260811_B06_code_3.1_17844P_noburn_p6.log` — guarded ceiling-version
   Cruz-P 3.1 code no-burn transfer.
 - `20260811_B05_code_2.7_16621P_noburn_p6.log` — guarded Cruz-P 2.7 code
