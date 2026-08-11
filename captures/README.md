@@ -158,7 +158,22 @@ our only robot sample (below).
   this layer. It exercises transport and updater dispatch but does not validate
   compatibility, decryptability, or a successful application write.
 
+## Cruz-P 2.7 application `noburn` (2026-08-11 15:39 PDT)
+
+- Raw P6 evidence: `20260811_B05_code_2.7_16621P_noburn_p6.log`.
+- Payload: Cruz-P 2.7 build 16621, 805,888 bytes, SHA-256
+  `2e6033b1ef5440bed949de20e89563d7cb3dda41e0eb5e371c9d86dceeb1633f`.
+- The fail-closed harness accepted the exact hash and target identity, then sent
+  only `Upload code noburn Size 805892`. USB returned `0x1A`; installed software
+  remained `2.4.15667`.
+- P6 matched the 2.5 result exactly: `CODE`, `BLAST`, `NoWrite`, full receive,
+  then `nandflashWrite() fail - -1`.
+- **Conclusion:** this path reveals no version-dependent decrypt, signature, or
+  compatibility decision between the 2.5 and 2.7 envelopes.
+
 ## Files here
+- `20260811_B05_code_2.7_16621P_noburn_p6.log` — guarded Cruz-P 2.7 code
+  no-burn transfer and internal updater diagnostics.
 - `20260811_B04R1_code_2.5_15893P_noburn_p6.log` — approved Cruz-P 2.5 code
   no-burn transfer and internal updater diagnostics.
 - `20260811_B04_code_2.5_15893P_noburn_p6.log` — pre-authorization recorder;

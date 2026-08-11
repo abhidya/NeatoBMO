@@ -156,6 +156,10 @@ Known state:
   then `nandflashWrite() fail - -1`. Installed identity stayed 2.4.15667. This
   remains transport/dispatch evidence, not decryption or compatibility proof.
   See `captures/20260811_B04R1_code_2.5_15893P_noburn_p6.log`.
+- The guarded Cruz-P 2.7 build 16621 no-burn test produced the identical P6
+  sequence and unchanged 2.4 identity. No version-dependent decrypt or
+  compatibility stage was exposed. See
+  `captures/20260811_B05_code_2.7_16621P_noburn_p6.log`.
 - ESP32 Wi-Fi was observed at `10.0.0.106` with ports `2323` and `3333` open.
   The P6 debug-UART bridge on `3334` was closed, and the ESP32 and Neato were
   not cabled together at that observation point.
