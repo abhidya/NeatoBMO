@@ -160,6 +160,14 @@ Known state:
   sequence and unchanged 2.4 identity. No version-dependent decrypt or
   compatibility stage was exposed. See
   `captures/20260811_B05_code_2.7_16621P_noburn_p6.log`.
+- The guarded ceiling-version Cruz-P 3.1 build 17844 test differed only in its
+  framed size, 847876 bytes; it ended in the same `NoWrite` NAND-failure status
+  with unchanged installed identity. Across 2.5/2.7/3.1, no-burn exposed no
+  decryption, signature, or compatibility decision. See
+  `captures/20260811_B06_code_3.1_17844P_noburn_p6.log`.
+- Incompatible 3.2 build 18755 was not transmitted. The checked-in no-burn
+  harness explicitly rejects its archived SHA-256 and every unknown image
+  before opening the serial port.
 - ESP32 Wi-Fi was observed at `10.0.0.106` with ports `2323` and `3333` open.
   The P6 debug-UART bridge on `3334` was closed, and the ESP32 and Neato were
   not cabled together at that observation point.

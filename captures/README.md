@@ -171,7 +171,27 @@ our only robot sample (below).
 - **Conclusion:** this path reveals no version-dependent decrypt, signature, or
   compatibility decision between the 2.5 and 2.7 envelopes.
 
+## Cruz-P 3.1 application `noburn` (2026-08-11 15:41 PDT)
+
+- Raw P6 evidence: `20260811_B06_code_3.1_17844P_noburn_p6.log`.
+- Payload: Cruz-P 3.1 build 17844, 847,872 bytes, SHA-256
+  `03396329a1a47a7358d09bd414d01eddaa5806a50a18f4d9ce2f96edc2d5fab7`.
+- The fail-closed harness accepted this exact ceiling-version hash and sent only
+  `Upload code noburn Size 847876`. USB returned `0x1A`; installed software
+  remained `2.4.15667`.
+- P6 again showed `CODE`, `BLAST`, `NoWrite`, full receive, then
+  `nandflashWrite() fail - -1`. The larger framed size was the only visible
+  difference from 2.5/2.7.
+- **Conclusion:** no-burn P6 does not expose decryption, signature, board-family,
+  or version-compatibility decisions for any of the three allowed images. It is
+  not a firmware-unlock oracle.
+- Version 3.2 build 18755 is incompatible with this oldest side-jack Cruz
+  Rev113 and was **not transmitted**. `tools/neato_code_noburn.py` rejects its
+  exact archived hash and every unknown image before opening the serial port.
+
 ## Files here
+- `20260811_B06_code_3.1_17844P_noburn_p6.log` — guarded ceiling-version
+  Cruz-P 3.1 code no-burn transfer.
 - `20260811_B05_code_2.7_16621P_noburn_p6.log` — guarded Cruz-P 2.7 code
   no-burn transfer and internal updater diagnostics.
 - `20260811_B04R1_code_2.5_15893P_noburn_p6.log` — approved Cruz-P 2.5 code
