@@ -64,7 +64,8 @@ the cause remains unresolved.
 
 1. Whether any undocumented boot/recovery command is available at USB layer other than what `Help` exposes.  
 2. Exact conditions under which `Upload` subcommands (`dump/readflash`) can become valid in non-stock patched firmware.  
-3. Whether a different service/developer image exposes additional system modes; stock 2.4 and 2.5 do not.  
+3. Whether a different service/developer image exposes additional system modes;
+   stock 2.4 and 2.5 do not.
 4. Whether the 0x1A-terminated ASCII parser is complete enough when firmware emits mixed binary text + telemetry bursts outside command mode.  
 5. Full command universe beyond `Help` output; the probed 2.4/2.5 help replies
    are byte-identical, but undocumented service commands may still exist.
