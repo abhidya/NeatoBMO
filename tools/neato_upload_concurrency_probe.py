@@ -384,9 +384,28 @@ def run_probe(
             else:
                 result["transfer_status"] = "no_terminal_marker"
 
-            # The command string is no-write, but only P6 can confirm the hidden
-            # updater option and terminal NAND-write refusal on this firmware.
-            time.sleep(0.25)
+            # Capture the experimental P6 window before issuing the post-probe
+            # USB GetVersion health check. This prevents a hypothetical USB-side
+            # version trace from being misclassified as the injected P6 response.
+            try:
+                p6_after_injection = collector.wait_for(
+                    lambda data: (
+                        classify_p6_capture(data)["nand_write_blocked"]
+                        or classify_p6_capture(data)["nand_write_ok"]
+                    ),
+                    injection_mark,
+                    6.0,
+                )
+            except ProbeSafetyError as exc:
+                result["p6_collection_error"] = str(exc)
+                p6_after_injection = collector.snapshot(injection_mark)
+            time.sleep(0.1)
+            p6_after_injection = collector.snapshot(injection_mark)
+            upload_p6 = collector.snapshot(upload_mark)
+
+            # The command string is no-write, but only the isolated P6 window
+            # above can confirm the hidden option and terminal NAND refusal.
+            time.sleep(0.15)
             post_version = usb_command(connection, "GetVersion")
             try:
                 post_software = require_target(
@@ -404,17 +423,7 @@ def run_probe(
                     "sha256": hashlib.sha256(post_version).hexdigest(),
                 }
 
-        try:
-            p6_after_injection = collector.wait_for(
-                lambda data: classify_p6_capture(data)["nand_write_blocked"],
-                injection_mark,
-                6.0,
-            )
-        except ProbeSafetyError as exc:
-            result["p6_collection_error"] = str(exc)
-            p6_after_injection = collector.snapshot(injection_mark)
         all_p6 = collector.snapshot(0)
-        upload_p6 = collector.snapshot(upload_mark)
         concurrent_flags = classify_p6_capture(p6_after_injection)
         upload_flags = classify_p6_capture(upload_p6)
         result["p6_during_upload"] = {
