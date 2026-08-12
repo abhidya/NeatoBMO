@@ -18,6 +18,7 @@ ALLOWED_SHA256 = {
     "c17d42ec605efde8affd3d184ce41a2fd08aae80795633c4d6fe6b3e6750900f": "validated-bmo",
     "a7bdb1142c627d44a695f6cb82f4389521ee2ea1068dd491c86414e8627ac848": "validated-bmo-compact",
     "9d3d82d9275c03fa9f2abb163cdfd9393445737999916f6337d2d6b639b51159": "validated-bmo-pcm-only",
+    "ebce7f200a8a3f5f0676c475b7abb3aba5926ce559fb81bd3c3e0f37c042449a": "validated-all-slots-silent-pcm-only",
 }
 EXPECTED_BYTES = 770_048
 COMMAND = "Upload sound"
@@ -50,7 +51,10 @@ def command(ser: serial.Serial, text: str, timeout: float = 5.0) -> bytes:
 
 
 def matching_version(data: bytes) -> bool:
-    return b"WTD41611DD" in data and b"Software,2,4,15667" in data
+    approved_software = (b"Software,2,4,15667", b"Software,2,5,15893")
+    return b"WTD41611DD" in data and any(
+        software in data for software in approved_software
+    )
 
 
 def find_healthy_robot(timeout: float = 90.0):

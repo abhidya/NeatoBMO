@@ -394,3 +394,20 @@ cold-boot P6 yields the **app/bootloader banner, not the SAM-BA ROM monitor**, s
 P6 alone is not a key-extraction route on a healthy board. **Next step: prove a
 signal exists on P6.3 (scope/DMM, or the GPIO17→GPIO18 loopback self-test) before
 any reflash or baud change.** Details: `analysis/{at91-baud-research,hypothesis-review,methodology-review}.md`.
+
+## NeatoOS full-length checksum experiment (2026-08-12 03:27–03:34 PDT)
+
+- E09 no-burn: the 805,888-byte controlled image
+  `cb9d7cc2de782f626ad8e8c8002ff52fefaa93976b8780c6784bcdfad3734e7f`
+  completed transport with `NoWrite`; identity remained software 2.5.15893.
+- E10 application write: USB returned ACK and P6 recorded a successful
+  805,892-byte NAND write at region `0x10000`, followed by
+  `Checksum error in application binary` and automatic factory 2.4.15667
+  fallback. No `NEATOOS RAW V0` sentinel appeared.
+- E11 recovery: exact stock Cruz-P 2.5
+  `e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697`
+  was written and acknowledged; P6 started NEROS build 15893 and USB confirmed
+  software 2.5.15893.
+- Evidence: `20260812_E09_full_length_noburn_{p6.log,usb.json}`,
+  `20260812_E10_full_length_burn_{p6.log,usb.json}`, and
+  `20260812_E11_stock_25_restore_{p6.log,usb.json}`.

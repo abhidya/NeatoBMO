@@ -1,0 +1,40 @@
+{
+  "schema": "neatoos-phase-a/v1",
+  "phase": "A",
+  "status": "hardware-tested-no-execution",
+  "targets": {
+    "cpu": "ARM926EJ-S",
+    "canary": "bare-metal DBGU/P6 raw banner image",
+    "default_link_address": "0x20000000 hypothesis; not hardware-verified"
+  },
+  "artifacts": [
+    "README.md",
+    "Makefile",
+    "src/startup.S",
+    "src/main.c",
+    "include/at91sam9xe_min.h",
+    "linker/linker.ld",
+    "manifests/reference-images.json",
+    "tools/probe_generator.py"
+  ],
+  "safety_constraints": [
+    "no hardware access",
+    "no upload commands",
+    "no erase commands",
+    "no flash commands",
+    "no proprietary firmware blobs committed"
+  ],
+  "probe_representations": [
+    "raw-structural",
+    "reference-header"
+  ],
+  "raw_banner": "NEATOOS RAW V0",
+  "hardware_results": {
+    "raw-arm": "NAND write OK; boot rejected illegal application size",
+    "raw-structural": "NAND write OK; boot rejected illegal application size",
+    "reference-header": "NAND write OK; boot reached Starting app; no sentinel or USB",
+    "custom_execution_proven": false,
+    "stock_2_5_restored": true,
+    "factory_2_4_recovery_verified": true
+  }
+}

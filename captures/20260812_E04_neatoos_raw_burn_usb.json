@@ -1,0 +1,50 @@
+{
+  "application_bytes_sent": true,
+  "application_region_write_requested": true,
+  "automatic_retry": false,
+  "before_identity_ok": true,
+  "closing_hex": "06",
+  "command": "Upload code reboot",
+  "image_bytes": 129,
+  "image_sha256": "bf7f415437ccac7e3fa5251d83765a33c365023722833ea1bf5f703f1f9b6c12",
+  "manifest": "neatoos/build/probes/neatoos-raw.manifest.json",
+  "manifest_record": {
+    "label": "raw-arm",
+    "path": "neatoos/build/neatoos-raw.bin",
+    "sha256": "bf7f415437ccac7e3fa5251d83765a33c365023722833ea1bf5f703f1f9b6c12",
+    "size": 129
+  },
+  "opening_hex": "55706c6f616420636f6465207265626f6f742053697a65203133330d0a05",
+  "post_reboot": {
+    "attempts": [
+      {
+        "port": "/dev/cu.usbmodem143301",
+        "reply": "GetVersion\r\n"
+      }
+    ],
+    "port": "/dev/cu.usbmodem143301",
+    "reply": "GetVersion\r\n"
+  },
+  "representation": "raw-arm",
+  "transport_checksum": "0x00003abf",
+  "usb_ack": true,
+  "usb_nak": false,
+  "p6": {
+    "framed_bytes_received": 133,
+    "nand_region": "0x10000",
+    "nand_offset": 0,
+    "nand_bytes": 133,
+    "nand_status": "Upload - nandFlashWrite() OK",
+    "boot_path": [
+      "Loading installed application",
+      "Illegal size for application.",
+      "Loading factory application",
+      "Starting app",
+      "NEROS Build 15667 Oct 28 2011 11:25:50"
+    ],
+    "custom_sentinel_observed": false
+  },
+  "classification": "4. NAND write succeeds but boot rejects image",
+  "first_rejection_layer": "boot application size validation before ARM payload execution",
+  "conclusion": "The updater accepts and writes a raw 129-byte application image. The next boot rejects its application size and automatically falls back to the independent factory application."
+}

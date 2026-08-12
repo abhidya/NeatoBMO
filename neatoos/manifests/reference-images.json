@@ -1,0 +1,13 @@
+{
+  "schema": "neatoos-reference-images/v1",
+  "references": [
+    {
+      "label": "cruz-p-2.5.15893-public-update",
+      "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware25/XV11App.15893.P.bin.enc",
+      "sha256": "e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697",
+      "proprietary": true,
+      "repo_policy": "metadata-only; do not copy image into repository"
+    }
+  ]
+}
+

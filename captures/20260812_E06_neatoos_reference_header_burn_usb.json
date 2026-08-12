@@ -1,0 +1,77 @@
+{
+  "application_bytes_sent": true,
+  "application_region_write_requested": true,
+  "automatic_retry": false,
+  "before_identity_ok": true,
+  "closing_hex": "06",
+  "command": "Upload code reboot",
+  "image_bytes": 1024,
+  "image_sha256": "fd6d34e8fc1e165f9bde3385ba4e9745b8c8c863b077e7d9cf9e16a485a1cf88",
+  "manifest": "neatoos/build/probes/neatoos-raw.manifest.json",
+  "manifest_record": {
+    "authentication_status": "NOT AUTHENTICATED",
+    "encryption_status": "NOT ENCRYPTED",
+    "expected_experiment": "verified Cruz-P 2.5 reference header with raw body replacement; declared header length intentionally remains vendor original",
+    "header": {
+      "declared_length": 805156,
+      "declared_length_matches_payload": false,
+      "sha256": "b5ea69acf606e771b4e36414b08671f0c7b2a3f540df23d53ee4c586327a5c97",
+      "size": 512,
+      "source": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware25/XV11App.15893.P.bin.enc",
+      "unknown_0x10_0x1f_value": "e7413c42631da5ead7af3b3853d40439"
+    },
+    "label": "reference-header",
+    "note": "Offline probe container only; not an encrypted or authenticated Neato firmware image.",
+    "output_sha256": "fd6d34e8fc1e165f9bde3385ba4e9745b8c8c863b077e7d9cf9e16a485a1cf88",
+    "path": "neatoos/build/probes/neatoos-reference-header-probe.bin.enc",
+    "payload": {
+      "padded_size": 512,
+      "padding": 383,
+      "page_padding_size": 383,
+      "raw_sha256": "bf7f415437ccac7e3fa5251d83765a33c365023722833ea1bf5f703f1f9b6c12",
+      "raw_size": 129
+    },
+    "safety": {
+      "authenticated": false,
+      "encrypted": false,
+      "erase_commands": false,
+      "flash_commands": false,
+      "hardware_access": false,
+      "upload_commands": false
+    },
+    "schema": "neatoos-probe-image/v1",
+    "sha256": "fd6d34e8fc1e165f9bde3385ba4e9745b8c8c863b077e7d9cf9e16a485a1cf88",
+    "size": 1024,
+    "warnings": [
+      "NOT ENCRYPTED",
+      "NOT AUTHENTICATED"
+    ]
+  },
+  "opening_hex": "55706c6f616420636f6465207265626f6f742053697a6520313032380d0a05",
+  "post_reboot": {
+    "attempts": [],
+    "port": null,
+    "reply": ""
+  },
+  "representation": "reference-header",
+  "transport_checksum": "0x00004463",
+  "usb_ack": true,
+  "usb_nak": false,
+  "p6": {
+    "framed_bytes_received": 1028,
+    "nand_region": "0x10000",
+    "nand_offset": 0,
+    "nand_bytes": 1028,
+    "nand_status": "Upload - nandFlashWrite() OK",
+    "boot_path": [
+      "Loading installed application",
+      "Starting app"
+    ],
+    "illegal_size_message_observed": false,
+    "custom_sentinel_observed": false,
+    "subsequent_output_within_20_seconds": false
+  },
+  "classification": "5. Boot declares image start but no UART sentinel follows",
+  "first_rejection_layer": "not yet distinguished after boot size/header acceptance; possible transform/authentication, load/entry mismatch, or early crash/hang",
+  "conclusion": "Copying the exact vendor header changes the boot result: size validation passes and the bootstrap prints Starting app, but arbitrary ARM execution is not proven because NEATOOS RAW V0 never appears and USB does not re-enumerate."
+}

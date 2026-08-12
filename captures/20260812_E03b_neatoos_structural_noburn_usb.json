@@ -1,0 +1,66 @@
+{
+  "after_identity_ok": true,
+  "automatic_retry": false,
+  "before_identity_ok": true,
+  "classification": "3. Full receive but write rejection (intentional NoWrite path)",
+  "command": "Upload code noburn",
+  "image": "neatoos/build/probes/neatoos-structural-probe.bin.enc",
+  "image_bytes": 1024,
+  "image_sha256": "566845909e34f46fece26ea77395a48e752760fc2b8a1534d025e3b8e8f3017a",
+  "manifest": "neatoos/build/probes/neatoos-raw.manifest.json",
+  "manifest_record": {
+    "authentication_status": "NOT AUTHENTICATED",
+    "encryption_status": "NOT ENCRYPTED",
+    "expected_experiment": "synthetic structural envelope with raw body replacement",
+    "header": {
+      "declared_length": 129,
+      "declared_length_matches_payload": true,
+      "sha256": "16d35b613603ed40415b1bb250174bbae2423b33a4b2420d27b7c5bb76e115a1",
+      "size": 512,
+      "source": "synthetic-neato-structural-header",
+      "unknown_0x10_0x1f_value": "39202700bde6319aeb23920d278d7c42"
+    },
+    "label": "raw-structural",
+    "note": "Offline probe container only; not an encrypted or authenticated Neato firmware image.",
+    "output_sha256": "566845909e34f46fece26ea77395a48e752760fc2b8a1534d025e3b8e8f3017a",
+    "path": "neatoos/build/probes/neatoos-structural-probe.bin.enc",
+    "payload": {
+      "padded_size": 512,
+      "padding": 383,
+      "page_padding_size": 383,
+      "raw_sha256": "bf7f415437ccac7e3fa5251d83765a33c365023722833ea1bf5f703f1f9b6c12",
+      "raw_size": 129
+    },
+    "safety": {
+      "authenticated": false,
+      "encrypted": false,
+      "erase_commands": false,
+      "flash_commands": false,
+      "hardware_access": false,
+      "upload_commands": false
+    },
+    "schema": "neatoos-probe-image/v1",
+    "sha256": "566845909e34f46fece26ea77395a48e752760fc2b8a1534d025e3b8e8f3017a",
+    "size": 1024,
+    "warnings": [
+      "NOT ENCRYPTED",
+      "NOT AUTHENTICATED"
+    ]
+  },
+  "reboot_requested": false,
+  "representation": "raw-structural",
+  "usb_reply_hex": "1a",
+  "usb_result": "receiver transaction completed",
+  "writes_requested": false,
+  "p6": {
+    "type": "CODE",
+    "protocol": "BLAST",
+    "framed_bytes_received": 1028,
+    "options": "NoWrite",
+    "status": "Upload fail - nandflashWrite() fail - -1"
+  },
+  "inference_limits": [
+    "Receiver accepted bytes does not prove the structural header is valid firmware.",
+    "NoWrite does not exercise decryption, authentication, NAND programming, or boot."
+  ]
+}

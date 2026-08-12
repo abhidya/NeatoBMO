@@ -1,0 +1,37 @@
+{
+  "experiment": "E01",
+  "command": "Upload sound",
+  "image_bytes": 770048,
+  "image_sha256": "ebce7f200a8a3f5f0676c475b7abb3aba5926ce559fb81bd3c3e0f37c042449a",
+  "image_profile": "validated-all-slots-silent-pcm-only",
+  "target_software": "2.5.15893",
+  "target_serial": "WTD41611DD-0037829-P",
+  "usb": {
+    "port": "/dev/cu.usbmodem143301",
+    "opening_ended_with_enq": true,
+    "transport_checksum": "0x00001d34",
+    "transfer_seconds": 3.055,
+    "closing_hex": "061a",
+    "post_write_identity_ok": true
+  },
+  "p6": {
+    "type": "SOUND",
+    "protocol": "BLAST",
+    "framed_bytes_received": 770052,
+    "nand_region": "0x400000",
+    "nand_offset": 0,
+    "nand_bytes": 770052,
+    "status": "Upload - nandFlashWrite() OK"
+  },
+  "verification": {
+    "expected_live_ids": [0, 1, 2, 3, 6, 7, 8, 9, 10, 19],
+    "all_expected_live_ids_accepted": true,
+    "all_live_pcm_fields_zero": true,
+    "audible_output": "silent"
+  },
+  "recovery": {
+    "original_bank": "assets/neato-xv12-sound-capture-20260810/public-reference/DfltSoundLib.Rev1.0.bin",
+    "original_bank_sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+    "restore_required_before_application_execution_test": true
+  }
+}

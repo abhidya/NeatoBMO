@@ -1,0 +1,83 @@
+{
+  "application_bytes_sent": true,
+  "application_region_write_requested": true,
+  "automatic_retry": false,
+  "before_identity_ok": true,
+  "closing_hex": "06",
+  "command": "Upload code reboot",
+  "image_bytes": 1024,
+  "image_sha256": "566845909e34f46fece26ea77395a48e752760fc2b8a1534d025e3b8e8f3017a",
+  "manifest": "neatoos/build/probes/neatoos-raw.manifest.json",
+  "manifest_record": {
+    "authentication_status": "NOT AUTHENTICATED",
+    "encryption_status": "NOT ENCRYPTED",
+    "expected_experiment": "synthetic structural envelope with raw body replacement",
+    "header": {
+      "declared_length": 129,
+      "declared_length_matches_payload": true,
+      "sha256": "16d35b613603ed40415b1bb250174bbae2423b33a4b2420d27b7c5bb76e115a1",
+      "size": 512,
+      "source": "synthetic-neato-structural-header",
+      "unknown_0x10_0x1f_value": "39202700bde6319aeb23920d278d7c42"
+    },
+    "label": "raw-structural",
+    "note": "Offline probe container only; not an encrypted or authenticated Neato firmware image.",
+    "output_sha256": "566845909e34f46fece26ea77395a48e752760fc2b8a1534d025e3b8e8f3017a",
+    "path": "neatoos/build/probes/neatoos-structural-probe.bin.enc",
+    "payload": {
+      "padded_size": 512,
+      "padding": 383,
+      "page_padding_size": 383,
+      "raw_sha256": "bf7f415437ccac7e3fa5251d83765a33c365023722833ea1bf5f703f1f9b6c12",
+      "raw_size": 129
+    },
+    "safety": {
+      "authenticated": false,
+      "encrypted": false,
+      "erase_commands": false,
+      "flash_commands": false,
+      "hardware_access": false,
+      "upload_commands": false
+    },
+    "schema": "neatoos-probe-image/v1",
+    "sha256": "566845909e34f46fece26ea77395a48e752760fc2b8a1534d025e3b8e8f3017a",
+    "size": 1024,
+    "warnings": [
+      "NOT ENCRYPTED",
+      "NOT AUTHENTICATED"
+    ]
+  },
+  "opening_hex": "55706c6f616420636f6465207265626f6f742053697a6520313032380d0a05",
+  "post_reboot": {
+    "attempts": [
+      {
+        "port": "/dev/cu.usbmodem143301",
+        "reply": "GetVersion\r\nComponent,Major,Minor,Build\r\nModelID,-1,XV12,\r\nConfigID,1,,\r\nSerial Number,WTD41611DD,0037829,P\r\nSoftware,2,4,15667\r\nBatteryType,1,NIMH_12CELL,\r\nBlowerType,1,BLOWER_ORIG,\r\nBrushSpeed,1200,,\r\nBrushMotorType,1,BRUSH_MOTOR_ORIG,\r\nSideBrushType,1,SIDE_BRUSH_NONE,\r\nWheelPodType,1,WHEEL_POD_ORIG,\r\nDropSensorType,1,DROP_SENSOR_ORIG,\r\nMagSensorType,1,MAG_SENSOR_ORIG,\r\nWallSensorType,1,WALL_SENSOR_ORIG,\r\nLocale,1,LOCALE_USA,\r\nLDS Software,V2.6.15295,,\r\nLDS Serial,WTD41411AA-0061795,,\r\nLDS CPU,F2802x/c001,,\r\nMainBoard Vendor ID,543,,\r\nMainBoard Serial Number,25810,,\r\nMainBoard Version,7,1,\r\nChassisRev,1,,\r\nUIPanelRev,1,,\r\n"
+      }
+    ],
+    "port": "/dev/cu.usbmodem143301",
+    "reply": "GetVersion\r\nComponent,Major,Minor,Build\r\nModelID,-1,XV12,\r\nConfigID,1,,\r\nSerial Number,WTD41611DD,0037829,P\r\nSoftware,2,4,15667\r\nBatteryType,1,NIMH_12CELL,\r\nBlowerType,1,BLOWER_ORIG,\r\nBrushSpeed,1200,,\r\nBrushMotorType,1,BRUSH_MOTOR_ORIG,\r\nSideBrushType,1,SIDE_BRUSH_NONE,\r\nWheelPodType,1,WHEEL_POD_ORIG,\r\nDropSensorType,1,DROP_SENSOR_ORIG,\r\nMagSensorType,1,MAG_SENSOR_ORIG,\r\nWallSensorType,1,WALL_SENSOR_ORIG,\r\nLocale,1,LOCALE_USA,\r\nLDS Software,V2.6.15295,,\r\nLDS Serial,WTD41411AA-0061795,,\r\nLDS CPU,F2802x/c001,,\r\nMainBoard Vendor ID,543,,\r\nMainBoard Serial Number,25810,,\r\nMainBoard Version,7,1,\r\nChassisRev,1,,\r\nUIPanelRev,1,,\r\n"
+  },
+  "representation": "raw-structural",
+  "transport_checksum": "0x00004366",
+  "usb_ack": true,
+  "usb_nak": false,
+  "p6": {
+    "framed_bytes_received": 1028,
+    "nand_region": "0x10000",
+    "nand_offset": 0,
+    "nand_bytes": 1028,
+    "nand_status": "Upload - nandFlashWrite() OK",
+    "boot_path": [
+      "Loading installed application",
+      "Illegal size for application.",
+      "Loading factory application",
+      "Starting app"
+    ],
+    "custom_sentinel_observed": false,
+    "capture_note": "ESP32 USB recorder disconnected immediately after the factory Starting app line; decisive write and rejection lines were preserved."
+  },
+  "classification": "4. NAND write succeeds but boot rejects image",
+  "first_rejection_layer": "boot application size validation before ARM payload execution",
+  "conclusion": "The updater writes the 1,024-byte structural container, but the boot layer rejects its declared/stored application size before execution."
+}

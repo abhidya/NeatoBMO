@@ -1,0 +1,33 @@
+{
+  "after_identity_ok": true,
+  "automatic_retry": false,
+  "before_identity_ok": true,
+  "classification": "3. Full receive but write rejection (intentional NoWrite path)",
+  "command": "Upload code noburn",
+  "image": "neatoos/build/neatoos-raw.bin",
+  "image_bytes": 129,
+  "image_sha256": "bf7f415437ccac7e3fa5251d83765a33c365023722833ea1bf5f703f1f9b6c12",
+  "manifest": "neatoos/build/probes/neatoos-raw.manifest.json",
+  "manifest_record": {
+    "label": "raw-arm",
+    "path": "neatoos/build/neatoos-raw.bin",
+    "sha256": "bf7f415437ccac7e3fa5251d83765a33c365023722833ea1bf5f703f1f9b6c12",
+    "size": 129
+  },
+  "reboot_requested": false,
+  "representation": "raw-arm",
+  "usb_reply_hex": "1a",
+  "usb_result": "receiver transaction completed",
+  "writes_requested": false,
+  "p6": {
+    "type": "CODE",
+    "protocol": "BLAST",
+    "framed_bytes_received": 133,
+    "options": "NoWrite",
+    "status": "Upload fail - nandflashWrite() fail - -1"
+  },
+  "inference_limits": [
+    "Receiver accepted bytes does not prove container validity.",
+    "NoWrite does not exercise decryption, authentication, NAND programming, or boot."
+  ]
+}

@@ -12,3 +12,8 @@ assets/bmo-soundboard-library-*/
 
 # tool state
 .omx/
+
+# NeatoOS local build/probe outputs (reference-header probe contains
+# caller-supplied vendor header bytes and must never be committed)
+neatoos/build/
+neatoos/tools/__pycache__/

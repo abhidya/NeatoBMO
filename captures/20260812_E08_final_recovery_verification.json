@@ -1,0 +1,36 @@
+{
+  "experiment": "E08",
+  "purpose": "final post-experiment recovery verification",
+  "installed_application": {
+    "serial": "WTD41611DD-0037829-P",
+    "software": "2.5.15893",
+    "mainboard_version": "7.1",
+    "usb_getversion_ok": true,
+    "p6_software_boot": "NEROS Build 15893 Nov 19 2011 21:44:52"
+  },
+  "factory_recovery": {
+    "verified_immediately_before_stock_restore": true,
+    "boot_selector": "BACK held during cold power-on",
+    "p6_boot_path": "Loading factory application",
+    "p6_build": "15667",
+    "usb_updater_connected": true
+  },
+  "stock_restore": {
+    "image_bytes": 805888,
+    "image_sha256": "e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697",
+    "framed_bytes": 805892,
+    "nand_region": "0x10000",
+    "nand_status": "Upload - nandFlashWrite() OK",
+    "usb_ack": true
+  },
+  "sound_restore": {
+    "image_sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+    "verified_before_application_experiments": true
+  },
+  "cold_boot_after_final_restore": {
+    "performed": false,
+    "reason": "User declined an additional repetition because installed build 15893 was already running after the verified restore."
+  },
+  "custom_execution_proven": false,
+  "final_state": "installed stock 2.5.15893 running; independent factory 2.4.15667 recovery verified"
+}
