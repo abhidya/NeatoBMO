@@ -84,6 +84,11 @@ Evidence quality:
 
 - Weak. The repo only establishes that it is not the preferred path.
 
+Procedure and scope: see [jtag-p10-access.md](jtag-p10-access.md). On the live
+board it is a read-only TAP-presence check; the security bit is fused off until
+an IDCODE proves otherwise, and the only documented way to clear it (ERASE)
+destroys internal flash and any on-chip key — a permanent brick, not an unbrick.
+
 ## Board-confirmation prerequisites
 
 Do these before treating any readback as meaningful:
