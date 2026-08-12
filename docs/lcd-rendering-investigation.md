@@ -24,6 +24,19 @@ Live probing (2026-08-09/10, fw 2.4.15667, photos verified) established:
   (~20-40 commands) takes ~2-4 s.
 - Contrast range is 0-63, persisted to NAND; this robot's default is 45.
 
+Post-application-upgrade observation (2026-08-11): after BACK selected the
+surviving factory 2.4.15667 application, the operator reported that the LCD had
+remained white for an extended period. The USB console then accepted the
+project's 29-operation `happy` face (`BGWhite`, `FGBlack`, full-span eye columns
+and mouth rows), followed by `TestMode Off`. No `Contrast` or upload command was
+sent, so this was a transient display test with no intended NAND write. The USB
+acceptance record is `../captures/20260811_D01_factory_lcd_happy_result.json`.
+The sequence was repeated a second time; every USB command was again accepted,
+but the operator observed no visible change and the LCD remained white. The
+cause is unresolved: the LCD/connection may be damaged, or the stripped bench
+configuration with most robot components disconnected may prevent the expected
+rendering path. Do not treat command echo as proof that pixels changed.
+
 The project renderer likewise sends primitives through `SetLCD`; it does not
 hold a host-side copy of an LCD framebuffer. This does not prove whether the
 robot application owns a RAM framebuffer or writes directly to the LCD

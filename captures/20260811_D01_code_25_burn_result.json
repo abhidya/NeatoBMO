@@ -1,0 +1,26 @@
+{
+  "checksum_hex": "0x062020ee",
+  "closing_hex": "06",
+  "command": "Upload code reboot",
+  "image_bytes": 805888,
+  "image_sha256": "e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697",
+  "opening_hex": "55706c6f616420636f6465207265626f6f742053697a65203830353839320d0a05",
+  "port": "/dev/cu.usbmodem143301",
+  "post_port": "/dev/cu.usbmodem143301",
+  "post_version": "GetVersion\r\nComponent,Major,Minor,Build\r\nModelID,-1,XV12,\r\nConfigID,1,,\r\nSerial Number,WTD41611DD,0037829,P\r\nSoftware,2,5,15893\r\nBatteryType,1,NIMH_12CELL,\r\nBlowerType,1,BLOWER_ORIG,\r\nBrushSpeed,1200,,\r\nBrushMotorType,1,BRUSH_MOTOR_ORIG,\r\nSideBrushType,1,SIDE_BRUSH_NONE,\r\nWheelPodType,1,WHEEL_POD_ORIG,\r\nDropSensorType,1,DROP_SENSOR_ORIG,\r\nMagSensorType,1,MAG_SENSOR_ORIG,\r\nWallSensorType,1,WALL_SENSOR_ORIG,\r\nLocale,1,LOCALE_USA,\r\nLDS Software,V2.6.15295,0000000000,\r\nLDS Serial,WTD41411AA-0061795,,\r\nLDS CPU,F2802x/c001,,\r\nMainBoard Vendor ID,543,,\r\nMainBoard Serial Number,25810,,\r\nMainBoard Version,7,1,\r\nChassisRev,1,,\r\nUIPanelRev,1,,\r\n",
+  "post_version_expected": true,
+  "reenumeration_attempts": [
+    {
+      "port": "/dev/cu.usbmodem143301",
+      "reply": "GetVersion\r\n"
+    },
+    {
+      "port": "/dev/cu.usbmodem143301",
+      "reply": "GetVersion\r\nComponent,Major,Minor,Build\r\nModelID,-1,XV12,\r\nConfigID,1,,\r\nSerial Number,WTD41611DD,0037829,P\r\nSoftware,2,5,15893\r\nBatteryType,1,NIMH_12CELL,\r\nBlowerType,1,BLOWER_ORIG,\r\nBrushSpeed,1200,,\r\nBrushMotorType,1,BRUSH_MOTOR_ORIG,\r\nSideBrushType,1,SIDE_BRUSH_NONE,\r\nWheelPodType,1,WHEEL_POD_ORIG,\r\nDropSensorType,1,DROP_SENSOR_ORIG,\r\nMagSensorType,1,MAG_SENSOR_ORIG,\r\nWallSensorType,1,WALL_SENSOR_ORIG,\r\nLocale,1,LOCALE_USA,\r\nLDS Software,V2.6.15295,0000000000,\r\nLDS Serial,WTD41411AA-0061795,,\r\nLDS CPU,F2802x/c001,,\r\nMainBoard Vendor ID,543,,\r\nMainBoard Serial Number,25810,,\r\nMainBoard Version,7,1,\r\nChassisRev,1,,\r\nUIPanelRev,1,,\r\n"
+    }
+  ],
+  "target_identity_ok": true,
+  "transfer_seconds": 3.028,
+  "upload_help_ok": true,
+  "writes_performed": true
+}

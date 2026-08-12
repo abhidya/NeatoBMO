@@ -18,7 +18,9 @@ Current evidence for understanding the XV-12 without further flash writes:
 - [Envelope crypto analysis](neato-envelope-crypto.md): the `.enc` format is
   AES-CBC with a fixed key+IV starting at off 512; brute force and every
   weak-setup shortcut ruled out; CPU = Atmel AT91SAM9XE128; no public break;
-  only route is on-chip key extraction (SAM-BA probe / GPNVM glitch).
+  on-device decryption is proven but the key's physical storage is unknown.
+  External-NAND acquisition is the next practical route; donor-only fault
+  injection remains a higher-risk alternative.
 - [Vorwerk VR100 cross-flash](neato-vorwerk-vr100-crossflash.md): archived
   community path to flash VR100/Neato images on Rev113 via the offline
   updater. Rev113 firmware = 3 parts (app/LDS/sound + Config.ini); oldest
@@ -26,6 +28,9 @@ Current evidence for understanding the XV-12 without further flash writes:
   == Vorwerk 3.2. Breaks the BMO sound-bank identity gates; do not run on
   the working BMO body.
 
-The immediate safe order is USB observation, LCD visual/bus capture, passive
-P6 capture, then only board-confirmed read-only recovery. Do not treat a
-sound-module upload as an OS memory-access primitive.
+USB observation, LCD probing, passive P6 capture, a factory-mode exact 2.5
+application write, installed cold boot, and factory-fallback verification are
+complete. Neither 2.4 nor 2.5 exposes application readback. The next research
+gate is duplicate raw external-NAND acquisition with OOB/ECC preservation,
+preferably on a donor board. Do not treat sound upload, `noburn`, or the 2.5
+stock update as an OS memory-access primitive.

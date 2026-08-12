@@ -1,5 +1,14 @@
 # Neato XV-12 version-only CFW path
 
+## Live-state correction — 2026-08-11
+
+The target now has exact stock Cruz-P `2.5.15893` installed; BACK still boots
+the separate factory `2.4.15667` application. The completed 2.5 write proved
+the vendor application path and logical NAND region `0x10000`, but subsequent
+USB/P6 probes produced no application readback or new bootloader mode. All
+references below to installed 2.4 are historical planning assumptions unless
+they specifically describe the surviving factory image.
+
 ## Outcome
 
 Produce a reversible, evidence-backed custom application image for XV-12
@@ -11,8 +20,9 @@ This is a plan, not authorization to write the robot.
 
 ## Requirements summary
 
-- Target the exact P-family/mainboard 7.1 device currently running
-  `2.4.15667` ([FIRMWARE_ARCHIVE.md](../../FIRMWARE_ARCHIVE.md#L28)).
+- Target the exact P-family/mainboard 7.1 device with installed `2.5.15893`
+  and factory fallback `2.4.15667`
+  ([FIRMWARE_ARCHIVE.md](../../FIRMWARE_ARCHIVE.md#L28)).
 - Do not infer application validity from `Upload code noburn`: the receiver
   accepts a transport payload but provides no readback or execution proof
   ([FIRMWARE_ARCHIVE.md](../../FIRMWARE_ARCHIVE.md#L39)).
@@ -337,7 +347,8 @@ hardware recovery already demonstrated.
 
 ## Immediate next action
 
-Produce the board-profile evidence package: board photographs, exact CPU/flash
-part numbers, P6/P10/J3 mapping, voltage measurements, and a passive cold-boot
-P6 trace. That result selects the concrete acquisition adapter and read command
-set; no firmware write is needed for this step.
+The P6 trace and board/CPU identity gates are complete. Identify the external
+NAND package and geometry, then acquire it twice with raw page data, OOB/spare
+bytes, bad-block markers, and ECC convention preserved. Prefer a donor Cruz
+board for the first active-programmer attempt. No further application write is
+needed for this step.

@@ -1,0 +1,26 @@
+{
+  "context": "BACK-selected factory application after installed application was upgraded to 2.5",
+  "factory_usb_software": "2.4.15667",
+  "operator_observation_before": "LCD remained white for an extended period",
+  "requested_face": "happy",
+  "drawing": {
+    "attempts": 2,
+    "test_mode_enabled": true,
+    "background": "BGWhite",
+    "foreground": "FGBlack",
+    "setlcd_operations": 29,
+    "geometry_source": "neatobmo.faces.face_ops('happy')",
+    "contrast_command_sent": false,
+    "all_usb_commands_accepted": true,
+    "test_mode_disabled_after": true
+  },
+  "operator_visual_confirmation": false,
+  "operator_observation_after": "No visible LCD change after either accepted draw sequence; display remained white",
+  "possible_causes": [
+    "LCD or its connection may be damaged",
+    "The stripped bench configuration may prevent visible rendering because most robot components are disconnected"
+  ],
+  "cause_determined": false,
+  "writes_performed": false,
+  "persistence_note": "Only transient TestMode and SetLCD commands were sent; no Contrast or Upload command was used."
+}

@@ -1,5 +1,14 @@
 # Native `PlaySound File` patch contract
 
+> **Live-state update (2026-08-11):** the installed application is now exact
+> Cruz-P `2.5.15893`; BACK still selects the separate factory `2.4.15667`
+> application. The stock 2.5 burn succeeded at NAND region `0x10000`, but its
+> help and dump/readflash behavior remained unchanged and no plaintext was
+> recovered. References below to the installed 2.4 image describe the original
+> research baseline. A future CFW proof should use whichever raw installed or
+> factory image is actually acquired and must not assume that a stock update
+> supplied plaintext.
+
 ## Distilled CFW execution path
 
 The first deliverable is not the full audio handler. It is a **version-only
@@ -20,7 +29,8 @@ The preferred path avoids that ambiguity:
    on this P-family board. Begin with passive P6 DBGU capture; do not use J3.
 2. Establish a non-destructive raw read path and take two byte-identical full
    captures, including any NAND OOB/ECC data required for restoration.
-3. Extract and validate the installed `2.4.15667` application. Require command
+3. Extract and validate a raw installed/factory application (currently installed
+   `2.5.15893`, factory `2.4.15667`). Require command
    strings, a coherent ARM9 memory map, load/entry addresses, and reproducible
    region hashes.
 4. Prove the execution path with an unchanged extracted image before patching.
@@ -91,7 +101,8 @@ flash wear entirely.)
 
 ## Existing pieces confirmed on the robot
 
-- Stock firmware is `2.4.15667`, mainboard `7.1`.
+- Installed firmware is `2.5.15893`; factory firmware is `2.4.15667`;
+  mainboard is `7.1`.
 - `PlaySound <0..20>` reads a page-indexed PCM library from the sound region.
 - The stock library is mono signed 16-bit PCM at 22,050 Hz.
 - Neato's uploader already implements a binary serial transaction: command,

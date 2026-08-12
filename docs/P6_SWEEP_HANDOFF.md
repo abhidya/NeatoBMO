@@ -107,6 +107,18 @@
 > succeed. Evidence: `../captures/20260811_U03_factory_sound_noburn_p6.log` and
 > adjacent JSON.
 
+> **Application-write finding:** after exact typed destructive authorization,
+> the BACK-selected factory application accepted exact Cruz-P 2.5 build 15893
+> via `Upload code reboot`. P6 showed `CODE`, `BLAST`, `Size 805892`, `Reboot`,
+> then `nandflashWrite() - region=0x10000 offset=0 bytes=805892` and
+> `nandFlashWrite() OK`. The robot rebooted and cold-booted as installed NEROS
+> build 15893 (`Software,2,5,15893`). A subsequent BACK cold boot still selected
+> factory NEROS build 15667 (`Software,2,4,15667`), proving the factory fallback
+> survived separately. Firmware 2.5 exposed no new help commands and its
+> dump/readflash/XMODEM probes still returned no application bytes. Evidence:
+> `../captures/20260811_D01_factory_code_25_burn_p6.log` and adjacent JSON/raw
+> records.
+
 > **Status update (2026-08-11):** the baud-sweep approach this doc originally
 > described is **abandoned**. Three adversarial reviews (`../captures/analysis/`)
 > concluded the P6 baud is **115200** (not unknown), and that our reproducible

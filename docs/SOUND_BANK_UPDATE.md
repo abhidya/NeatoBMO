@@ -1,5 +1,12 @@
 # Updating or restoring the Neato XV-12 sound bank
 
+> **Live-state update (2026-08-11):** normal boot now runs installed
+> `2.5.15893`; BACK boot still runs factory `2.4.15667`. The sound-bank artifacts
+> below were validated on 2.4, and the destructive sound tools intentionally
+> retain their 2.4 identity gate. Use the confirmed factory application for any
+> existing guarded sound restore until the same invariants are separately
+> verified on installed 2.5; do not widen the gate by assumption.
+
 This repository contains two approved **profile** sound-bank images for XV-12
 `WTD41611DD-0037829-P`, firmware `2.4.15667`, mainboard `7.1` (the remote
 soundboard additionally publishes 36 derived modules built off the same

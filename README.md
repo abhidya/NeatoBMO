@@ -56,9 +56,17 @@ full architecture and milestones.
   `VLine <col>`); a trailing number is parsed as a *Contrast* value and
   written to NAND. Faces are therefore carved from full-span bands
   (see [docs/lcd-rendering-investigation.md](docs/lcd-rendering-investigation.md)).
-- For plaintext firmware capture, connect mainboard `P6.2` (robot RX) to ESP32
-  GPIO17, `P6.3` (robot TX) to GPIO18, and `P6.4` to GND; the raw 115200-baud
-  debug stream is then at `nc <board-ip> 3334`.
+- For passive boot-log capture, connect mainboard `P6.3` (robot TX) to ESP32
+  GPIO18 and `P6.4` to GND. Leave `P6.2` disconnected unless transmit access is
+  explicitly needed; it may optionally connect to GPIO17. The raw 115200 8N1
+  stream is available over the diagnostic bridge. P6 exposes Neato boot/update
+  logs on a healthy board, **not plaintext firmware or a SAM-BA unlock**.
+- Hardware-research state (2026-08-11): exact Cruz-P 2.5 build 15893 is
+  installed, BACK still boots factory 2.4 build 15667, and neither firmware
+  exposed application readback. The accepted factory LCD face probe made no
+  visible change in the stripped bench setup; cause remains unresolved. See
+  [captures/README.md](captures/README.md) and
+  [FIRMWARE_ARCHIVE.md](FIRMWARE_ARCHIVE.md).
 
 ## Getting started
 

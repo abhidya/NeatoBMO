@@ -66,16 +66,18 @@ LCD/button panel. To reach it:
   > header shows the **app boot log** (NEROS), not a ROM prompt. So passive P6
   > capture (**115200 8N1**, confirmed) identifies the board and proves the tap,
   > but is **not** itself the key-extraction route on a working board. SAM-BA
-  > read access requires the destructive GPNVM-glitch path, not a plain reset.
+  > read access is not available from a plain reset. Normal security-bit
+  > clearing uses ERASE and destroys internal flash; any non-erasing transient
+  > bypass would be separate donor-board fault-injection research.
 
 - **`P10` — JTAG header.** Verbatim layout:
   ```
   Bottom row: VDDIO (square pin), TRST, TDI, TMS, TCK
   Top row:    GND, GND, SRST, TDO, RTCK
   ```
-  **JTAG is software-disabled** — it will not respond until the GPNVM
-  security bit is cleared (the voltage-glitch route). Useless as-is; it's the
-  target *after* a successful glitch.
+  **JTAG is blocked while the AT91 security bit is set.** Ordinary clearing
+  invokes ERASE and destroys internal flash. Treat P10 as a donor-board research
+  target only after a genuinely non-erasing bypass has been demonstrated.
 
 - **`J3` — ERASE jumper. DO NOT TOUCH.** Direct connection to the AT91 ERASE
   line. **Shorting it and rebooting wipes the CPU's programming with no known
@@ -88,9 +90,12 @@ LCD/button panel. To reach it:
   Neato bootloader/app banner, NOT a SAM-BA `RomBOOT>` prompt** — see the
   correction above; a healthy board never drops to the ROM monitor at reset.
   Value here is confirming the tap and reading the app boot log, not key readout.
-- **JTAG dump → `P10`,** but only *after* glitching the GPNVM security bit to
-  re-enable it. Hard: Atmel debounced the ERASE line specifically to resist
-  glitching (ATSAM4C32 is the nearest public precedent).
+- **External NAND acquisition → flash package/test pads, not P6/P10.** This is
+  the next practical acquisition route; preserve page data plus OOB/ECC and
+  make duplicate reads, preferably first on a donor Cruz board.
+- **Protected internal-flash/JTAG research → `P10`, donor only.** A useful
+  fault attack must transiently bypass protection without the documented ERASE
+  operation. No such Cruz result has been demonstrated.
 
 ## Reminder
 
@@ -99,8 +104,8 @@ P6.4→ESP32 GND and P6.3→ESP32 GPIO18, with P6.2 left disconnected. The prese
 log is `../captures/p6_1786482063.log` and identifies NEROS Build 15667. As
 expected, it is a Neato boot/application log and contains no SAM-BA prompt.
 
-This is only worth doing to extract the fused AES key — the sole route left
-(no public break exists; see [neato-envelope-crypto.md](neato-envelope-crypto.md)).
-It has **nothing to do with running BMO**: the sound bank is unencrypted and
-the speech pipeline never needs the app firmware. And do not do any of this
-to the working BMO body — use a second scavenged Rev113 robot.
+P6 is now complete as a boot-observability experiment; it is not an unlock.
+The next OS-acquisition experiment is duplicate external-NAND capture, ideally
+on a second scavenged Rev113 robot. On-chip key storage remains unknown. None
+of this is required to run BMO: the sound bank is unencrypted and the speech
+pipeline does not require application-firmware decryption.

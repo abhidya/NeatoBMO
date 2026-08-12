@@ -1,5 +1,20 @@
 # Neato 2.5 stock-upgrade and CFW E2E experiment
 
+## Execution result — 2026-08-11
+
+Phases 1–3 were completed on `WTD41611DD-0037829-P`. The guarded exact-image
+tool installed Cruz-P 2.5 build 15893 from the BACK-selected factory
+application. P6 recorded a successful 805892-byte transfer and NAND write to
+logical region `0x10000`; software reboot and a separate cold boot both reached
+NEROS 15893. BACK still boots the independent factory 2.4 build 15667.
+
+The upgrade did **not** unlock CFW acquisition: probed help remained unchanged,
+`PowerCycleCDC` was absent, raw `dump`/`readflash` returned only command framing,
+and XMODEM never began. Phase 4 repeat-write is unnecessary flash wear. The
+next gate is duplicate external-NAND acquisition with OOB/ECC preservation,
+preferably on a donor board. Evidence is indexed under
+`captures/20260811_D01_*` and in `captures/README.md`.
+
 ## Current answer
 
 The CFW tooling is not end-to-end. It currently implements only:
@@ -163,7 +178,7 @@ Passing CFW E2E means:
 
 ## Recommended next action
 
-Implement and test `tools/neato_code_upgrade.py` through `preflight` and
-`noburn` only. This closes the host-side E2E gaps without writing flash. After
-those records pass, present the exact 2.5 destructive install as a separate
-approval gate with the explicit fact that 2.4 rollback is unavailable.
+Do not repeat the stock write. Acquire the external NAND twice, preserving raw
+pages, OOB/spare data, bad-block markers, and ECC convention. Prefer a donor
+Cruz board for active probing, then classify the logical `0x10000` application
+region from the matching captures.

@@ -3,7 +3,8 @@
 Right-to-repair reverse engineering of the user's own Neato XV-12 / Vorwerk
 Cruz Rev113 firmware. Consolidates the 2026-08-10 static analysis (local
 `.enc` images) and OSINT. **No public break exists; the payload cipher is
-implemented correctly; the only route is on-chip key extraction.**
+implemented correctly. The next practical route is external-NAND acquisition;
+on-chip key recovery remains a separate, higher-risk research path.**
 
 ## Image format (measured)
 
@@ -54,10 +55,12 @@ plaintext prefixes (which is all we observed). It does **not** reduce the
 ## Hardware / key location
 
 - **Cruz Rev113 MCU = Atmel AT91SAM9XE128-QU** (ARM926). Binky Rev64 = NXP
-  LPC3143 + STM32F100. The AES key is **fused into the MCU** and decryption
-  is on-chip; `NeatoUpgrader.exe` and NeatoControl only relay the `.enc` —
-  the key is in **no host binary**. JTAG software-disabled; SAM-BA gated by
-  the GPNVM security bit; no public flash dump of this chip.
+  LPC3143 + STM32F100. The robot performs decryption on-device;
+  `NeatoUpgrader.exe` and NeatoControl only relay the `.enc`, so no key was
+  found in the inspected host software. Whether the key is fused, provisioned
+  in protected internal flash, or derived by the bootloader is **unknown**.
+  JTAG is blocked while the AT91 security bit is set; no public Cruz flash dump
+  is known.
 - Firmware is **RSA-SHA256 signed** (`Signing.crt`); on the sibling Botvac
   line the robot does not validate the cert chain (self-signed accepted).
   Signing key never leaked. Signature location on the XV `.enc` is not the
@@ -79,17 +82,25 @@ SAM-BA ROM, but the exploit itself does not transfer.
    `../captures/analysis/at91-baud-research.md`):* a healthy board's RomBOOT
    jumps straight to a valid image, so P6 at cold boot shows the **app boot log,
    not a SAM-BA `RomBOOT>` prompt.** There is **no pre-lock window** to catch at
-   reset; SAM-BA read access only exists after the destructive GPNVM glitch
-   (#3). P6 capture confirms the tap and the board — treat it as reconnaissance,
-   not extraction.
-2. **Analysis-only** — diff more `.enc` builds from the Vault corpus
+   reset. P6 capture confirms the tap and the board — treat it as
+   reconnaissance, not extraction.
+2. **Acquire the external NAND twice**, preserving raw pages, OOB, bad-block
+   markers, and ECC convention. Prefer a donor Cruz board before attaching an
+   active programmer to the working robot. The live 2.5 write identifies the
+   logical application region as `0x10000`; the known sound region starts at
+   `0x400000`, but neither observation substitutes for a physical geometry map.
+3. **Analysis-only** — diff more `.enc` builds from the Vault corpus
    (largely done here).
-3. **Voltage-glitch the GPNVM security bit** to re-enable JTAG and dump
-   flash. Hard: Atmel debounced the ERASE line to resist glitching;
-   ATSAM4C32 is the nearest public precedent.
+4. **Research a transient security-bypass/fault-injection path** only on a
+   donor. The AT91SAM9XE documentation says normal clearing of the security bit
+   is performed by the ERASE operation, which also erases internal flash. A
+   useful fault attack would therefore need to bypass protection long enough
+   to read without performing that ordinary destructive clear; this has not
+   been demonstrated on the Cruz board.
 - **Do NOT touch the J3/ERASE jumper — documented unrecoverable brick.**
-- Once flash is dumped, offset-512 plaintext (word 0 = SP `0x2000xxxx`,
-  word 1 = odd Thumb reset addr) confirms an ARM vector table.
+- Once executable plaintext is recovered, ARM9 vector and string checks can
+  classify it; do not assume the encrypted file's offset 512 is directly the
+  stored application layout.
 
 ## For the BMO project specifically
 

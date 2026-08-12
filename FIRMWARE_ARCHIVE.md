@@ -22,17 +22,21 @@ application binary: stock firmware 2.4 does not export that region over USB.
 
 ## Current unlock/recovery status
 
-Status as of 2026-08-10: there is no proven Cruz firmware unlock, decryptor,
-repacker, plaintext application, or restorable full-flash backup.
+Status as of 2026-08-11: there is no proven Cruz firmware unlock, decryptor,
+repacker, plaintext application, or byte-restorable full-flash backup. The
+exact public Cruz-P 2.5 application has now been installed successfully, but
+that stock update did not open a readback or custom-firmware route.
 
 Known state:
 
-- Live robot: XV-12, P hardware family, mainboard `7.1`, firmware
+- Live robot: XV-12, P hardware family, mainboard `7.1`, installed firmware
+  `2.5.15893`; the separate BACK-selected factory application remains
   `2.4.15667`. **Oldest Rev113 Cruz sub-variant: side charging jack present
   (confirmed 2026-08-10) — hard-capped at firmware v3.1; v3.2+ uses a
   different CPU and bricks this board.**
-- Public compatible P-family application images start at `2.5.15893`; none is
-  known to match the installed `2.4.15667` bytes.
+- Public compatible P-family application images start at `2.5.15893`, now the
+  installed image. No public image is known to match the former installed
+  `2.4.15667` bytes; the surviving factory 2.4 image is not a raw backup.
 - Public application updates are opaque `.enc` files with a 512-byte `neato`
   format-2 envelope and high-entropy, 512-byte-aligned payloads.
 - **Envelope structure (measured 2026-08-10 across builds 15893/16621/17844/
@@ -83,13 +87,14 @@ Known state:
   key is still 2^128. The header `off 16–31` field is **not** the CBC IV
   (block 0 @512 is identical across all images, so the IV is constant); it
   is a per-image nonce/MAC of unresolved purpose.
-- **CPU / key location (OSINT, 2026-08-10).** Cruz Rev113 main MCU =
+- **CPU / key location (OSINT, corrected 2026-08-11).** Cruz Rev113 main MCU =
   **Atmel AT91SAM9XE128-QU** (ARM926, per the RECESSIM XV-11 teardown);
-  Binky Rev64 = NXP LPC3143 + STM32F100. The AES key is **fused into the
-  MCU at the factory** and the decrypt happens on-chip — `NeatoUpgrader.exe`
-  and NeatoControl only pass the `.enc` through, so **the key is in no host
-  binary**. JTAG is software-disabled and SAM-BA is gated by the GPNVM
-  security bit; no public flash dump of this chip exists.
+  Binky Rev64 = NXP LPC3143 + STM32F100. Decryption happens on the robot and
+  the inspected host updaters only relay `.enc` bytes. The key's physical
+  storage is **unknown**: fused storage, protected internal flash, and
+  bootloader derivation have not been distinguished. JTAG is blocked while
+  the AT91 security bit is set; ordinary clearing uses ERASE and destroys
+  internal flash. No public Cruz flash dump is known.
 - **No public break exists** (high confidence). No published key,
   decryptor, repacker, or plaintext XV/VR100 image. Firmware is RSA-SHA256
   signed (`Signing.crt`; confirmed on the sibling Botvac line, where the
@@ -100,16 +105,16 @@ Known state:
   bypass that does **not** transfer to the Atmel Cruz. Aside: the Vorwerk
   update ZIPs' password is `VORVR100!%` — a wrapper over the already-`.enc`
   files, not the firmware key (matches the 2012 Mikrocontroller.net crack).
-- **Only realistic route = on-chip key extraction from the AT91SAM9XE.**
-  Ranked by effort/risk: (1) probe the SAM-BA ROM over the **P6 serial
-  header** for a pre-lock window (cheap, try first); (2) analysis-only —
-  diff many `.enc` builds (done, above); (3) **voltage-glitch the GPNVM
-  security bit** to re-enable JTAG and dump flash (hard — Atmel debounced
-  the ERASE line specifically to resist this; ATSAM4C32 is the nearest
-  public precedent). **Avoid the J3/ERASE jumper — documented as an
-  unrecoverable brick.** Once flash is out, offset-512 plaintext (word 0 =
-  SP `0x2000xxxx`, word 1 = odd Thumb reset handler) will confirm the head
-  is an ARM vector table. See
+- **Next realistic route = duplicate external-NAND acquisition.** P6 has now
+  been proven as the 115200 8N1 Neato boot log, not a healthy-board SAM-BA
+  entry. Acquire raw NAND pages twice with OOB, bad-block markers, and ECC
+  convention preserved, preferably on a donor board. The live 2.5 write
+  identifies logical application region `0x10000`; existing sound evidence
+  identifies logical region `0x400000`, but physical geometry still must be
+  mapped. On-chip fault injection remains a higher-risk donor-only research
+  path: it would need to bypass security transiently without the ordinary
+  destructive ERASE clear. **Avoid J3/ERASE — documented as an unrecoverable
+  brick.** See
   [neato-envelope-crypto.md](docs/neato-envelope-crypto.md) for the full
   analysis and source list.
 - Pairwise comparison of the same 2.5 build for B/D/M/P hardware matches the
@@ -168,6 +173,14 @@ Known state:
 - Incompatible 3.2 build 18755 was not transmitted. The checked-in no-burn
   harness explicitly rejects its archived SHA-256 and every unknown image
   before opening the serial port.
+- Exact Cruz-P 2.5 build 15893 was subsequently installed from the confirmed
+  factory application with `Upload code reboot`. USB returned ACK; P6 showed a
+  successful 805892-byte write to NAND region `0x10000`; software reboot and
+  true cold boot both produced installed NEROS build 15893. BACK still boots
+  the separate factory NEROS build 15667. Post-upgrade help was unchanged, raw
+  dump/readflash returned only echoes, and XMODEM never started, so the stock
+  upgrade did not unlock firmware acquisition. See
+  `captures/20260811_D01_factory_code_25_burn_p6.log` and adjacent records.
 - Holding UI BACK at cold power directly selected the factory application. Its
   USB `GetVersion`, `Help`, `Help Upload`, and `Help SetSystemMode` replies were
   byte-identical to the installed application's responses. This is a plausible
@@ -225,13 +238,11 @@ Evidence lives outside this repo:
 - [work/plaintext-candidates](/Volumes/2TB/neato-firmware-archive/work/plaintext-candidates/)
 - [work/repacked](/Volumes/2TB/neato-firmware-archive/work/repacked/)
 
-Next recovery gate: non-destructive hardware acquisition only. First photograph
-the actual P-board and verify part markings, then passively capture P6 DBGU at
-115200 8N1. If a ROM-monitor route is proven on this exact board, use official
-SAM-BA read operations only and write duplicate matching captures to
-`work/inputs/`. No Ghidra patching or flash image work starts until the raw
-capture geometry, hashes, extraction map, and application plaintext state are
-proved.
+Next recovery gate: duplicate external-NAND acquisition with raw page/OOB/ECC
+preservation, preferably on a donor board. Board identity and passive P6 DBGU
+at 115200 8N1 are already proven; repeating USB/P6 probes is not the priority.
+No Ghidra patching or flash image work starts until capture geometry, hashes,
+extraction map, and application plaintext state are proved.
 
 ## Archived Cruz application images
 

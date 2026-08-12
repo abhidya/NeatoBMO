@@ -10,11 +10,11 @@ data, never burns.
     python3 tools/firmware_probe.py "Upload readflash" -o region.bin
 """
 import argparse
-import glob
 import sys
 import time
 
 import serial
+from serial.tools import list_ports
 
 
 def raw_cmd(ser, cmd, quiet=2.0, hard_limit=120.0):
@@ -69,6 +69,7 @@ def xmodem_recv(ser, initiate_cmd):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd")
+    ap.add_argument("--port", help="explicit Neato USB serial port")
     ap.add_argument("-o", "--out", help="write raw capture to file")
     ap.add_argument("--quiet", type=float, default=2.0)
     ap.add_argument("--xmodem-recv", action="store_true",
@@ -82,7 +83,17 @@ if __name__ == "__main__":
        ("upload" in lowered and not any(w in lowered for w in ("dump", "readflash", "help"))):
         sys.exit("refusing: this tool only sends read-only upload commands")
 
-    port = glob.glob("/dev/cu.usbmodem*")[0]
+    if args.port:
+        port = args.port
+    else:
+        ports = [
+            candidate.device
+            for candidate in list_ports.comports()
+            if candidate.vid == 0x2108 and candidate.pid == 0x780B
+        ]
+        if len(ports) != 1:
+            sys.exit(f"expected exactly one Neato USB port, found: {ports}")
+        port = ports[0]
     ser = serial.Serial(port, 115200, timeout=0.1)
     if args.xmodem_recv:
         try:
@@ -92,7 +103,7 @@ if __name__ == "__main__":
     else:
         data = raw_cmd(ser, args.cmd, quiet=args.quiet)
     if args.out:
-        with open(args.out, "wb") as f:
+        with open(args.out, "xb") as f:
             f.write(data)
         print(f"{len(data)} bytes -> {args.out}")
     else:

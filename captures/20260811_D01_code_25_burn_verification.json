@@ -1,0 +1,78 @@
+{
+  "experiment": "D01",
+  "authorization": "BURN EXACT CRUZ-P 2.5 ON WTD41611DD-0037829-P",
+  "image": {
+    "release": "2.5",
+    "build": 15893,
+    "hardware_suffix": "P",
+    "bytes": 805888,
+    "sha256": "e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697"
+  },
+  "preflight": {
+    "target_serial": "WTD41611DD-0037829-P",
+    "software": "2.4.15667",
+    "factory_boot_confirmed_on_p6": true,
+    "live_upload_help_advertised_code_and_reboot": true,
+    "writes_performed": false
+  },
+  "burn": {
+    "command": "Upload code reboot",
+    "framed_bytes": 805892,
+    "checksum": "0x062020ee",
+    "usb_closing_hex": "06",
+    "transfer_seconds": 3.028,
+    "nand_region": "0x10000",
+    "nand_offset": 0,
+    "nand_bytes": 805892,
+    "p6_status": "Upload - nandFlashWrite() OK",
+    "writes_performed": true
+  },
+  "installed_application": {
+    "software_reboot": "NEROS Build 15893 Nov 19 2011 21:44:52",
+    "cold_boot": "NEROS Build 15893 Nov 19 2011 21:44:52",
+    "cold_boot_reset_reason": "PowerUp",
+    "usb_software": "2.5.15893",
+    "identity_preserved": true
+  },
+  "factory_fallback": {
+    "boot_selector": "BACK held during cold power-on",
+    "p6_boot_path": "Loading factory application",
+    "p6_build": "15667",
+    "usb_software": "2.4.15667",
+    "survived_application_write": true
+  },
+  "display_probe": {
+    "application": "factory 2.4.15667",
+    "attempts": 2,
+    "usb_commands_accepted": true,
+    "visible_change_observed": false,
+    "display_remained_white": true,
+    "cause_determined": false,
+    "record": "captures/20260811_D01_factory_lcd_happy_result.json"
+  },
+  "readback": {
+    "help_surface_matches_2_4": true,
+    "power_cycle_cdc_available": false,
+    "upload_dump_usb_bytes": 14,
+    "upload_dump_usb_result": "command echo plus terminator only",
+    "upload_dump_p6_result": "256-byte all-zero upload save area",
+    "code_readflash_usb_bytes": 24,
+    "code_readflash_usb_result": "command echo plus terminator only",
+    "code_readflash_xmodem_started": false,
+    "application_bytes_recovered": false
+  },
+  "evidence": {
+    "p6_capture": "captures/20260811_D01_factory_code_25_burn_p6.log",
+    "p6_capture_sha256": "dc1c1f42d404db1806099455623e83c921a9e4ee3bba516824ae8cc109419e6f",
+    "usb_burn_result": "captures/20260811_D01_code_25_burn_result.json",
+    "usb_burn_result_sha256": "d79000427feff5431503596188e98e66cd9c5828f46a599bd899bc0ae9d1d00e",
+    "post_upgrade_snapshot": "captures/usb-snapshots/WTD41611DD-0037829-P_sw-2-5-15893_20260812T0048Z/WTD41611DD-0037829-P_sw-2-5-15893_20260812T005003Z/snapshot.json",
+    "post_upgrade_snapshot_sha256": "c137add66c2bdf1bf102a2111d7c95d73a1f40f7089fa357c06846bb32ec0281"
+  },
+  "limitations": [
+    "No application plaintext or encryption key was recovered.",
+    "The factory application is a working fallback updater, not a byte-restorable copy of the former installed 2.4 application.",
+    "No custom or modified application image was transmitted.",
+    "The accepted LCD commands did not produce a visible change; damage versus stripped-bench dependency was not distinguished."
+  ]
+}

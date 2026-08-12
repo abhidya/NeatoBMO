@@ -1,0 +1,9 @@
+{
+  "command": "Upload code reboot",
+  "image_bytes": 805888,
+  "image_sha256": "e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697",
+  "port": "/dev/cu.usbmodem143301",
+  "target_identity_ok": true,
+  "upload_help_ok": true,
+  "writes_performed": false
+}

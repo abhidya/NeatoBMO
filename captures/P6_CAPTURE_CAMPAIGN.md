@@ -41,7 +41,7 @@ The tap is receive-only. Keep Neato power off while changing wires.
 | B05 | Known Cruz-P 2.7 application through no-burn/validation path | Residual NAND-path risk explicitly authorized | Complete: `20260811_B05_code_2.7_16621P_noburn_p6.log`; guarded CODE/BLAST/805892/NoWrite, full receive, NAND failure, USB `0x1A`, identity unchanged. |
 | B06 | Known Cruz-P 3.1 application through no-burn/validation path | Residual NAND-path risk explicitly authorized; maximum allowed version | Complete: `20260811_B06_code_3.1_17844P_noburn_p6.log`; guarded CODE/BLAST/847876/NoWrite, full receive, NAND failure, USB `0x1A`, identity unchanged. 3.2+ remains forbidden and untested. |
 | C01 | Program a known sound bank | Destructive write explicitly requested; exact vendor recovery bank | Complete: `20260811_C01_original_sound_burn_p6.log` and result JSON. ACK+TERM, health/slot verification passed. P6: SOUND/BLAST/770052, NAND region `0x400000`, offset 0, `nandFlashWrite() OK`. |
-| D01 | Program application firmware | High risk; requires verified image, backup/recovery plan | HARD STOP |
+| D01 | Program exact Cruz-P 2.5 application firmware | Destructive write explicitly authorized; no exact installed-2.4 rollback image | Complete: `20260811_D01_factory_code_25_burn_p6.log`, burn/preflight/verification JSON, raw readback probes, and post-upgrade snapshot. Factory-mode `Upload code reboot` wrote 805892 bytes to NAND region `0x10000`, ACKed, rebooted into installed build 15893, passed a true cold boot, and preserved the separate BACK-selected factory build 15667. |
 
 Do not test 3.2+, L1000, Vorwerk, or unidentified images on this Cruz Rev113 board. “No-burn” must be confirmed from the exact uploader command before submitting any image.
 

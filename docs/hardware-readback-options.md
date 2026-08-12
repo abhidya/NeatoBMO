@@ -2,36 +2,52 @@
 
 ## TL;DR
 
-The only safe, evidence-backed path left for learning more about the stock XV OS is passive or non-erasing hardware acquisition:
+The passive P6 phase and stock-2.5 experiment are complete. The remaining
+evidence-backed path for learning more about the XV firmware is raw external
+memory acquisition:
 
-1. Confirm the exact board and connector markings on the live P-family robot.
-2. Passively capture the P6 debug UART at 115200 8N1.
-3. If and only if the board actually drops into an AT91 ROM monitor, use official SAM-BA read commands only.
-4. Treat JTAG as secondary, and do not use erase/write/unlock paths.
+1. Prefer a matching donor Cruz/P board rather than the working BMO board.
+2. Identify the external NAND part and exact page/OOB/ECC geometry.
+3. Take two independent complete raw reads including OOB and bad-block markers.
+4. Use the known sound bank written at logical region `0x400000` to validate the
+   raw-to-logical mapping, then classify installed/factory application regions.
+5. Treat protected internal-flash/JTAG work as a later branch only if external
+   NAND still contains encrypted application data. Never use J3 ERASE.
 
-The current repo evidence says the USB-facing stock console does not provide the installed application bytes, and the readback gate is closed on firmware `2.4.15667`. That makes hardware-level capture the remaining route for exact plaintext, flash geometry, or recovery data.
+P6 proved the boot/update paths but never exposed SAM-BA. Exact Cruz-P 2.5 was
+then installed successfully from factory mode; its USB help remained identical
+to 2.4, raw dump/readflash returned no application bytes, and XMODEM never
+started. BACK still boots the separate factory 2.4.15667 image. Hardware-level
+capture therefore remains the route to plaintext, flash geometry, or a
+byte-restorable backup.
 
 ## Evidence-backed options
 
 ### 1) Passive P6 DBGU capture
 
-This is the first and best route.
+This route is complete on the live board.
 
 Repo evidence:
 
-- `README.md` documents the P6 wiring used for plaintext capture: `P6.2` robot RX to ESP32 GPIO17, `P6.3` robot TX to GPIO18, `P6.4` to GND, with the debug stream available at port `3334`.
-- `FIRMWARE_ARCHIVE.md` says the next recovery gate is to verify the actual P-board markings and passively capture P6 DBGU at `115200 8N1`.
+- `README.md` documents the passive wiring: `P6.3` robot TX to ESP32 GPIO18
+  and `P6.4` to GND, with `P6.2`/GPIO17 left disconnected unless transmit
+  access is explicitly needed.
+- `FIRMWARE_ARCHIVE.md` records the completed 115200 8N1 P6 capture and the
+  next duplicate external-NAND acquisition gate.
 - `docs/usb-os-observability.md` records the P6 bridge as a dedicated debug-capture surface isolated from the command plane.
 
 Why it matters:
 
-- It can reveal boot logs, memory map hints, recovery prompts, and ROM monitor behavior without modifying the robot.
-- It is the safest way to decide whether the board can be read through a documented bootloader path.
+- It revealed boot selection, reset causes, updater types/options, and the NAND
+  write regions `0x10000` (application) and `0x400000` (sound).
+- It established that normal cold boot reaches the Neato bootloader/application,
+  not a ROM monitor or read-capable shell.
 
 Evidence quality:
 
 - Strong for wiring, baud rate, and safety boundaries.
-- Weak-to-moderate for what the logs will contain; that depends on the exact boot state and board revision.
+- Strong for the observed boot and updater behavior; negative for direct
+  plaintext or SAM-BA access.
 
 ### 2) Official SAM-BA read commands, but only if the exact board reaches ROM monitor
 
@@ -73,7 +89,8 @@ Evidence quality:
 Do these before treating any readback as meaningful:
 
 - Photograph the mainboard and verify the actual P-board markings.
-- Confirm the robot is the same live target described in the archive: XV-12, P hardware family, mainboard `7.1`, firmware `2.4.15667`.
+- Confirm the robot is the same live target described in the archive: XV-12, P
+  hardware family, mainboard `7.1`, installed `2.5.15893`, factory `2.4.15667`.
 - Verify the P6 pin mapping before connecting anything.
 - Capture the debug UART passively first; do not send erase, write, unlock, or flash commands.
 - If the board does not show a ROM monitor, stop treating SAM-BA as available.
@@ -87,7 +104,9 @@ Hard stop conditions:
 - Any J3 erase workflow.
 - Any assumption that USB `readflash` or `dump` is a full firmware backup.
 
-The repo already records that stock USB readback is unavailable for the installed application and sound region on `2.4.15667`. That means a safe hardware route must stay read-only until a real recovery path is proven.
+The repo records that stock USB readback is unavailable from both the former
+installed 2.4 application and installed 2.5. That means a hardware acquisition
+route must stay read-only until geometry and restoration are proven.
 
 ## What counts as good evidence
 
@@ -107,13 +126,13 @@ Lower-value evidence:
 
 ## Recommended sequence
 
-1. Photograph and identify the board.
-2. Attach passive P6 capture only.
-3. Record boot and power-state transitions.
-4. Look for a documented ROM monitor.
-5. If present, use official SAM-BA reads only.
-6. Save duplicate matching raw captures.
-7. Only after that, reason about flash geometry, plaintext extraction, or recovery.
+1. Obtain or identify a matching donor Cruz/P board.
+2. Photograph and identify the external NAND part and nearby bus/test points.
+3. Select a reader that preserves raw pages, OOB, ECC, and bad-block markers.
+4. Save two independent complete captures and compare stable regions.
+5. Anchor the geometry using the exact known sound bank at logical `0x400000`.
+6. Classify the application regions as plaintext, encrypted, compressed, or
+   transformed before choosing a patch or internal-flash attack path.
 
 ## Source files
 

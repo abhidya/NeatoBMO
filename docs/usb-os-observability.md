@@ -2,6 +2,13 @@
 
 Scope: static, repo-local evidence only. All paths are repo files.
 
+Live-state update (2026-08-11): the exact Cruz-P 2.5 build 15893 is installed;
+BACK still selects the separate factory 2.4 build 15667. The 2.5 help surface
+is byte-identical for the probed commands, `PowerCycleCDC` remains absent, and
+application `dump`/`readflash` returned no firmware bytes. The accepted factory
+LCD happy-face commands produced no visible change on the stripped bench setup;
+the cause remains unresolved.
+
 ## Stock command surface from live XV-12 protocol evidence
 
 | Evidence source | Command/API evidence | OS behavior observed | Use status |
@@ -17,7 +24,7 @@ Scope: static, repo-local evidence only. All paths are repo files.
 | System mode command set | `neato_protocol_dump.txt` help for `SetSystemMode`: `Shutdown | Hibernate | Standby` only | Stock firmware exposes only 3 mode targets |
 | TestMode gating | `neato_protocol_dump.txt` marks several controls test-only (`SetMotor`, `SetLED`, `SetLCD`, `SetLDSRotation`, `SetSystemMode`) | Commands are only accepted once `TestMode On` is set in normal operation |
 | Rejected transition attempt | `FIRMWARE_ARCHIVE.md` (2026-08-10 status) reports `TestMode On` + `SetSystemMode PowerCycleCDC` rejected as unrecognized | Bootloader-style CDC transition via system mode was unavailable on live stock firmware |
-| Possible stale enum mismatch | `neato-driver-python/neato_driver.py` still exposes `PowerCycle` enum value | Potential mismatch risk with live firmware; treat as API drift unless retested |
+| Possible stale enum mismatch | `neato-driver-python/neato_driver.py` still exposes `PowerCycle` enum value | Potential mismatch risk with live firmware; both 2.4 and 2.5 lack `PowerCycleCDC` in live help |
 
 ## USB transport + bridge observability
 
@@ -35,7 +42,7 @@ Scope: static, repo-local evidence only. All paths are repo files.
 |---|---|---|---|
 | `/Users/abdulrehmanbhidya/Documents/neato/tools/backup_neato.py` | USB `GetVersion`, `Help`, `Get*` queries + transcript + checksums | Configuration/calibration and help output snapshot | Explicitly not application flash dump |
 | `/Users/abdulrehmanbhidya/Documents/neato/tools/firmware_probe.py` | Raw byte capture + optional xmodem receive of `readflash` | Determines whether XMODEM readback ever starts, captures raw replies | Readback appears unavailable for stock app writes in current tests |
-| `/Users/abdulrehmanbhidya/Documents/neato/FIRMWARE_ARCHIVE.md` | Status log | Read-only snapshot and readback status tracked in single source | Readback gate currently closed for installed app/image and sound readflash on stock 2.4 |
+| `/Users/abdulrehmanbhidya/Documents/neato/FIRMWARE_ARCHIVE.md` | Status log | Read-only snapshot and readback status tracked in single source | Readback gate is closed for application probes on stock 2.4 and 2.5, and for sound readflash |
 
 ## Stock command behavior confirmed in write/read experiments
 
@@ -57,12 +64,12 @@ Scope: static, repo-local evidence only. All paths are repo files.
 
 1. Whether any undocumented boot/recovery command is available at USB layer other than what `Help` exposes.  
 2. Exact conditions under which `Upload` subcommands (`dump/readflash`) can become valid in non-stock patched firmware.  
-3. Whether `SetSystemMode` supports additional values (`PowerCycle`, `PowerCycleCDC`) on future firmware revisions.  
+3. Whether a different service/developer image exposes additional system modes; stock 2.4 and 2.5 do not.  
 4. Whether the 0x1A-terminated ASCII parser is complete enough when firmware emits mixed binary text + telemetry bursts outside command mode.  
-5. Full command universe beyond `Help` output in stock 2.4; `Help SetConfig` is queried in snapshots but not documented in the shared protocol dump excerpt.
+5. Full command universe beyond `Help` output; the probed 2.4/2.5 help replies
+   are byte-identical, but undocumented service commands may still exist.
 
-Recommended next read-only pass:
-- keep `backup_neato.py` and `firmware_probe.py --xmodem-recv` on the same live robot and only add tests that assert:
-  - response invariants (0x1A handling, ENQ/ACK/NAK sequence),
-  - unchanged `GetVersion` identity after no-burn runs,
-  - command allowlist from `Help` remains stable across cold boots.
+Recommended next acquisition pass: make two independent raw external-NAND
+captures with page/OOB/ECC preservation, preferably on a donor Cruz board.
+USB/P6 repetition has reached diminishing returns unless a new firmware or
+service mode supplies genuinely new evidence.

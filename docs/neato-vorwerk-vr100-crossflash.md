@@ -36,6 +36,13 @@ only the exact verified hashes for Cruz-P 2.5 build 15893, 2.7 build 16621, and
 every unknown image before opening the serial port. This guard applies to
 no-burn diagnostics only and does not authorize an application flash write.
 
+> **Live result (2026-08-11):** exact Cruz-P 2.5 build 15893 was explicitly
+> authorized and installed successfully from the BACK-selected factory app.
+> P6 recorded the application write at NAND region `0x10000`; installed 2.5
+> passed software reboot and cold boot. BACK still selects the untouched factory
+> 2.4.15667 image. The 2.5 command surface and readback behavior remained
+> unchanged, so this proves stock update/recovery—not a CFW unlock.
+
 ## Why we missed it
 
 Our firmware docs (`FIRMWARE_ARCHIVE.md`, `FIRMWARE_SOUND_PATCH.md`) framed

@@ -1,5 +1,15 @@
 # Neato CFW session handoff — 2026-08-10
 
+> **Superseded live-state update (2026-08-11):** P6 capture was completed, exact
+> Cruz-P 2.5 build 15893 was installed from the BACK-selected factory
+> application, and the application write was mapped to NAND region `0x10000`.
+> Installed 2.5 passed software reboot and cold boot; BACK still boots factory
+> 2.4.15667. Firmware 2.5 retained the same help surface and failed to expose
+> application bytes through dump/readflash/XMODEM. The raw external-memory
+> acquisition gate below therefore remains open; the statements in this dated
+> handoff that no application had been written and P6 was not captured are
+> preserved only as historical context. See `../captures/README.md` D01.
+
 ## Current result
 
 No Neato application firmware has been dumped, patched, or written. The stock

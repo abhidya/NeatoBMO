@@ -253,7 +253,53 @@ our only robot sample (below).
   Rev113 and was **not transmitted**. `tools/neato_code_noburn.py` rejects its
   exact archived hash and every unknown image before opening the serial port.
 
+## Cruz-P 2.5 application burn and recovery proof (2026-08-11 17:49 PDT)
+
+- The user explicitly authorized the exact destructive confirmation phrase
+  recorded in `20260811_D01_code_25_burn_verification.json`. Two read-only
+  preflights first pinned robot identity, current 2.4.15667 software, live
+  updater help, image size, and SHA-256.
+- Image: Cruz-P 2.5 build 15893, 805,888 bytes, SHA-256
+  `e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697`.
+- Factory-mode USB command: `Upload code reboot Size 805892`. USB returned ACK
+  (`0x06`) after 3.028 seconds and re-enumerated on the same port.
+- P6 exposed the write: `CODE`, `BLAST`, `Options : Reboot`, full receive,
+  `nandflashWrite() - region=0x10000 offset=0 bytes=805892`, then
+  `Upload - nandFlashWrite() OK` and `Reboot in 1 sec ...`.
+- The software reboot and a separate true cold boot both selected the installed
+  application and reported NEROS build 15893. USB reports
+  `Software,2,5,15893`; the archive's filename build 15893, not Config.ini's
+  15894 token, is the live version.
+- Post-upgrade `Help`, `Help Upload`, `Help SetSystemMode`, and `Help SetConfig`
+  remain byte-identical to 2.4. No `PowerCycleCDC` appeared. `Upload dump`
+  returned only its USB echo/terminator while P6 printed a 256-byte all-zero
+  upload-save-area dump. `Upload code readflash` returned only echo/terminator,
+  and its XMODEM form never started. Firmware 2.5 therefore does not unlock
+  application readback.
+- A BACK-held cold boot after the write selected the separate factory
+  application, which still reports NEROS build 15667 and USB
+  `Software,2,4,15667`. This proves the 2.5 application write did not overwrite
+  the factory image and establishes a working factory updater fallback. It is
+  not a byte-restorable copy of the former installed 2.4 application.
+
 ## Files here
+- `20260811_D01_factory_code_25_burn_p6.log` — factory boot, exact 2.5 NAND
+  application write, software reboot, installed 2.5 cold boot, readback-probe
+  diagnostics, and post-upgrade factory 2.4 boot.
+- `20260811_D01_code_25_burn_result.json` — guarded USB transfer and verified
+  post-reboot 2.5 identity.
+- `20260811_D01_code_25_burn_verification.json` — consolidated image, USB, P6,
+  cold-boot, readback, snapshot, and factory-fallback results.
+- `20260811_D01_code_25_burn_preflight*.json` — two pre-write no-write safety
+  records, including the repeat after P6-confirmed factory selection.
+- `20260811_D01_sw25_upload_dump.raw` and
+  `20260811_D01_sw25_code_readflash.raw` — echo-plus-terminator USB results;
+  neither contains application bytes.
+- `20260811_D01_factory_lcd_happy_result.json` — two accepted, transient
+  factory-application happy-face draw attempts; the operator saw no visible
+  change, and the white-LCD cause remains undetermined.
+- `usb-snapshots/WTD41611DD-0037829-P_sw-2-5-15893_20260812T0048Z/` — read-only
+  post-upgrade identity/configuration/calibration/help snapshot.
 - `20260811_U03_factory_sound_noburn_p6.log` — exact vendor sound bank through
   the BACK-selected factory application's no-write upload path.
 - `20260811_U03_factory_sound_noburn_result.json` — payload identity, USB/P6
