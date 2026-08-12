@@ -411,3 +411,22 @@ any reflash or baud change.** Details: `analysis/{at91-baud-research,hypothesis-
 - Evidence: `20260812_E09_full_length_noburn_{p6.log,usb.json}`,
   `20260812_E10_full_length_burn_{p6.log,usb.json}`, and
   `20260812_E11_stock_25_restore_{p6.log,usb.json}`.
+
+## Cruz-P opaque-header bit experiment (2026-08-12 03:49-03:57 PDT)
+
+- E12 changed only bit 0 at file offset `0x18` in exact stock Cruz-P 2.5;
+  bytes `0x200..EOF` remained byte-identical authentic ciphertext. The no-burn
+  control completed and software 2.5.15893 remained healthy.
+- E13 wrote that image once. USB returned ACK, P6 recorded the complete NAND
+  write, then the bootstrap printed `Checksum error in application binary` and
+  loaded factory 2.4.15667.
+- Conclusion: the clear `0x10..0x1f` field is integrity-relevant or feeds the
+  validated transform. The test does not reveal whether it is a checksum, MAC,
+  nonce, or another form of covered metadata.
+- E14 immediately restored exact stock
+  `e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697`.
+  P6 started NEROS build 15893 and USB confirmed software 2.5.15893 on
+  mainboard 7.1.
+- Evidence: `20260812_E12_header_field_bitflip_noburn_{p6.log,usb.json}`,
+  `20260812_E13_header_field_bitflip_burn_{p6.log,usb.json}`, and
+  `20260812_E14_stock_25_restore_{p6.log,usb.json}`.

@@ -1,0 +1,131 @@
+
+===== capture session 2026-08-12T03:49:50 on /dev/cu.usbmodem5C381965721 =====
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x1 (POWERON),boot:0x8 (SPI_FAST_FLASH_BOOT)
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x14f0
+load:0x403c8700,len:0xd24
+load:0x403cb700,len:0x2ef0
+entry 0x403c891c
+I (24) boot: ESP-IDF 5.5.3 2nd stage bootloader
+I (25) boot: compile time Aug 11 2026 13:56:17
+I (25) boot: Multicore bootloader
+I (25) boot: chip revision: v0.2
+I (28) boot: efuse block revision: v1.4
+I (31) boot.esp32s3: Boot SPI Speed : 80MHz
+I (35) boot.esp32s3: SPI Mode       : DIO
+I (39) boot.esp32s3: SPI Flash Size : 16MB
+I (43) boot: Enabling RNG early entropy source...
+I (47) boot: Partition Table:
+I (50) boot: ## Label            Usage          Type ST Offset   Length
+I (56) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (63) boot:  1 otadata          OTA data         01 00 0000f000 00002000
+I (69) boot:  2 phy_init         RF data          01 01 00011000 00001000
+I (76) boot:  3 ota_0            OTA app          00 10 00020000 00300000
+I (82) boot:  4 ota_1            OTA app          00 11 00320000 00300000
+I (89) boot:  5 storage          Unknown data     01 82 00620000 009e0000
+I (95) boot: End of partition table
+I (99) esp_image: segment 0: paddr=00020020 vaddr=3c0d0020 size=40a74h (264820) map
+I (152) esp_image: segment 1: paddr=00060a9c vaddr=3fc9d100 size=057a0h ( 22432) load
+I (157) esp_image: segment 2: paddr=00066244 vaddr=40374000 size=09dd4h ( 40404) load
+I (166) esp_image: segment 3: paddr=00070020 vaddr=42000020 size=ca9c0h (829888) map
+I (313) esp_image: segment 4: paddr=0013a9e8 vaddr=4037ddd4 size=0f27ch ( 62076) load
+I (327) esp_image: segment 5: paddr=00149c6c vaddr=50000000 size=00020h (    32) load
+I (337) boot: Loaded app from partition at offset 0x20000
+I (337) boot: Disabling RNG early entropy source...
+I (347) octal_psram: vendor id    : 0x0d (AP)
+I (347) octal_psram: dev id       : 0x02 (generation 3)
+I (348) octal_psram: density      : 0x03 (64 Mbit)
+I (350) octal_psram: good-die     : 0x01 (Pass)
+I (354) octal_psram: Latency      : 0x01 (Fixed)
+I (358) octal_psram: VCC          : 0x01 (3V)
+I (362) octal_psram: SRF          : 0x01 (Fast Refresh)
+I (367) octal_psram: BurstType    : 0x01 (Hybrid Wrap)
+I (372) octal_psram: BurstLen     : 0x01 (32 Byte)
+I (377) octal_psram: Readlatency  : 0x02 (10 cycles@Fixed)
+I (382) octal_psram: DriveStrength: 0x00 (1/1)
+I (386) MSPI Timing: Enter psram timing tuning
+I (391) esp_psram: Found 8MB PSRAM device
+I (394) esp_psram: Speed: 80MHz
+I (397) cpu_start: Multicore app
+I (832) esp_psram: SPI SRAM memory test OK
+I (841) cpu_start: GPIO 44 and 43 are used as console UART I/O pins
+I (841) cpu_start: Pro cpu start user code
+I (842) cpu_start: cpu freq: 160000000 Hz
+I (843) app_init: Application information:
+I (847) app_init: Project name:     neato_body
+I (851) app_init: App version:      0648189-dirty
+I (855) app_init: Compile time:     Aug 11 2026 13:55:24
+I (860) app_init: ELF file SHA256:  837ed3aad...
+I (865) app_init: ESP-IDF:          5.5.3
+I (869) efuse_init: Min chip rev:     v0.0
+I (872) efuse_init: Max chip rev:     v0.99 
+I (876) efuse_init: Chip rev:         v0.2
+I (880) heap_init: Initializing. RAM available for dynamic allocation:
+I (887) heap_init: At 3FCA7CA8 len 00041A68 (262 KiB): RAM
+I (892) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM
+I (897) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM
+I (902) heap_init: At 600FE000 len 00001FE8 (7 KiB): RTCRAM
+I (908) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator
+I (915) spi_flash: detected chip: boya
+I (917) spi_flash: flash io: dio
+I (921) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (927) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (934) main_task: Started on CPU0
+I (964) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations
+I (964) main_task: Calling app_main()
+I (994) pp: pp rom version: e7ae62f
+I (994) net80211: net80211 rom version: e7ae62f
+I (1004) wifi:wifi driver task: 3fced600, prio:23, stack:6656, core=0
+I (1014) wifi:wifi firmware version: 4df78f2
+I (1014) wifi:wifi certification version: v7.0
+I (1014) wifi:config NVS flash: enabled
+I (1014) wifi:config nano formatting: disabled
+I (1014) wifi:Init data frame dynamic rx buffer num: 32
+I (1024) wifi:Init static rx mgmt buffer num: 5
+I (1024) wifi:Init management short buffer num: 32
+I (1034) wifi:Init dynamic tx buffer num: 32
+I (1034) wifi:Init static tx FG buffer num: 2
+I (1044) wifi:Init static rx buffer size: 1600
+I (1044) wifi:Init static rx buffer num: 10
+I (1044) wifi:Init dynamic rx buffer num: 32
+I (1054) wifi_init: rx ba win: 6
+I (1054) wifi_init: accept mbox: 6
+I (1054) wifi_init: tcpip mbox: 32
+I (1064) wifi_init: udp mbox: 6
+I (1064) wifi_init: tcp mbox: 6
+I (1064) wifi_init: tcp tx win: 5760
+I (1074) wifi_init: tcp rx win: 5760
+I (1074) wifi_init: tcp mss: 1440
+I (1074) wifi_init: WiFi IRAM OP enabled
+I (1084) wifi_init: WiFi RX IRAM OP enabled
+W (1084) wifi_mgr: no wifi creds
+I (1094) phy_init: phy_version 711,97bcf0a2,Aug 25 2025,19:04:10
+I (1134) wifi:mode : sta (44:1b:f6:ff:18:a0) + softAP (44:1b:f6:ff:18:a1)
+I (1134) wifi:enable tsf
+I (1134) wifi:Total power save buffer number: 16
+I (1134) wifi:Init max length of beacon: 752/752
+I (1144) wifi:Init max length of beacon: 752/752
+I (1144) example_dns_redirect_server: Socket created
+I (1144) esp_netif_lwip: DHCP server started on interface WIFI_AP_DEF with IP: 192.168.4.1
+W (1154) wifi_mgr: setup AP "NeatoBMO-Setup" up: connect and browse to http://192.168.4.1/wifi
+I (1154) example_dns_redirect_server: Socket bound, port 53
+I (1174) example_dns_redirect_server: Waiting for data
+I (1174) web: web server up on port 80 (captive portal)
+I (1184) debug_uart: P6 debug bridge on USB console + TCP 3334 (TX GPIO17, RX GPIO18)
+I (1184) faces: face engine up: POST /emote with emoji text
+I (1224) coli_msc: MSC class client installed; shared USB host remains app-owned
+I (1224) neato_usb: Waiting for Neato on USB...
+
+Upload parameters...
+  Type     : CODE
+  Protocol : BLAST
+  Size     : 805892
+  Options  :   NoWrite 
+
+Upload Starting .. Blast protocol
+......................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+Upload complete - 805892 bytes received
+Upload fail - nandflashWrite() fail - -1

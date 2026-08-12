@@ -101,3 +101,27 @@ eliminated the short-write tail confound and exposed an application checksum
 gate. See `docs/neatoos-execution-probe.md` for hashes, raw captures, inference
 limits, and recovery evidence. Exact stock 2.5 was restored successfully and a
 fresh USB identity check confirmed software 2.5.15893.
+
+A later single-variable experiment preserved the exact stock encrypted body
+and flipped only bit 0 at clear-header offset `0x18`. The full write succeeded,
+but the bootstrap printed `Checksum error in application binary` and loaded
+factory software. This proves the opaque `0x10..0x1f` field participates in
+application acceptance; it does not identify the field as a checksum rather
+than a MAC, nonce, or other validated metadata. Exact stock 2.5 was restored
+again and verified over P6 and USB.
+
+## Clean-room v0 scope
+
+NeatoOS v0 is a serial/API compatibility target, not a proprietary-source copy.
+It is limited to behavior exposed through the documented USB serial protocol:
+
+- exact ASCII command parsing and `0x1A` response termination;
+- `GetVersion`, `Help`, `TestMode`, and read-only `Get*` commands first;
+- serial-exposed LDS, motor, LED/LCD, system-mode, and sound commands after
+  their stock transcripts are captured;
+- actuator commands parsed but side-effect gated until simulator and safety
+  tests pass.
+
+Cloud, schedules, autonomous navigation, filesystem behavior, and unexposed
+peripherals are outside v0. JTAG/P10, NAND readback, and bootloader work remain
+a separate donor-board track; J3/ERASE remains forbidden.

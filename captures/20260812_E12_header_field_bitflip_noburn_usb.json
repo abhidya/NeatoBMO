@@ -1,0 +1,21 @@
+{
+  "after_identity_ok": true,
+  "automatic_retry": false,
+  "base_bytes": 805888,
+  "base_sha256": "e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697",
+  "before_identity_ok": true,
+  "classification": "transport complete; boot integrity untested",
+  "command": "Upload code noburn",
+  "image_bytes": 805888,
+  "image_sha256": "3c5440920ef0183a573b9c3071973cbf9c202faaf7561bb01d2c2e0053a87d3c",
+  "mutation": {
+    "changed_bits": 1,
+    "encrypted_body_preserved": true,
+    "offset": 24,
+    "xor_mask": "0x01"
+  },
+  "reboot_requested": false,
+  "representation": "stock-header-field-0x18-bit0-flip",
+  "usb_reply_hex": "1a",
+  "writes_requested": false
+}
