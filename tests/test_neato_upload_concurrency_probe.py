@@ -52,8 +52,8 @@ class _FakeCollector:
 class UploadConcurrencyProbeSafetyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # hashlib is patched only for the exact-size synthetic fixture because
-        # the real 770 KB vendor artifact is intentionally not duplicated here.
+        # Keep an exact-size synthetic fixture so the wrong-hash path is tested
+        # without duplicating the real 770 KB vendor artifact in the test suite.
         cls.fake_bank = b"\x00" * BANK_BYTES
 
     def test_commands_are_fixed_to_noburn_and_readonly(self):
