@@ -83,6 +83,29 @@ Run the offline test suite:
 python3 -m pytest tests/test_neatoos_phase_a.py
 ```
 
+## Serial compatibility slice
+
+The first clean-room serial slice is a freestanding C parser shared with a host
+simulator. It implements:
+
+- ASCII commands terminated by either LF or CRLF;
+- CRLF replies terminated by byte `0x1A`;
+- `GetVersion` with a deliberately non-vendor `NEATOOS` identity;
+- a truthful reduced `Help` surface;
+- stateful `TestMode On` and `TestMode Off`, with no actuator side effects.
+
+Build the simulator and send it commands on standard input:
+
+```sh
+make -C neatoos host-sim
+printf 'GetVersion\nHelp\n' | neatoos/build/neato-serial-sim
+```
+
+The stock captures do not contain the response bodies for `TestMode On/Off` or
+an unknown command. The current echo-plus-terminator behavior for both cases is
+therefore provisional and labeled by tests; it must be checked against a future
+read-only transcript capture.
+
 ## Hardware result (2026-08-12)
 
 Four controlled representations were written once to application NAND

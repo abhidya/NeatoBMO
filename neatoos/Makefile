@@ -18,8 +18,10 @@ LDFLAGS += -T linker/linker.ld $(LDFLAGS_EXTRA)
 
 SOURCES := src/startup.S src/main.c
 OBJECTS := $(BUILD_DIR)/startup.o $(BUILD_DIR)/main.o
+HOST_SIM := $(BUILD_DIR)/neato-serial-sim
+HOST_STATE_TEST := $(BUILD_DIR)/neato-serial-state-test
 
-.PHONY: all clean probe-selftest test toolchain-check
+.PHONY: all clean host-sim probe-selftest test toolchain-check
 
 all: toolchain-check $(ELF) $(BIN) $(LST)
 
@@ -47,11 +49,21 @@ $(BIN): $(ELF)
 $(LST): $(ELF)
 	$(OBJDUMP) -d $< > $@
 
+host-sim: $(HOST_SIM) $(HOST_STATE_TEST)
+
+$(HOST_SIM): tools/serial_simulator.c src/neato_serial.c include/neato_serial.h | $(BUILD_DIR)
+	cc -std=c99 -Wall -Wextra -Werror -pedantic -Iinclude \
+		tools/serial_simulator.c src/neato_serial.c -o $@
+
+$(HOST_STATE_TEST): ../tests/neato_serial_state_test.c src/neato_serial.c include/neato_serial.h | $(BUILD_DIR)
+	cc -std=c99 -Wall -Wextra -Werror -pedantic -Iinclude \
+		../tests/neato_serial_state_test.c src/neato_serial.c -o $@
+
 probe-selftest:
 	python3 tools/probe_generator.py --self-test
 
 test: probe-selftest
-	python3 -m pytest ../tests/test_neatoos_phase_a.py
+	python3 -m pytest ../tests/test_neatoos_phase_a.py ../tests/test_neatoos_serial.py
 
 clean:
 	rm -rf $(BUILD_DIR)
