@@ -26,6 +26,7 @@ from export_glm52_bmoq import (
     dense_gate_id,
     expected_logical_tensors,
     expert_gate_id,
+    quantize_row,
     scale_id,
     sparse_router_id,
     write_bmoq,
@@ -156,6 +157,39 @@ class ExportGlm52BmoqTests(unittest.TestCase):
             self.assertEqual(
                 by_id[scale_id(expert_gate_id(1, 0))]["layout"],
                 LAYOUT_EXPERT_GROUP_SCALES_F32,
+            )
+            second_expert = source.row_floats(
+                "model.layers.1.mlp.experts.1.gate_proj.weight", 0
+            )
+            expected_weight_row, expected_scale_row = quantize_row(
+                second_expert, config.quant_group
+            )
+            expert_weight_stride = (
+                config.moe_intermediate_size * config.hidden_size // 2
+            )
+            expert_scale_stride = (
+                config.moe_intermediate_size
+                * (config.hidden_size // config.quant_group)
+                * 4
+            )
+            self.assertEqual(
+                raw[
+                    gate_bundle["offset"]
+                    + expert_weight_stride : gate_bundle["offset"]
+                    + expert_weight_stride
+                    + len(expected_weight_row)
+                ],
+                expected_weight_row,
+            )
+            gate_scales = by_id[scale_id(expert_gate_id(1, 0))]
+            self.assertEqual(
+                raw[
+                    gate_scales["offset"]
+                    + expert_scale_stride : gate_scales["offset"]
+                    + expert_scale_stride
+                    + len(expected_scale_row)
+                ],
+                expected_scale_row,
             )
             self.assertEqual(by_id[2]["layout"], LAYOUT_DENSE_F32)
             self.assertEqual(by_id[CONFIG_TENSOR_ID]["layout"], LAYOUT_OPAQUE)
