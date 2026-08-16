@@ -26,10 +26,19 @@ typedef struct {
 
 typedef struct {
     coli_q4_tensor_ids_t router;
+    /** Optional dense-f32 correction bias used for expert selection. */
+    uint32_t router_bias_id;
     const coli_moe_expert_t *experts;
+    /** One Q4 expert bundle per projection when experts_bundled is true. */
+    coli_moe_expert_t expert_bundles;
     size_t expert_count;
     size_t top_k;
     bool norm_topk_prob;
+    bool experts_bundled;
+    /** Use sigmoid gate mass while ranking by sigmoid(logit) + bias. */
+    bool sigmoid_router;
+    /** Multiplier applied after optional selected-weight normalization. */
+    float routed_scale;
 } coli_moe_config_t;
 
 typedef struct {

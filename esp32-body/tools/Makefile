@@ -80,7 +80,7 @@ $(BUILD)/test_coli_kv_attention: test_coli_kv_attention.c \
 
 $(BUILD)/test_coli_glm52: test_coli_glm52.c $(MCU)/model_format.c \
 		$(MCU)/store_file.c $(MCU)/kv_cache.c $(MCU)/ops.c $(MCU)/q4_matvec.c \
-		$(MCU)/glm52.c | $(BUILD)
+		$(MCU)/moe.c $(MCU)/glm52.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 test: $(BINS)

@@ -719,3 +719,206 @@ coli_status_t coli_glm52_dense_layer_decode(
             : mlp_buffers;
     return COLI_OK;
 }
+
+size_t coli_glm52_sparse_mlp_required_workspace(
+    const coli_glm52_config_t *config, size_t q4_workspace_bytes)
+{
+    if (!config || config->num_experts == 0 ||
+        config->experts_per_token == 0 || config->moe_intermediate_size == 0)
+        return 0;
+    size_t routed = coli_moe_required_workspace(
+        config->hidden_size, config->moe_intermediate_size,
+        config->num_experts, config->experts_per_token, q4_workspace_bytes);
+    if (routed == 0 || config->shared_experts == 0) return routed;
+    size_t shared_intermediate;
+    size_t shared = 0;
+    size_t q4_aligned;
+    if (!mul_size(config->moe_intermediate_size, config->shared_experts,
+                  &shared_intermediate) ||
+        !add_floats(&shared, config->hidden_size) ||
+        !add_floats(&shared, shared_intermediate) ||
+        !add_floats(&shared, shared_intermediate) ||
+        !align_float(q4_workspace_bytes, &q4_aligned) ||
+        !add_size(shared, q4_aligned, &shared))
+        return 0;
+    return routed > shared ? routed : shared;
+}
+
+coli_status_t coli_glm52_sparse_mlp_decode(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t layer, const float *input, size_t input_count, float *output,
+    size_t output_count, void *workspace, size_t workspace_bytes,
+    coli_moe_stats_t *moe_stats, coli_q4_stats_t *shared_stats)
+{
+    if (!model || !config || !input || !output || !workspace || !moe_stats ||
+        !shared_stats || layer < config->first_dense_layers ||
+        layer >= config->num_layers || input_count != config->hidden_size ||
+        output_count != input_count)
+        return COLI_ERR_ARGUMENT;
+    memset(shared_stats, 0, sizeof(*shared_stats));
+    const coli_moe_config_t moe = {
+        .router =
+            {
+                .weight_id = coli_glm52_router_id(layer),
+                .scale_id = coli_glm52_scale_id(coli_glm52_router_id(layer)),
+            },
+        .router_bias_id = coli_glm52_router_bias_id(layer),
+        .expert_bundles =
+            {
+                .gate =
+                    {
+                        .weight_id = coli_glm52_expert_gate_bundle_id(layer),
+                        .scale_id = coli_glm52_scale_id(
+                            coli_glm52_expert_gate_bundle_id(layer)),
+                    },
+                .up =
+                    {
+                        .weight_id = coli_glm52_expert_up_bundle_id(layer),
+                        .scale_id = coli_glm52_scale_id(
+                            coli_glm52_expert_up_bundle_id(layer)),
+                    },
+                .down =
+                    {
+                        .weight_id = coli_glm52_expert_down_bundle_id(layer),
+                        .scale_id = coli_glm52_scale_id(
+                            coli_glm52_expert_down_bundle_id(layer)),
+                    },
+            },
+        .expert_count = config->num_experts,
+        .top_k = config->experts_per_token,
+        .norm_topk_prob = config->normalize_topk,
+        .experts_bundled = true,
+        .sigmoid_router = true,
+        .routed_scale = config->routed_scale,
+    };
+    coli_status_t status = coli_moe_forward(
+        model, &moe, input, input_count, output, output_count, workspace,
+        workspace_bytes, moe_stats);
+    if (status != COLI_OK || config->shared_experts == 0) return status;
+
+    size_t shared_intermediate;
+    if (!mul_size(config->moe_intermediate_size, config->shared_experts,
+                  &shared_intermediate))
+        return COLI_ERR_RANGE;
+    void *cursor = workspace;
+    size_t remaining = workspace_bytes;
+    float *shared_output;
+    float *gate;
+    float *up;
+    if (!carve_floats(&cursor, &remaining, config->hidden_size,
+                      &shared_output) ||
+        !carve_floats(&cursor, &remaining, shared_intermediate, &gate) ||
+        !carve_floats(&cursor, &remaining, shared_intermediate, &up))
+        return COLI_ERR_RANGE;
+    const bmoq_tensor_t *weights;
+    const bmoq_tensor_t *scales;
+    coli_q4_stats_t q4;
+    status = find_q4_pair(model, coli_glm52_shared_gate_id(layer), &weights,
+                          &scales);
+    if (status != COLI_OK) return status;
+    status = coli_q4_matvec(model, weights, scales, input, input_count, gate,
+                            shared_intermediate, cursor, remaining, &q4);
+    if (status != COLI_OK) return status;
+    accumulate_q4(shared_stats, &q4);
+    status = find_q4_pair(model, coli_glm52_shared_up_id(layer), &weights,
+                          &scales);
+    if (status != COLI_OK) return status;
+    status = coli_q4_matvec(model, weights, scales, input, input_count, up,
+                            shared_intermediate, cursor, remaining, &q4);
+    if (status != COLI_OK) return status;
+    accumulate_q4(shared_stats, &q4);
+    status = coli_ops_silu_gated(gate, up, gate, shared_intermediate);
+    if (status != COLI_OK) return status;
+    status = find_q4_pair(model, coli_glm52_shared_down_id(layer), &weights,
+                          &scales);
+    if (status != COLI_OK) return status;
+    status = coli_q4_matvec(model, weights, scales, gate,
+                            shared_intermediate, shared_output,
+                            config->hidden_size, cursor, remaining, &q4);
+    if (status != COLI_OK) return status;
+    accumulate_q4(shared_stats, &q4);
+    return coli_ops_residual_add(output, shared_output, output, output_count);
+}
+
+size_t coli_glm52_sparse_layer_required_workspace(
+    const coli_glm52_config_t *config, uint32_t token_count,
+    size_t q4_workspace_bytes)
+{
+    if (!config) return 0;
+    const size_t attention = coli_glm52_attention_required_workspace(
+        config, token_count, q4_workspace_bytes);
+    const size_t sparse = coli_glm52_sparse_mlp_required_workspace(
+        config, q4_workspace_bytes);
+    if (attention == 0 || sparse == 0) return 0;
+    size_t sparse_stage = 0;
+    if (!add_floats(&sparse_stage, config->hidden_size) ||
+        !add_floats(&sparse_stage, config->hidden_size) ||
+        !add_size(sparse_stage, sparse, &sparse_stage))
+        return 0;
+    return attention > sparse_stage ? attention : sparse_stage;
+}
+
+coli_status_t coli_glm52_sparse_layer_decode(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t layer, uint32_t position, const float *input,
+    size_t input_count, float *output, size_t output_count,
+    coli_kv_cache_t *state, void *workspace, size_t workspace_bytes,
+    coli_glm52_layer_stats_t *stats)
+{
+    if (!model || !config || !input || !output || !state || !workspace ||
+        !stats || layer < config->first_dense_layers ||
+        layer >= config->num_layers || input_count != config->hidden_size ||
+        output_count != input_count)
+        return COLI_ERR_ARGUMENT;
+    memset(stats, 0, sizeof(*stats));
+    coli_status_t status = coli_glm52_attention_decode(
+        model, config, layer, position, input, input_count, output,
+        output_count, state, workspace, workspace_bytes, &stats->attention);
+    if (status != COLI_OK) return status;
+    status = coli_ops_residual_add(input, output, output, output_count);
+    if (status != COLI_OK) return status;
+
+    void *cursor = workspace;
+    size_t remaining = workspace_bytes;
+    float *mlp_output;
+    float *normalized;
+    if (!carve_floats(&cursor, &remaining, config->hidden_size, &mlp_output) ||
+        !carve_floats(&cursor, &remaining, config->hidden_size, &normalized))
+        return COLI_ERR_RANGE;
+    status = read_dense_f32(model, coli_glm52_post_attention_norm_id(layer),
+                            mlp_output, config->hidden_size);
+    if (status != COLI_OK) return status;
+    status = coli_ops_rmsnorm(output, mlp_output, normalized,
+                              config->hidden_size,
+                              config->rms_norm_epsilon);
+    if (status != COLI_OK) return status;
+    status = coli_glm52_sparse_mlp_decode(
+        model, config, layer, normalized, config->hidden_size, mlp_output,
+        config->hidden_size, cursor, remaining, &stats->moe,
+        &stats->shared_expert);
+    if (status != COLI_OK) return status;
+    status = coli_ops_residual_add(output, mlp_output, output, output_count);
+    if (status != COLI_OK) return status;
+    const size_t stage_buffers = workspace_bytes - remaining;
+    size_t sparse_peak = stats->moe.peak_workspace_bytes;
+    size_t shared_intermediate;
+    size_t shared_peak = 0;
+    if (config->shared_experts != 0) {
+        if (!mul_size(config->moe_intermediate_size, config->shared_experts,
+                      &shared_intermediate) ||
+            !add_floats(&shared_peak, config->hidden_size) ||
+            !add_floats(&shared_peak, shared_intermediate) ||
+            !add_floats(&shared_peak, shared_intermediate) ||
+            !add_size(shared_peak, stats->shared_expert.peak_workspace_bytes,
+                      &shared_peak))
+            return COLI_ERR_RANGE;
+        if (sparse_peak < shared_peak) sparse_peak = shared_peak;
+    }
+    if (!add_size(stage_buffers, sparse_peak, &sparse_peak))
+        return COLI_ERR_RANGE;
+    stats->peak_workspace_bytes =
+        stats->attention.peak_workspace_bytes > sparse_peak
+            ? stats->attention.peak_workspace_bytes
+            : sparse_peak;
+    return COLI_OK;
+}

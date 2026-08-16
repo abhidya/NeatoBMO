@@ -339,6 +339,27 @@ int main(void)
     for (uint32_t i = 0; i < HIDDEN; ++i)
         assert(fabsf(output[i] - expected[i]) < 0.0005f);
 
+    config.sigmoid_router = true;
+    config.norm_topk_prob = true;
+    config.routed_scale = 2.5f;
+    assert(coli_moe_forward(&model, &config, input, HIDDEN, output, HIDDEN,
+                            workspace, workspace_bytes, &stats) == COLI_OK);
+    float selected_sigmoid_sum = 0.0f;
+    for (uint32_t slot = 0; slot < TOP_K; ++slot)
+        selected_sigmoid_sum +=
+            1.0f / (1.0f + expf(-router_logits[expected_order[slot]]));
+    float routed_sum = 0.0f;
+    for (uint32_t slot = 0; slot < TOP_K; ++slot) {
+        assert(stats.selected_experts[slot] == expected_order[slot]);
+        float sigmoid =
+            1.0f / (1.0f + expf(-router_logits[expected_order[slot]]));
+        float expected_weight = sigmoid / selected_sigmoid_sum * 2.5f;
+        assert(fabsf(stats.routing_weights[slot] - expected_weight) <
+               0.000001f);
+        routed_sum += stats.routing_weights[slot];
+    }
+    assert(fabsf(routed_sum - 2.5f) < 0.000001f);
+
     assert(coli_moe_forward(&model, &config, input, HIDDEN, output, HIDDEN,
                             workspace, workspace_bytes - 25u, &stats) ==
            COLI_ERR_RANGE);

@@ -6,6 +6,7 @@
 
 #include "coli_kv_cache.h"
 #include "coli_model.h"
+#include "coli_moe.h"
 #include "coli_q4.h"
 
 #ifdef __cplusplus
@@ -86,6 +87,46 @@ static inline uint32_t coli_glm52_dense_down_id(uint32_t layer)
     return coli_glm52_layer_base(layer) + 22u;
 }
 
+static inline uint32_t coli_glm52_router_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 30u;
+}
+
+static inline uint32_t coli_glm52_router_bias_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 31u;
+}
+
+static inline uint32_t coli_glm52_shared_gate_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 40u;
+}
+
+static inline uint32_t coli_glm52_shared_up_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 41u;
+}
+
+static inline uint32_t coli_glm52_shared_down_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 42u;
+}
+
+static inline uint32_t coli_glm52_expert_gate_bundle_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 1001u;
+}
+
+static inline uint32_t coli_glm52_expert_up_bundle_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 1002u;
+}
+
+static inline uint32_t coli_glm52_expert_down_bundle_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 1003u;
+}
+
 static inline uint32_t coli_glm52_scale_id(uint32_t tensor_id)
 {
     return tensor_id + COLI_GLM52_SCALE_ID_OFFSET;
@@ -128,6 +169,8 @@ typedef struct {
 typedef struct {
     coli_glm52_attention_stats_t attention;
     coli_q4_stats_t mlp;
+    coli_moe_stats_t moe;
+    coli_q4_stats_t shared_expert;
     size_t peak_workspace_bytes;
 } coli_glm52_layer_stats_t;
 
@@ -186,6 +229,28 @@ size_t coli_glm52_dense_layer_required_workspace(
 
 /** Execute a complete pre-MoE GLM transformer layer including both residuals. */
 coli_status_t coli_glm52_dense_layer_decode(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t layer, uint32_t position, const float *input,
+    size_t input_count, float *output, size_t output_count,
+    coli_kv_cache_t *state, void *workspace, size_t workspace_bytes,
+    coli_glm52_layer_stats_t *stats);
+
+size_t coli_glm52_sparse_mlp_required_workspace(
+    const coli_glm52_config_t *config, size_t q4_workspace_bytes);
+
+/** Execute GLM sigmoid/noaux routing plus its always-on shared expert. */
+coli_status_t coli_glm52_sparse_mlp_decode(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t layer, const float *input, size_t input_count, float *output,
+    size_t output_count, void *workspace, size_t workspace_bytes,
+    coli_moe_stats_t *moe_stats, coli_q4_stats_t *shared_stats);
+
+size_t coli_glm52_sparse_layer_required_workspace(
+    const coli_glm52_config_t *config, uint32_t token_count,
+    size_t q4_workspace_bytes);
+
+/** Execute a complete sparse GLM transformer layer including both residuals. */
+coli_status_t coli_glm52_sparse_layer_decode(
     const coli_model_t *model, const coli_glm52_config_t *config,
     uint32_t layer, uint32_t position, const float *input,
     size_t input_count, float *output, size_t output_count,

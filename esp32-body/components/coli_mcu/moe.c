@@ -72,6 +72,66 @@ static const bmoq_tensor_t *find_tensor(const coli_model_t *model,
     return coli_model_find(model, tensor_id);
 }
 
+typedef struct {
+    bmoq_tensor_t views[6];
+    const bmoq_tensor_t *gate_weights;
+    const bmoq_tensor_t *gate_scales;
+    const bmoq_tensor_t *up_weights;
+    const bmoq_tensor_t *up_scales;
+    const bmoq_tensor_t *down_weights;
+    const bmoq_tensor_t *down_scales;
+} resolved_expert_t;
+
+static coli_status_t resolve_expert(const coli_model_t *model,
+                                    const coli_moe_config_t *config,
+                                    uint32_t expert,
+                                    resolved_expert_t *resolved)
+{
+    if (!model || !config || !resolved || expert >= config->expert_count)
+        return COLI_ERR_ARGUMENT;
+    memset(resolved, 0, sizeof(*resolved));
+    const coli_moe_expert_t *ids = config->experts_bundled
+                                       ? &config->expert_bundles
+                                       : &config->experts[expert];
+    const bmoq_tensor_t *gate_weights = find_tensor(model, ids->gate.weight_id);
+    const bmoq_tensor_t *gate_scales = find_tensor(model, ids->gate.scale_id);
+    const bmoq_tensor_t *up_weights = find_tensor(model, ids->up.weight_id);
+    const bmoq_tensor_t *up_scales = find_tensor(model, ids->up.scale_id);
+    const bmoq_tensor_t *down_weights = find_tensor(model, ids->down.weight_id);
+    const bmoq_tensor_t *down_scales = find_tensor(model, ids->down.scale_id);
+    if (!gate_weights || !gate_scales || !up_weights || !up_scales ||
+        !down_weights || !down_scales)
+        return COLI_ERR_NOT_FOUND;
+    if (config->experts_bundled) {
+        coli_status_t status = coli_model_q4_expert_view(
+            gate_weights, gate_scales, expert, &resolved->views[0],
+            &resolved->views[1]);
+        if (status != COLI_OK) return status;
+        status = coli_model_q4_expert_view(
+            up_weights, up_scales, expert, &resolved->views[2],
+            &resolved->views[3]);
+        if (status != COLI_OK) return status;
+        status = coli_model_q4_expert_view(
+            down_weights, down_scales, expert, &resolved->views[4],
+            &resolved->views[5]);
+        if (status != COLI_OK) return status;
+        resolved->gate_weights = &resolved->views[0];
+        resolved->gate_scales = &resolved->views[1];
+        resolved->up_weights = &resolved->views[2];
+        resolved->up_scales = &resolved->views[3];
+        resolved->down_weights = &resolved->views[4];
+        resolved->down_scales = &resolved->views[5];
+    } else {
+        resolved->gate_weights = gate_weights;
+        resolved->gate_scales = gate_scales;
+        resolved->up_weights = up_weights;
+        resolved->up_scales = up_scales;
+        resolved->down_weights = down_weights;
+        resolved->down_scales = down_scales;
+    }
+    return COLI_OK;
+}
+
 static bool route_precedes(const route_slot_t *left, const route_slot_t *right)
 {
     if (left->logit > right->logit) return true;
@@ -79,22 +139,25 @@ static bool route_precedes(const route_slot_t *left, const route_slot_t *right)
     return left->expert < right->expert;
 }
 
-static coli_status_t select_routes(const float *logits, size_t expert_count,
-                                   size_t top_k, bool norm_topk_prob,
-                                   route_slot_t *top)
+static coli_status_t select_routes(const float *logits, const float *bias,
+                                   size_t expert_count, size_t top_k,
+                                   bool norm_topk_prob, bool sigmoid_router,
+                                   float routed_scale, route_slot_t *top)
 {
     if (expert_count == 0 || top_k == 0 || top_k > COLI_MOE_MAX_TOP_K ||
         top_k > expert_count)
         return COLI_ERR_RANGE;
 
     float max_logit = -FLT_MAX;
-    for (size_t expert = 0; expert < expert_count; ++expert)
-        if (logits[expert] > max_logit) max_logit = logits[expert];
-
-    float denominator = 0.0f;
-    for (size_t expert = 0; expert < expert_count; ++expert)
-        denominator += expf(logits[expert] - max_logit);
-    if (!(denominator > 0.0f)) return COLI_ERR_RANGE;
+    float denominator = 1.0f;
+    if (!sigmoid_router) {
+        for (size_t expert = 0; expert < expert_count; ++expert)
+            if (logits[expert] > max_logit) max_logit = logits[expert];
+        denominator = 0.0f;
+        for (size_t expert = 0; expert < expert_count; ++expert)
+            denominator += expf(logits[expert] - max_logit);
+        if (!(denominator > 0.0f)) return COLI_ERR_RANGE;
+    }
 
     for (size_t slot = 0; slot < top_k; ++slot) {
         top[slot].expert = UINT32_MAX;
@@ -103,10 +166,13 @@ static coli_status_t select_routes(const float *logits, size_t expert_count,
     }
 
     for (size_t expert = 0; expert < expert_count; ++expert) {
+        const float weight = sigmoid_router
+                                 ? 1.0f / (1.0f + expf(-logits[expert]))
+                                 : expf(logits[expert] - max_logit) / denominator;
         route_slot_t candidate = {
             .expert = (uint32_t)expert,
-            .logit = logits[expert],
-            .weight = expf(logits[expert] - max_logit) / denominator,
+            .logit = weight + (bias ? bias[expert] : 0.0f),
+            .weight = weight,
         };
         for (size_t slot = 0; slot < top_k; ++slot) {
             if (route_precedes(&candidate, &top[slot])) {
@@ -126,6 +192,9 @@ static coli_status_t select_routes(const float *logits, size_t expert_count,
         for (size_t slot = 0; slot < top_k; ++slot)
             top[slot].weight /= selected_sum;
     }
+    if (!(routed_scale > 0.0f)) routed_scale = 1.0f;
+    for (size_t slot = 0; slot < top_k; ++slot)
+        top[slot].weight *= routed_scale;
     return COLI_OK;
 }
 
@@ -140,6 +209,8 @@ size_t coli_moe_required_workspace(size_t hidden_count,
     size_t part = 0;
     if (!mul_size(expert_count, sizeof(float), &part) ||
         !add_size(bytes, align_up_size(part, sizeof(float)), &bytes))
+        return 0;
+    if (!add_size(bytes, align_up_size(part, sizeof(float)), &bytes))
         return 0;
     if (!mul_size(top_k, sizeof(route_slot_t), &part) ||
         !add_size(bytes, align_up_size(part, sizeof(float)), &bytes))
@@ -166,7 +237,8 @@ coli_status_t coli_moe_forward(const coli_model_t *model,
                                size_t workspace_bytes,
                                coli_moe_stats_t *stats)
 {
-    if (!model || !config || !config->experts || !input || !output ||
+    if (!model || !config || (!config->experts && !config->experts_bundled) ||
+        !input || !output ||
         !workspace || !stats || config->expert_count == 0 ||
         config->top_k == 0 || config->top_k > COLI_MOE_MAX_TOP_K ||
         config->top_k > config->expert_count || output_count != hidden_count ||
@@ -184,16 +256,13 @@ coli_status_t coli_moe_forward(const coli_model_t *model,
 
     size_t intermediate_count = 0;
     for (size_t expert = 0; expert < config->expert_count; ++expert) {
-        const coli_moe_expert_t *ids = &config->experts[expert];
-        const bmoq_tensor_t *gate_weights = find_tensor(model, ids->gate.weight_id);
-        const bmoq_tensor_t *up_weights = find_tensor(model, ids->up.weight_id);
-        const bmoq_tensor_t *down_weights = find_tensor(model, ids->down.weight_id);
-        const bmoq_tensor_t *gate_scales = find_tensor(model, ids->gate.scale_id);
-        const bmoq_tensor_t *up_scales = find_tensor(model, ids->up.scale_id);
-        const bmoq_tensor_t *down_scales = find_tensor(model, ids->down.scale_id);
-        if (!gate_weights || !up_weights || !down_weights || !gate_scales ||
-            !up_scales || !down_scales)
-            return COLI_ERR_ARGUMENT;
+        resolved_expert_t resolved;
+        coli_status_t status =
+            resolve_expert(model, config, (uint32_t)expert, &resolved);
+        if (status != COLI_OK) return status;
+        const bmoq_tensor_t *gate_weights = resolved.gate_weights;
+        const bmoq_tensor_t *up_weights = resolved.up_weights;
+        const bmoq_tensor_t *down_weights = resolved.down_weights;
         if (gate_weights->dimensions[1] != hidden_count ||
             up_weights->dimensions[1] != hidden_count ||
             down_weights->dimensions[0] != hidden_count ||
@@ -211,12 +280,15 @@ coli_status_t coli_moe_forward(const coli_model_t *model,
     void *cursor = workspace;
     size_t remaining = workspace_bytes;
     float *router_logits = NULL;
+    float *router_bias = NULL;
     route_slot_t *top = NULL;
     float *gate = NULL;
     float *up = NULL;
     float *down = NULL;
     if (!carve(&cursor, &remaining, config->expert_count * sizeof(float),
                (void **)&router_logits) ||
+        !carve(&cursor, &remaining, config->expert_count * sizeof(float),
+               (void **)&router_bias) ||
         !carve(&cursor, &remaining, config->top_k * sizeof(route_slot_t),
                (void **)&top) ||
         !carve(&cursor, &remaining, intermediate_count * sizeof(float),
@@ -226,6 +298,22 @@ coli_status_t coli_moe_forward(const coli_model_t *model,
         !carve(&cursor, &remaining, hidden_count * sizeof(float),
                (void **)&down))
         return COLI_ERR_RANGE;
+
+    memset(router_bias, 0, config->expert_count * sizeof(*router_bias));
+    if (config->router_bias_id != 0) {
+        const bmoq_tensor_t *bias =
+            find_tensor(model, config->router_bias_id);
+        if (!bias || bias->dtype != BMOQ_DTYPE_F32 ||
+            bias->layout != BMOQ_LAYOUT_DENSE_F32 ||
+            bias->dimensions[0] != config->expert_count ||
+            bias->dimensions[1] != 1 || bias->dimensions[2] != 1 ||
+            bias->dimensions[3] != 1)
+            return COLI_ERR_FORMAT;
+        coli_status_t bias_status = coli_tensor_read(
+            model, bias, 0, router_bias,
+            config->expert_count * sizeof(*router_bias));
+        if (bias_status != COLI_OK) return bias_status;
+    }
 
     size_t used = workspace_bytes - remaining;
     void *q4_workspace = cursor;
@@ -239,20 +327,23 @@ coli_status_t coli_moe_forward(const coli_model_t *model,
     if (status != COLI_OK) return status;
     record_q4_call(stats, &q4_stats, used);
 
-    status = select_routes(router_logits, config->expert_count, config->top_k,
-                           config->norm_topk_prob, top);
+    status = select_routes(router_logits, router_bias, config->expert_count,
+                           config->top_k, config->norm_topk_prob,
+                           config->sigmoid_router, config->routed_scale, top);
     if (status != COLI_OK) return status;
 
     memset(output, 0, hidden_count * sizeof(*output));
     for (size_t slot = 0; slot < config->top_k; ++slot) {
         const uint32_t expert_index = top[slot].expert;
-        const coli_moe_expert_t *ids = &config->experts[expert_index];
-        const bmoq_tensor_t *gate_weights = find_tensor(model, ids->gate.weight_id);
-        const bmoq_tensor_t *gate_scales = find_tensor(model, ids->gate.scale_id);
-        const bmoq_tensor_t *up_weights = find_tensor(model, ids->up.weight_id);
-        const bmoq_tensor_t *up_scales = find_tensor(model, ids->up.scale_id);
-        const bmoq_tensor_t *down_weights = find_tensor(model, ids->down.weight_id);
-        const bmoq_tensor_t *down_scales = find_tensor(model, ids->down.scale_id);
+        resolved_expert_t resolved;
+        status = resolve_expert(model, config, expert_index, &resolved);
+        if (status != COLI_OK) return status;
+        const bmoq_tensor_t *gate_weights = resolved.gate_weights;
+        const bmoq_tensor_t *gate_scales = resolved.gate_scales;
+        const bmoq_tensor_t *up_weights = resolved.up_weights;
+        const bmoq_tensor_t *up_scales = resolved.up_scales;
+        const bmoq_tensor_t *down_weights = resolved.down_weights;
+        const bmoq_tensor_t *down_scales = resolved.down_scales;
 
         status = coli_q4_matvec(model, gate_weights, gate_scales, input,
                                 hidden_count, gate, intermediate_count,
