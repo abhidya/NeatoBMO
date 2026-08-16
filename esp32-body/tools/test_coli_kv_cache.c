@@ -116,6 +116,55 @@ static void test_persistence_reopen(void)
     unlink(path);
 }
 
+static void test_unequal_state_planes(void)
+{
+    coli_kv_cache_layout_t layout;
+    assert(coli_kv_cache_layout_custom(2, 5, 12, 4, &layout) == COLI_OK);
+    assert(layout.key_token_bytes == 12);
+    assert(layout.value_token_bytes == 4);
+    assert(layout.key_layer_bytes == 60);
+    assert(layout.value_layer_bytes == 20);
+    assert(layout.total_bytes == 160);
+
+    char path[] = "/tmp/coli-kv-cache-unequal-XXXXXX";
+    int fd = mkstemp(path);
+    assert(fd >= 0);
+    close(fd);
+
+    coli_kv_cache_t *cache = NULL;
+    assert(coli_kv_cache_open_file(&layout, path, 7, &cache) == COLI_OK);
+    uint8_t key[12];
+    uint8_t value[4];
+    uint8_t got_key[12];
+    uint8_t got_value[4];
+    for (uint32_t layer = 0; layer < layout.layers; ++layer) {
+        for (uint32_t token = 0; token < layout.max_tokens; ++token) {
+            fill_pattern(key, sizeof(key), (uint8_t)(31 + layer + token));
+            fill_pattern(value, sizeof(value),
+                         (uint8_t)(171 + layer + token));
+            assert(coli_kv_cache_write_token(cache, layer, token, key,
+                                             value) == COLI_OK);
+        }
+    }
+    assert(coli_kv_cache_flush(cache) == COLI_OK);
+    coli_kv_cache_close(cache);
+
+    assert(coli_kv_cache_open_file(&layout, path, 7, &cache) == COLI_OK);
+    for (uint32_t layer = 0; layer < layout.layers; ++layer) {
+        for (uint32_t token = 0; token < layout.max_tokens; ++token) {
+            fill_pattern(key, sizeof(key), (uint8_t)(31 + layer + token));
+            fill_pattern(value, sizeof(value),
+                         (uint8_t)(171 + layer + token));
+            assert(coli_kv_cache_read_token(cache, layer, token, got_key,
+                                            got_value) == COLI_OK);
+            assert(memcmp(got_key, key, sizeof(key)) == 0);
+            assert(memcmp(got_value, value, sizeof(value)) == 0);
+        }
+    }
+    coli_kv_cache_close(cache);
+    unlink(path);
+}
+
 static void test_large_logical_context_small_resident(void)
 {
     coli_kv_cache_layout_t layout;
@@ -180,6 +229,7 @@ int main(void)
 {
     test_ram_file_parity_and_boundary_crossing();
     test_persistence_reopen();
+    test_unequal_state_planes();
     test_large_logical_context_small_resident();
     test_invalid_cases();
     puts("coli_kv_cache ram/file backends: PASS");

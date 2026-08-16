@@ -16,6 +16,7 @@ typedef enum {
     COLI_ERR_NO_MEMORY = -5,
     COLI_ERR_REMOVED = -6,
     COLI_ERR_UNSUPPORTED = -7,
+    COLI_ERR_NOT_FOUND = -8,
 } coli_status_t;
 
 typedef struct coli_store coli_store_t;

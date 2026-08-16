@@ -10,10 +10,16 @@ extern "C" {
 
 #define BMOQ_HEADER_BYTES 4096u
 #define BMOQ_VERSION 1u
+#define BMOQ_VERSION_EXTENDED_CONFIG 2u
 #define BMOQ_MAX_TENSORS 8192u
 #define BMOQ_TENSOR_NAME_BYTES 16u
 #define BMOQ_DATA_ALIGNMENT 4096u
 #define BMOQ_MODEL_CONFIG_OFFSET 32u
+#define BMOQ_CONFIG_TENSOR_ID 0x32474643u
+#define BMOQ_CONFIG_HEADER_BYTES 16u
+#define BMOQ_CONFIG_ENTRY_BYTES 12u
+#define BMOQ_CONFIG_MAX_BYTES (1024u * 1024u)
+#define BMOQ_CONFIG_MAX_ENTRIES 256u
 
 typedef enum {
     BMOQ_DTYPE_OPAQUE = 0,
@@ -34,7 +40,42 @@ typedef enum {
 typedef enum {
     BMOQ_MODEL_ARCH_GENERIC = 0,
     BMOQ_MODEL_ARCH_OLMOE = 1,
+    BMOQ_MODEL_ARCH_GEMMA3 = 2,
+    BMOQ_MODEL_ARCH_GLM52 = 3,
+    BMOQ_MODEL_ARCH_INKLING = 4,
+    BMOQ_MODEL_ARCH_KIMI_K3 = 5,
+    BMOQ_MODEL_ARCH_DEEPSEEK_V4 = 6,
 } bmoq_model_arch_t;
+
+typedef enum {
+    BMOQ_CONFIG_U32 = 1,
+    BMOQ_CONFIG_I32 = 2,
+    BMOQ_CONFIG_F32 = 3,
+    BMOQ_CONFIG_BOOL = 4,
+    BMOQ_CONFIG_U32_ARRAY = 5,
+} bmoq_config_type_t;
+
+typedef enum {
+    BMOQ_CONFIG_STOP_TOKEN_IDS = 1u,
+    BMOQ_CONFIG_RMS_NORM_EPS = 2u,
+    BMOQ_CONFIG_ATTENTION_SCALE = 3u,
+    BMOQ_CONFIG_ROUTED_SCALE = 4u,
+    BMOQ_CONFIG_MOE_INTERMEDIATE_SIZE = 1000u,
+    BMOQ_CONFIG_FIRST_DENSE_LAYERS = 1001u,
+    BMOQ_CONFIG_Q_LORA_RANK = 1002u,
+    BMOQ_CONFIG_KV_LORA_RANK = 1003u,
+    BMOQ_CONFIG_QK_NOPE_HEAD_DIM = 1004u,
+    BMOQ_CONFIG_QK_ROPE_HEAD_DIM = 1005u,
+    BMOQ_CONFIG_V_HEAD_DIM = 1006u,
+    BMOQ_CONFIG_SHARED_EXPERTS = 1007u,
+    BMOQ_CONFIG_EXPERT_GROUPS = 1008u,
+    BMOQ_CONFIG_TOPK_GROUPS = 1009u,
+    BMOQ_CONFIG_NORMALIZE_TOPK = 1010u,
+    BMOQ_CONFIG_SLIDING_WINDOW = 2000u,
+    BMOQ_CONFIG_LAYER_PATTERN = 2001u,
+    BMOQ_CONFIG_LINEAR_ATTENTION_PATTERN = 3000u,
+    BMOQ_CONFIG_SPARSE_ATTENTION_WINDOW = 4000u,
+} bmoq_config_key_t;
 
 typedef struct {
     uint32_t arch;
@@ -69,6 +110,7 @@ typedef struct {
 
 typedef struct {
     coli_store_t *store;
+    uint16_t format_version;
     uint32_t tensor_count;
     bmoq_tensor_t *tensors;
     bmoq_model_config_t config;
@@ -82,6 +124,13 @@ coli_status_t coli_tensor_read(const coli_model_t *model,
                                uint64_t tensor_offset, void *destination,
                                size_t length);
 void coli_model_close(coli_model_t *model);
+
+/** Read one bounded BMOQ-v2 binary config value without loading the manifest. */
+coli_status_t coli_model_config_read(const coli_model_t *model, uint32_t key,
+                                     bmoq_config_type_t expected_type,
+                                     void *destination,
+                                     size_t destination_bytes,
+                                     size_t *out_value_count);
 
 #ifdef __cplusplus
 }

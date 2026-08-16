@@ -11,6 +11,7 @@
 #define TEST_DIRECTORY_OFFSET BMOQ_HEADER_BYTES
 #define TEST_DATA_OFFSET (BMOQ_HEADER_BYTES * 2u)
 #define TEST_DENSE_BYTES (4u * sizeof(float))
+#define TEST_CONFIG_OFFSET (BMOQ_HEADER_BYTES * 2u)
 
 static void put_u16(uint8_t *p, uint16_t value)
 {
@@ -94,6 +95,67 @@ static void write_fixture(const char *path)
     assert(fclose(file) == 0);
 }
 
+static size_t write_config_entry(uint8_t *config, size_t offset, uint32_t key,
+                                 uint16_t type, const void *value,
+                                 uint16_t count)
+{
+    size_t bytes = (size_t)count * sizeof(uint32_t);
+    put_u32(config + offset, key);
+    put_u16(config + offset + 4u, type);
+    put_u16(config + offset + 6u, count);
+    put_u32(config + offset + 8u, (uint32_t)bytes);
+    memcpy(config + offset + BMOQ_CONFIG_ENTRY_BYTES, value, bytes);
+    return offset + BMOQ_CONFIG_ENTRY_BYTES + bytes;
+}
+
+static void write_v2_config_fixture(const char *path)
+{
+    uint8_t config[72] = {0};
+    memcpy(config, "BCFG", 4);
+    put_u16(config + 4, 1);
+    put_u16(config + 6, BMOQ_CONFIG_HEADER_BYTES);
+    put_u32(config + 8, 3);
+    put_u32(config + 12, sizeof(config));
+    size_t cursor = BMOQ_CONFIG_HEADER_BYTES;
+    uint32_t kv_rank = 512;
+    cursor = write_config_entry(config, cursor, BMOQ_CONFIG_KV_LORA_RANK,
+                                BMOQ_CONFIG_U32, &kv_rank, 1);
+    float epsilon = 1.0e-6f;
+    cursor = write_config_entry(config, cursor, BMOQ_CONFIG_RMS_NORM_EPS,
+                                BMOQ_CONFIG_F32, &epsilon, 1);
+    uint32_t stops[] = {151329, 151336, 151338};
+    cursor = write_config_entry(config, cursor, BMOQ_CONFIG_STOP_TOKEN_IDS,
+                                BMOQ_CONFIG_U32_ARRAY, stops, 3);
+    assert(cursor == sizeof(config));
+
+    FILE *file = fopen(path, "wb");
+    assert(file);
+    uint8_t header[BMOQ_HEADER_BYTES] = {0};
+    memcpy(header, "BMOQ", 4);
+    put_u16(header + 4, BMOQ_VERSION_EXTENDED_CONFIG);
+    put_u32(header + 8, 0x01020304u);
+    put_u32(header + 12, BMOQ_HEADER_BYTES);
+    put_u32(header + 16, 1);
+    put_u32(header + 20, 64);
+    put_u64(header + 24, BMOQ_HEADER_BYTES);
+    put_u32(header + BMOQ_MODEL_CONFIG_OFFSET, BMOQ_MODEL_ARCH_GLM52);
+    assert(fwrite(header, 1, sizeof(header), file) == sizeof(header));
+
+    uint8_t entry[64] = {0};
+    put_u32(entry, BMOQ_CONFIG_TENSOR_ID);
+    put_u32(entry + 8, sizeof(config));
+    put_u32(entry + 12, 1);
+    put_u32(entry + 16, 1);
+    put_u32(entry + 20, 1);
+    put_u64(entry + 24, TEST_CONFIG_OFFSET);
+    put_u64(entry + 32, sizeof(config));
+    memcpy(entry + 48, "config.v2", 9);
+    assert(fwrite(entry, 1, sizeof(entry), file) == sizeof(entry));
+    assert(fseeko(file, TEST_CONFIG_OFFSET, SEEK_SET) == 0);
+    assert(fwrite(config, 1, sizeof(config), file) == sizeof(config));
+    assert(fclose(file) == 0);
+}
+
 int main(void)
 {
     char path[] = "/tmp/coli-bmoq-XXXXXX";
@@ -109,6 +171,7 @@ int main(void)
                TEST_DENSE_BYTES);
     coli_model_t model;
     assert(coli_model_open(store, &model) == COLI_OK);
+    assert(model.format_version == BMOQ_VERSION);
     const bmoq_tensor_t *tensor = coli_model_find(&model, 42);
     assert(tensor && tensor->byte_length == TEST_TENSOR_BYTES);
     const bmoq_tensor_t *dense = coli_model_find(&model, 43);
@@ -129,6 +192,36 @@ int main(void)
     coli_model_close(&model);
     coli_store_close(store);
     unlink(path);
+
+    char config_path[] = "/tmp/coli-bmoq-v2-XXXXXX";
+    fd = mkstemp(config_path);
+    assert(fd >= 0);
+    close(fd);
+    write_v2_config_fixture(config_path);
+    assert(coli_store_open_file(config_path, &store) == COLI_OK);
+    assert(coli_model_open(store, &model) == COLI_OK);
+    assert(model.format_version == BMOQ_VERSION_EXTENDED_CONFIG);
+    assert(model.config.arch == BMOQ_MODEL_ARCH_GLM52);
+    size_t count = 0;
+    uint32_t kv_rank = 0;
+    assert(coli_model_config_read(&model, BMOQ_CONFIG_KV_LORA_RANK,
+                                  BMOQ_CONFIG_U32, &kv_rank, sizeof(kv_rank),
+                                  &count) == COLI_OK);
+    assert(kv_rank == 512 && count == 1);
+    uint32_t stops[3] = {0};
+    assert(coli_model_config_read(&model, BMOQ_CONFIG_STOP_TOKEN_IDS,
+                                  BMOQ_CONFIG_U32_ARRAY, stops, sizeof(stops),
+                                  &count) == COLI_OK);
+    assert(count == 3 && stops[0] == 151329 && stops[2] == 151338);
+    assert(coli_model_config_read(&model, BMOQ_CONFIG_STOP_TOKEN_IDS,
+                                  BMOQ_CONFIG_U32_ARRAY, stops,
+                                  sizeof(uint32_t), &count) == COLI_ERR_RANGE);
+    assert(coli_model_config_read(&model, 999999u, BMOQ_CONFIG_U32, &kv_rank,
+                                  sizeof(kv_rank), &count) ==
+           COLI_ERR_NOT_FOUND);
+    coli_model_close(&model);
+    coli_store_close(store);
+    unlink(config_path);
     puts("BMOQ parser and deterministic tiled reads: PASS");
     return 0;
 }

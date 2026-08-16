@@ -24,6 +24,11 @@ coli_status_t coli_kv_cache_layout(uint32_t layers, uint32_t heads,
                                    size_t bytes_per_value,
                                    coli_kv_cache_layout_t *out_layout);
 
+/** Build a paged state layout whose two per-token planes have unequal sizes. */
+coli_status_t coli_kv_cache_layout_custom(
+    uint32_t layers, uint32_t max_tokens, size_t key_token_bytes,
+    size_t value_token_bytes, coli_kv_cache_layout_t *out_layout);
+
 /** Wrap caller-owned contiguous memory. The cache object itself is allocated. */
 coli_status_t coli_kv_cache_open_ram(const coli_kv_cache_layout_t *layout,
                                      void *memory, size_t memory_bytes,

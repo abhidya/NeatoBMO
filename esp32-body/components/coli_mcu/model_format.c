@@ -23,6 +23,20 @@ static uint64_t read_u64(const uint8_t *p)
     return (uint64_t)read_u32(p) | ((uint64_t)read_u32(p + 4) << 32);
 }
 
+static size_t config_type_bytes(uint16_t type)
+{
+    switch (type) {
+    case BMOQ_CONFIG_U32:
+    case BMOQ_CONFIG_I32:
+    case BMOQ_CONFIG_F32:
+    case BMOQ_CONFIG_BOOL:
+    case BMOQ_CONFIG_U32_ARRAY:
+        return 4u;
+    default:
+        return 0;
+    }
+}
+
 static bool multiply_u64(uint64_t left, uint64_t right, uint64_t *product)
 {
     if (left && right > UINT64_MAX / left) return false;
@@ -95,7 +109,9 @@ coli_status_t coli_model_open(coli_store_t *store, coli_model_t *model)
     uint8_t header[32];
     coli_status_t status = coli_store_read_at(store, 0, header, sizeof(header));
     if (status != COLI_OK) return status;
-    if (memcmp(header, "BMOQ", 4) != 0 || read_u16(header + 4) != BMOQ_VERSION ||
+    uint16_t version = read_u16(header + 4);
+    if (memcmp(header, "BMOQ", 4) != 0 ||
+        (version != BMOQ_VERSION && version != BMOQ_VERSION_EXTENDED_CONFIG) ||
         read_u32(header + 8) != BMOQ_ENDIAN_MARKER ||
         read_u32(header + 12) != BMOQ_HEADER_BYTES)
         return COLI_ERR_FORMAT;
@@ -140,6 +156,7 @@ coli_status_t coli_model_open(coli_store_t *store, coli_model_t *model)
         previous_end = tensor->data_offset + tensor->byte_length;
     }
     model->store = store;
+    model->format_version = version;
     model->tensor_count = count;
     model->tensors = tensors;
     uint8_t config[sizeof(model->config)];
@@ -153,6 +170,72 @@ fail:
     free(tensors);
     memset(model, 0, sizeof(*model));
     return status;
+}
+
+coli_status_t coli_model_config_read(const coli_model_t *model, uint32_t key,
+                                     bmoq_config_type_t expected_type,
+                                     void *destination,
+                                     size_t destination_bytes,
+                                     size_t *out_value_count)
+{
+    if (!model || !destination || destination_bytes == 0 || !out_value_count)
+        return COLI_ERR_ARGUMENT;
+    *out_value_count = 0;
+    if (model->format_version < BMOQ_VERSION_EXTENDED_CONFIG)
+        return COLI_ERR_NOT_FOUND;
+    const bmoq_tensor_t *config =
+        coli_model_find(model, BMOQ_CONFIG_TENSOR_ID);
+    if (!config || config->layout != BMOQ_LAYOUT_OPAQUE ||
+        config->dtype != BMOQ_DTYPE_OPAQUE ||
+        config->byte_length < BMOQ_CONFIG_HEADER_BYTES ||
+        config->byte_length > BMOQ_CONFIG_MAX_BYTES)
+        return config ? COLI_ERR_FORMAT : COLI_ERR_NOT_FOUND;
+
+    uint8_t header[BMOQ_CONFIG_HEADER_BYTES];
+    coli_status_t status = coli_tensor_read(model, config, 0, header,
+                                            sizeof(header));
+    if (status != COLI_OK) return status;
+    uint32_t entries = read_u32(header + 8);
+    if (memcmp(header, "BCFG", 4) != 0 || read_u16(header + 4) != 1u ||
+        read_u16(header + 6) != BMOQ_CONFIG_HEADER_BYTES ||
+        entries > BMOQ_CONFIG_MAX_ENTRIES ||
+        read_u32(header + 12) != config->byte_length)
+        return COLI_ERR_FORMAT;
+
+    uint64_t cursor = BMOQ_CONFIG_HEADER_BYTES;
+    for (uint32_t index = 0; index < entries; ++index) {
+        uint8_t entry[BMOQ_CONFIG_ENTRY_BYTES];
+        if (cursor > config->byte_length ||
+            sizeof(entry) > config->byte_length - cursor)
+            return COLI_ERR_FORMAT;
+        status = coli_tensor_read(model, config, cursor, entry, sizeof(entry));
+        if (status != COLI_OK) return status;
+        cursor += sizeof(entry);
+        uint32_t entry_key = read_u32(entry);
+        uint16_t type = read_u16(entry + 4);
+        uint16_t count = read_u16(entry + 6);
+        uint32_t value_bytes = read_u32(entry + 8);
+        size_t element_bytes = config_type_bytes(type);
+        if (element_bytes == 0 || count == 0 ||
+            count > SIZE_MAX / element_bytes ||
+            value_bytes != (size_t)count * element_bytes ||
+            cursor > config->byte_length ||
+            value_bytes > config->byte_length - cursor)
+            return COLI_ERR_FORMAT;
+        if (entry_key == key) {
+            if (type != expected_type) return COLI_ERR_FORMAT;
+            if (destination_bytes < value_bytes) return COLI_ERR_RANGE;
+            status = coli_tensor_read(model, config, cursor, destination,
+                                      value_bytes);
+            if (status == COLI_OK) *out_value_count = count;
+            return status;
+        }
+        uint64_t padded = (value_bytes + 3u) & ~(uint64_t)3u;
+        if (padded > config->byte_length - cursor) return COLI_ERR_FORMAT;
+        cursor += padded;
+    }
+    if (cursor != config->byte_length) return COLI_ERR_FORMAT;
+    return COLI_ERR_NOT_FOUND;
 }
 
 const bmoq_tensor_t *coli_model_find(const coli_model_t *model,

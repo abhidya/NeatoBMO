@@ -160,6 +160,8 @@ coli_status_t coli_ops_kv_cache_layout(uint32_t layers, uint32_t heads,
     out_layout->head_dim = head_dim;
     out_layout->max_tokens = max_tokens;
     out_layout->bytes_per_value = bytes_per_value;
+    out_layout->key_token_bytes = token_bytes;
+    out_layout->value_token_bytes = token_bytes;
     out_layout->key_layer_bytes = plane_bytes;
     out_layout->value_layer_bytes = plane_bytes;
     out_layout->layer_stride_bytes = layer_stride;

@@ -16,7 +16,6 @@ typedef enum {
 struct coli_kv_cache {
     coli_kv_cache_layout_t layout;
     coli_kv_backend_t backend;
-    uint64_t token_bytes;
     uint64_t reads;
     uint64_t writes;
     uint64_t flushes;
@@ -65,17 +64,57 @@ static coli_status_t seek_file(FILE *file, uint64_t offset)
 #endif
 }
 
-static coli_status_t compute_token_bytes(const coli_kv_cache_layout_t *layout,
-                                         uint64_t *out_token_bytes)
+static coli_status_t validate_layout(const coli_kv_cache_layout_t *layout)
 {
-    uint64_t values;
-    if (!layout || !out_token_bytes || layout->layers == 0 ||
-        layout->heads == 0 || layout->head_dim == 0 ||
-        layout->max_tokens == 0 || layout->bytes_per_value == 0)
+    uint64_t expected_key_layer;
+    uint64_t expected_value_layer;
+    uint64_t expected_stride;
+    uint64_t expected_total;
+    if (!layout || layout->layers == 0 || layout->max_tokens == 0 ||
+        layout->key_token_bytes == 0 || layout->value_token_bytes == 0)
         return COLI_ERR_ARGUMENT;
-    if (!mul_u64(layout->heads, layout->head_dim, &values) ||
-        !mul_u64(values, (uint64_t)layout->bytes_per_value, out_token_bytes))
+    if (!mul_u64(layout->key_token_bytes, layout->max_tokens,
+                 &expected_key_layer) ||
+        !mul_u64(layout->value_token_bytes, layout->max_tokens,
+                 &expected_value_layer) ||
+        !add_u64(expected_key_layer, expected_value_layer, &expected_stride) ||
+        !mul_u64(expected_stride, layout->layers, &expected_total))
         return COLI_ERR_RANGE;
+    if (layout->key_layer_bytes != expected_key_layer ||
+        layout->value_layer_bytes != expected_value_layer ||
+        layout->layer_stride_bytes != expected_stride ||
+        layout->total_bytes != expected_total)
+        return COLI_ERR_ARGUMENT;
+    return COLI_OK;
+}
+
+coli_status_t coli_kv_cache_layout_custom(
+    uint32_t layers, uint32_t max_tokens, size_t key_token_bytes,
+    size_t value_token_bytes, coli_kv_cache_layout_t *out_layout)
+{
+    if (!out_layout || layers == 0 || max_tokens == 0 ||
+        key_token_bytes == 0 || value_token_bytes == 0)
+        return COLI_ERR_ARGUMENT;
+
+    uint64_t key_layer_bytes;
+    uint64_t value_layer_bytes;
+    uint64_t layer_stride;
+    uint64_t total_bytes;
+    if (!mul_u64(key_token_bytes, max_tokens, &key_layer_bytes) ||
+        !mul_u64(value_token_bytes, max_tokens, &value_layer_bytes) ||
+        !add_u64(key_layer_bytes, value_layer_bytes, &layer_stride) ||
+        !mul_u64(layer_stride, layers, &total_bytes))
+        return COLI_ERR_RANGE;
+
+    memset(out_layout, 0, sizeof(*out_layout));
+    out_layout->layers = layers;
+    out_layout->max_tokens = max_tokens;
+    out_layout->key_token_bytes = key_token_bytes;
+    out_layout->value_token_bytes = value_token_bytes;
+    out_layout->key_layer_bytes = key_layer_bytes;
+    out_layout->value_layer_bytes = value_layer_bytes;
+    out_layout->layer_stride_bytes = layer_stride;
+    out_layout->total_bytes = total_bytes;
     return COLI_OK;
 }
 
@@ -90,25 +129,18 @@ coli_status_t coli_kv_cache_layout(uint32_t layers, uint32_t heads,
 
     uint64_t token_values;
     uint64_t token_bytes;
-    uint64_t plane_bytes;
-    uint64_t layer_stride;
-    uint64_t total_bytes;
+    coli_status_t status;
     if (!mul_u64(heads, head_dim, &token_values) ||
-        !mul_u64(token_values, (uint64_t)bytes_per_value, &token_bytes) ||
-        !mul_u64(token_bytes, max_tokens, &plane_bytes) ||
-        !add_u64(plane_bytes, plane_bytes, &layer_stride) ||
-        !mul_u64(layer_stride, layers, &total_bytes))
+        !mul_u64(token_values, (uint64_t)bytes_per_value, &token_bytes))
         return COLI_ERR_RANGE;
-
-    out_layout->layers = layers;
+    if (token_bytes > (uint64_t)SIZE_MAX) return COLI_ERR_RANGE;
+    status = coli_kv_cache_layout_custom(layers, max_tokens,
+                                         (size_t)token_bytes,
+                                         (size_t)token_bytes, out_layout);
+    if (status != COLI_OK) return status;
     out_layout->heads = heads;
     out_layout->head_dim = head_dim;
-    out_layout->max_tokens = max_tokens;
     out_layout->bytes_per_value = bytes_per_value;
-    out_layout->key_layer_bytes = plane_bytes;
-    out_layout->value_layer_bytes = plane_bytes;
-    out_layout->layer_stride_bytes = layer_stride;
-    out_layout->total_bytes = total_bytes;
     return COLI_OK;
 }
 
@@ -123,17 +155,23 @@ static coli_status_t token_offsets(const coli_kv_cache_t *cache,
         return COLI_ERR_RANGE;
 
     uint64_t layer_offset;
-    uint64_t token_offset;
+    uint64_t key_token_offset;
+    uint64_t value_token_offset;
     uint64_t key_offset;
     uint64_t value_base;
     uint64_t value_offset;
     if (!mul_u64((uint64_t)layer, layout->layer_stride_bytes, &layer_offset) ||
-        !mul_u64((uint64_t)token, cache->token_bytes, &token_offset) ||
-        !add_u64(layer_offset, token_offset, &key_offset) ||
+        !mul_u64((uint64_t)token, layout->key_token_bytes,
+                 &key_token_offset) ||
+        !mul_u64((uint64_t)token, layout->value_token_bytes,
+                 &value_token_offset) ||
+        !add_u64(layer_offset, key_token_offset, &key_offset) ||
         !add_u64(layer_offset, layout->key_layer_bytes, &value_base) ||
-        !add_u64(value_base, token_offset, &value_offset) ||
-        cache->token_bytes > UINT64_MAX - value_offset ||
-        value_offset + cache->token_bytes > layout->total_bytes)
+        !add_u64(value_base, value_token_offset, &value_offset) ||
+        layout->key_token_bytes > UINT64_MAX - key_offset ||
+        key_offset + layout->key_token_bytes > layout->total_bytes ||
+        layout->value_token_bytes > UINT64_MAX - value_offset ||
+        value_offset + layout->value_token_bytes > layout->total_bytes)
         return COLI_ERR_RANGE;
 
     *out_key_offset = key_offset;
@@ -150,15 +188,13 @@ coli_status_t coli_kv_cache_open_ram(const coli_kv_cache_layout_t *layout,
         memory_bytes < (size_t)layout->total_bytes)
         return COLI_ERR_ARGUMENT;
 
-    uint64_t token_bytes;
-    coli_status_t status = compute_token_bytes(layout, &token_bytes);
+    coli_status_t status = validate_layout(layout);
     if (status != COLI_OK) return status;
 
     coli_kv_cache_t *cache = calloc(1, sizeof(*cache));
     if (!cache) return COLI_ERR_NO_MEMORY;
     cache->layout = *layout;
     cache->backend = COLI_KV_BACKEND_RAM;
-    cache->token_bytes = token_bytes;
     cache->storage.ram.memory = memory;
     cache->storage.ram.memory_bytes = memory_bytes;
     *out_cache = cache;
@@ -172,8 +208,7 @@ coli_status_t coli_kv_cache_open_file(const coli_kv_cache_layout_t *layout,
     if (!layout || !path || page_bytes == 0 || !out_cache)
         return COLI_ERR_ARGUMENT;
 
-    uint64_t token_bytes;
-    coli_status_t status = compute_token_bytes(layout, &token_bytes);
+    coli_status_t status = validate_layout(layout);
     if (status != COLI_OK) return status;
 
     coli_kv_cache_t *cache = calloc(1, sizeof(*cache));
@@ -194,7 +229,6 @@ coli_status_t coli_kv_cache_open_file(const coli_kv_cache_layout_t *layout,
 
     cache->layout = *layout;
     cache->backend = COLI_KV_BACKEND_FILE;
-    cache->token_bytes = token_bytes;
     cache->storage.file.file = file;
     cache->storage.file.page_bytes = page_bytes;
     *out_cache = cache;
@@ -310,7 +344,9 @@ coli_status_t coli_kv_cache_write_token(coli_kv_cache_t *cache,
                                         const void *key, const void *value)
 {
     if (!cache || !key || !value) return COLI_ERR_ARGUMENT;
-    if (cache->token_bytes > (uint64_t)SIZE_MAX) return COLI_ERR_RANGE;
+    if (cache->layout.key_token_bytes > (uint64_t)SIZE_MAX ||
+        cache->layout.value_token_bytes > (uint64_t)SIZE_MAX)
+        return COLI_ERR_RANGE;
 
     uint64_t key_offset;
     uint64_t value_offset;
@@ -319,10 +355,10 @@ coli_status_t coli_kv_cache_write_token(coli_kv_cache_t *cache,
     if (status != COLI_OK) return status;
 
     status = transfer_span(cache, key_offset, (void *)key,
-                           (size_t)cache->token_bytes, true);
+                           (size_t)cache->layout.key_token_bytes, true);
     if (status != COLI_OK) return status;
     status = transfer_span(cache, value_offset, (void *)value,
-                           (size_t)cache->token_bytes, true);
+                           (size_t)cache->layout.value_token_bytes, true);
     if (status == COLI_OK) ++cache->writes;
     return status;
 }
@@ -332,7 +368,9 @@ coli_status_t coli_kv_cache_read_token(coli_kv_cache_t *cache,
                                        void *key, void *value)
 {
     if (!cache || !key || !value) return COLI_ERR_ARGUMENT;
-    if (cache->token_bytes > (uint64_t)SIZE_MAX) return COLI_ERR_RANGE;
+    if (cache->layout.key_token_bytes > (uint64_t)SIZE_MAX ||
+        cache->layout.value_token_bytes > (uint64_t)SIZE_MAX)
+        return COLI_ERR_RANGE;
 
     uint64_t key_offset;
     uint64_t value_offset;
@@ -340,11 +378,11 @@ coli_status_t coli_kv_cache_read_token(coli_kv_cache_t *cache,
         token_offsets(cache, layer, token, &key_offset, &value_offset);
     if (status != COLI_OK) return status;
 
-    status = transfer_span(cache, key_offset, key, (size_t)cache->token_bytes,
-                           false);
+    status = transfer_span(cache, key_offset, key,
+                           (size_t)cache->layout.key_token_bytes, false);
     if (status != COLI_OK) return status;
     status = transfer_span(cache, value_offset, value,
-                           (size_t)cache->token_bytes, false);
+                           (size_t)cache->layout.value_token_bytes, false);
     if (status == COLI_OK) ++cache->reads;
     return status;
 }
@@ -354,14 +392,17 @@ static coli_status_t read_plane(coli_kv_cache_t *cache, uint32_t layer,
                                 void *destination)
 {
     if (!cache || !destination) return COLI_ERR_ARGUMENT;
-    if (cache->token_bytes > (uint64_t)SIZE_MAX) return COLI_ERR_RANGE;
+    const uint64_t token_bytes = value_plane
+                                     ? cache->layout.value_token_bytes
+                                     : cache->layout.key_token_bytes;
+    if (token_bytes > (uint64_t)SIZE_MAX) return COLI_ERR_RANGE;
     uint64_t key_offset;
     uint64_t value_offset;
     coli_status_t status =
         token_offsets(cache, layer, token, &key_offset, &value_offset);
     if (status != COLI_OK) return status;
     status = transfer_span(cache, value_plane ? value_offset : key_offset,
-                           destination, (size_t)cache->token_bytes, false);
+                           destination, (size_t)token_bytes, false);
     if (status == COLI_OK) ++cache->reads;
     return status;
 }
@@ -388,13 +429,17 @@ coli_status_t coli_kv_cache_attention_decode(
     if (!cache || !query || !output || !score_workspace || !vector_scratch ||
         layer >= cache->layout.layers || token_count == 0 ||
         token_count > cache->layout.max_tokens ||
-        cache->layout.bytes_per_value != sizeof(float))
+        cache->layout.bytes_per_value != sizeof(float) ||
+        cache->layout.key_token_bytes != cache->layout.value_token_bytes)
         return COLI_ERR_ARGUMENT;
 
     const size_t heads = cache->layout.heads;
     const size_t head_dim = cache->layout.head_dim;
     if (heads != 0 && head_dim > SIZE_MAX / heads) return COLI_ERR_RANGE;
     const size_t vector_values = heads * head_dim;
+    if (vector_values > SIZE_MAX / sizeof(float) ||
+        cache->layout.key_token_bytes != vector_values * sizeof(float))
+        return COLI_ERR_ARGUMENT;
     if (heads != 0 && token_count > SIZE_MAX / heads) return COLI_ERR_RANGE;
     const size_t required_scores = heads * token_count;
     if (score_count < required_scores || vector_count < vector_values)

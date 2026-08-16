@@ -19,6 +19,8 @@ typedef struct {
     uint32_t head_dim;
     uint32_t max_tokens;
     size_t bytes_per_value;
+    uint64_t key_token_bytes;
+    uint64_t value_token_bytes;
     uint64_t key_layer_bytes;
     uint64_t value_layer_bytes;
     uint64_t layer_stride_bytes;
