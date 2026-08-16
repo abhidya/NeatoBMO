@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,7 +16,28 @@
 #define TEST_TOKEN_AB 2000u
 #define TEST_TOKEN_ABC 2001u
 #define TEST_TOKEN_SPACE_HI 2002u
-#define TEST_MERGE_COUNT 3u
+#define TEST_TOKEN_HE 3000u
+#define TEST_TOKEN_HEL 3001u
+#define TEST_TOKEN_HELL 3002u
+#define TEST_TOKEN_HELLO 3003u
+#define TEST_TOKEN_WO 3004u
+#define TEST_TOKEN_WOR 3005u
+#define TEST_TOKEN_WORL 3006u
+#define TEST_TOKEN_WORLD 3007u
+#define TEST_TOKEN_HELLOWORLD 3008u
+#define TEST_TOKEN_12 3009u
+#define TEST_TOKEN_123 3010u
+#define TEST_TOKEN_1234 3011u
+#define TEST_TOKEN_CA 3012u
+#define TEST_TOKEN_CAN 3013u
+#define TEST_TOKEN_CAN_APOS 3014u
+#define TEST_TOKEN_CANT 3015u
+#define TEST_TOKEN_BANG_SLASH 3016u
+#define TEST_TOKEN_BANG_SLASH_SLASH 3017u
+#define TEST_TOKEN_BANG_SLASH_SLASH_NL 3018u
+#define TEST_TOKEN_BANG_SLASH_SLASH_NL_SLASH 3019u
+#define TEST_TOKEN_ROLE_USER 3020u
+#define TEST_MERGE_COUNT 23u
 
 typedef struct {
     uint32_t token_id;
@@ -71,7 +93,8 @@ static void write_token_entry(FILE *file, const fixture_token_t *token)
     assert(fwrite(entry, 1, sizeof(entry), file) == sizeof(entry));
 }
 
-static void write_fixture(const char *path)
+static void write_fixture(const char *path, uint16_t pretokenizer_family,
+                          bool write_special_index)
 {
     FILE *file = fopen(path, "wb");
     assert(file);
@@ -90,6 +113,7 @@ static void write_fixture(const char *path)
     put_u32(header + 52, COLI_TOKENIZER_PAD_ID_OLMOE);
     put_u32(header + 56, COLI_TOKENIZER_EOS_ID_OLMOE);
     put_u16(header + 60, COLI_TOKENIZER_MAX_TOKEN_BYTES);
+    put_u16(header + 62, pretokenizer_family);
     assert(fwrite(header, 1, sizeof(header), file) == sizeof(header));
 
     uint8_t empty_entry[COLI_TOKENIZER_ENTRY_BYTES] = {0};
@@ -98,7 +122,7 @@ static void write_fixture(const char *path)
                sizeof(empty_entry));
     }
 
-    fixture_token_t tokens[262];
+    fixture_token_t tokens[288];
     size_t token_count = 0;
     uint64_t data_offset = TEST_TOKEN_DATA_OFFSET;
     uint8_t byte_storage[256];
@@ -135,6 +159,41 @@ static void write_fixture(const char *path)
         .data_offset = data_offset,
     };
     data_offset += 3;
+    const struct {
+        uint32_t token_id;
+        const char *text;
+    } text_tokens[] = {
+        {TEST_TOKEN_HE, "He"},
+        {TEST_TOKEN_HEL, "Hel"},
+        {TEST_TOKEN_HELL, "Hell"},
+        {TEST_TOKEN_HELLO, "Hello"},
+        {TEST_TOKEN_WO, "Wo"},
+        {TEST_TOKEN_WOR, "Wor"},
+        {TEST_TOKEN_WORL, "Worl"},
+        {TEST_TOKEN_WORLD, "World"},
+        {TEST_TOKEN_HELLOWORLD, "HelloWorld"},
+        {TEST_TOKEN_12, "12"},
+        {TEST_TOKEN_123, "123"},
+        {TEST_TOKEN_1234, "1234"},
+        {TEST_TOKEN_CA, "ca"},
+        {TEST_TOKEN_CAN, "can"},
+        {TEST_TOKEN_CAN_APOS, "can'"},
+        {TEST_TOKEN_CANT, "can't"},
+        {TEST_TOKEN_BANG_SLASH, "!/"},
+        {TEST_TOKEN_BANG_SLASH_SLASH, "!//"},
+        {TEST_TOKEN_BANG_SLASH_SLASH_NL, "!//\n"},
+        {TEST_TOKEN_BANG_SLASH_SLASH_NL_SLASH, "!//\n/"},
+    };
+    for (size_t i = 0; i < sizeof(text_tokens) / sizeof(text_tokens[0]); ++i) {
+        uint16_t length = (uint16_t)strlen(text_tokens[i].text);
+        tokens[token_count++] = (fixture_token_t){
+            .token_id = text_tokens[i].token_id,
+            .bytes = (const uint8_t *)text_tokens[i].text,
+            .byte_length = length,
+            .data_offset = data_offset,
+        };
+        data_offset += length;
+    }
     tokens[token_count++] = (fixture_token_t){
         .token_id = COLI_TOKENIZER_PAD_ID_OLMOE,
         .bytes = (const uint8_t *)"<|padding|>",
@@ -151,6 +210,14 @@ static void write_fixture(const char *path)
         .data_offset = data_offset,
     };
     data_offset += sizeof("<|endoftext|>") - 1u;
+    tokens[token_count++] = (fixture_token_t){
+        .token_id = TEST_TOKEN_ROLE_USER,
+        .bytes = (const uint8_t *)"<|user|>",
+        .byte_length = sizeof("<|user|>") - 1u,
+        .flags = 0x0001u,
+        .data_offset = data_offset,
+    };
+    data_offset += sizeof("<|user|>") - 1u;
 
     for (size_t i = 0; i < token_count; ++i) {
         write_token_entry(file, &tokens[i]);
@@ -162,7 +229,32 @@ static void write_fixture(const char *path)
                tokens[i].byte_length);
     }
 
-    uint64_t merge_offset = data_offset;
+    uint64_t special_offset = data_offset;
+    const uint32_t special_ids[] = {
+        COLI_TOKENIZER_PAD_ID_OLMOE,
+        COLI_TOKENIZER_EOS_ID_OLMOE,
+        TEST_TOKEN_ROLE_USER,
+    };
+    if (write_special_index) {
+        assert(fseeko(file, (off_t)special_offset, SEEK_SET) == 0);
+        for (size_t i = 0; i < sizeof(special_ids) / sizeof(special_ids[0]);
+             ++i) {
+            uint8_t raw[4];
+            put_u32(raw, special_ids[i]);
+            assert(fwrite(raw, 1, sizeof(raw), file) == sizeof(raw));
+        }
+        assert(fseeko(file, 64, SEEK_SET) == 0);
+        uint8_t special_header[12];
+        put_u32(special_header, sizeof(special_ids) / sizeof(special_ids[0]));
+        put_u64(special_header + 4, special_offset);
+        assert(fwrite(special_header, 1, sizeof(special_header), file) ==
+               sizeof(special_header));
+    }
+
+    uint64_t merge_offset = special_offset;
+    if (write_special_index) {
+        merge_offset += sizeof(special_ids);
+    }
     assert(fseeko(file, 40, SEEK_SET) == 0);
     uint8_t merge_offset_raw[8];
     put_u64(merge_offset_raw, merge_offset);
@@ -172,10 +264,50 @@ static void write_fixture(const char *path)
     const fixture_merge_t merges[] = {
         {.left = byte_token(' '), .right = byte_token('h'),
          .result = TEST_TOKEN_SPACE_HI, .rank = 2},
+        {.left = byte_token('!'), .right = byte_token('/'),
+         .result = TEST_TOKEN_BANG_SLASH, .rank = 3},
+        {.left = byte_token('1'), .right = byte_token('2'),
+         .result = TEST_TOKEN_12, .rank = 3},
+        {.left = byte_token('H'), .right = byte_token('e'),
+         .result = TEST_TOKEN_HE, .rank = 3},
+        {.left = byte_token('W'), .right = byte_token('o'),
+         .result = TEST_TOKEN_WO, .rank = 3},
         {.left = byte_token('a'), .right = byte_token('b'),
          .result = TEST_TOKEN_AB, .rank = 1},
+        {.left = byte_token('c'), .right = byte_token('a'),
+         .result = TEST_TOKEN_CA, .rank = 3},
         {.left = TEST_TOKEN_AB, .right = byte_token('c'),
          .result = TEST_TOKEN_ABC, .rank = 0},
+        {.left = TEST_TOKEN_HE, .right = byte_token('l'),
+         .result = TEST_TOKEN_HEL, .rank = 3},
+        {.left = TEST_TOKEN_HEL, .right = byte_token('l'),
+         .result = TEST_TOKEN_HELL, .rank = 3},
+        {.left = TEST_TOKEN_HELL, .right = byte_token('o'),
+         .result = TEST_TOKEN_HELLO, .rank = 3},
+        {.left = TEST_TOKEN_HELLO, .right = TEST_TOKEN_WORLD,
+         .result = TEST_TOKEN_HELLOWORLD, .rank = 3},
+        {.left = TEST_TOKEN_WO, .right = byte_token('r'),
+         .result = TEST_TOKEN_WOR, .rank = 3},
+        {.left = TEST_TOKEN_WOR, .right = byte_token('l'),
+         .result = TEST_TOKEN_WORL, .rank = 3},
+        {.left = TEST_TOKEN_WORL, .right = byte_token('d'),
+         .result = TEST_TOKEN_WORLD, .rank = 3},
+        {.left = TEST_TOKEN_12, .right = byte_token('3'),
+         .result = TEST_TOKEN_123, .rank = 3},
+        {.left = TEST_TOKEN_123, .right = byte_token('4'),
+         .result = TEST_TOKEN_1234, .rank = 3},
+        {.left = TEST_TOKEN_CA, .right = byte_token('n'),
+         .result = TEST_TOKEN_CAN, .rank = 3},
+        {.left = TEST_TOKEN_CAN, .right = byte_token('\''),
+         .result = TEST_TOKEN_CAN_APOS, .rank = 3},
+        {.left = TEST_TOKEN_CAN_APOS, .right = byte_token('t'),
+         .result = TEST_TOKEN_CANT, .rank = 3},
+        {.left = TEST_TOKEN_BANG_SLASH, .right = byte_token('/'),
+         .result = TEST_TOKEN_BANG_SLASH_SLASH, .rank = 3},
+        {.left = TEST_TOKEN_BANG_SLASH_SLASH, .right = byte_token('\n'),
+         .result = TEST_TOKEN_BANG_SLASH_SLASH_NL, .rank = 3},
+        {.left = TEST_TOKEN_BANG_SLASH_SLASH_NL, .right = byte_token('/'),
+         .result = TEST_TOKEN_BANG_SLASH_SLASH_NL_SLASH, .rank = 3},
     };
     assert(fseeko(file, (off_t)merge_offset, SEEK_SET) == 0);
     for (size_t i = 0; i < sizeof(merges) / sizeof(merges[0]); ++i) {
@@ -203,7 +335,7 @@ int main(void)
     int fd = mkstemp(path);
     assert(fd >= 0);
     close(fd);
-    write_fixture(path);
+    write_fixture(path, COLI_TOKENIZER_PRETOKENIZER_BYTE_BPE, false);
 
     coli_store_t *store = NULL;
     assert(coli_store_open_file(path, &store) == COLI_OK);
@@ -212,6 +344,9 @@ int main(void)
     assert(tokenizer.vocab_size == TEST_VOCAB_SIZE);
     assert(tokenizer.pad_token_id == COLI_TOKENIZER_PAD_ID_OLMOE);
     assert(tokenizer.eos_token_id == COLI_TOKENIZER_EOS_ID_OLMOE);
+    assert(tokenizer.pretokenizer_family ==
+           COLI_TOKENIZER_PRETOKENIZER_BYTE_BPE);
+    assert(tokenizer.special_token_count == 2);
 
     uint32_t token_ids[32];
     size_t token_count = 0;
@@ -229,6 +364,15 @@ int main(void)
     assert(coli_tokenizer_decode(&tokenizer, token_ids, token_count, decoded,
                                  sizeof(decoded), &decoded_bytes) == COLI_OK);
     assert_text(decoded, decoded_bytes, "abc!");
+
+    const char mixed_case[] = "HelloWorld";
+    assert(coli_tokenizer_encode(&tokenizer, (const uint8_t *)mixed_case,
+                                 strlen(mixed_case), token_ids,
+                                 sizeof(token_ids) / sizeof(token_ids[0]),
+                                 &token_count,
+                                 COLI_TOKENIZER_ENCODE_DEFAULT) == COLI_OK);
+    assert(token_count == 1);
+    assert(token_ids[0] == TEST_TOKEN_HELLOWORLD);
 
     const uint8_t bytes[] = {'x', 0xffu, 'y'};
     assert(coli_tokenizer_encode(&tokenizer, bytes, sizeof(bytes), token_ids,
@@ -263,6 +407,69 @@ int main(void)
     const uint32_t long_token[] = {TEST_TOKEN_ABC};
     assert(coli_tokenizer_decode(&tokenizer, long_token, 1, decoded, 2,
                                  &decoded_bytes) == COLI_ERR_RANGE);
+
+    coli_tokenizer_close(&tokenizer);
+    coli_store_close(store);
+
+    write_fixture(path, COLI_TOKENIZER_PRETOKENIZER_O200K, true);
+    store = NULL;
+    assert(coli_store_open_file(path, &store) == COLI_OK);
+    assert(coli_tokenizer_open(store, &tokenizer) == COLI_OK);
+    assert(tokenizer.pretokenizer_family == COLI_TOKENIZER_PRETOKENIZER_O200K);
+    assert(tokenizer.special_token_count == 3);
+
+    assert(coli_tokenizer_encode(&tokenizer, (const uint8_t *)mixed_case,
+                                 strlen(mixed_case), token_ids,
+                                 sizeof(token_ids) / sizeof(token_ids[0]),
+                                 &token_count,
+                                 COLI_TOKENIZER_ENCODE_DEFAULT) == COLI_OK);
+    assert(token_count == 2);
+    assert(token_ids[0] == TEST_TOKEN_HELLO);
+    assert(token_ids[1] == TEST_TOKEN_WORLD);
+
+    const char number_text[] = "1234";
+    assert(coli_tokenizer_encode(&tokenizer, (const uint8_t *)number_text,
+                                 strlen(number_text), token_ids,
+                                 sizeof(token_ids) / sizeof(token_ids[0]),
+                                 &token_count,
+                                 COLI_TOKENIZER_ENCODE_DEFAULT) == COLI_OK);
+    assert(token_count == 2);
+    assert(token_ids[0] == TEST_TOKEN_123);
+    assert(token_ids[1] == byte_token('4'));
+
+    const char contraction[] = "can't";
+    assert(coli_tokenizer_encode(&tokenizer, (const uint8_t *)contraction,
+                                 strlen(contraction), token_ids,
+                                 sizeof(token_ids) / sizeof(token_ids[0]),
+                                 &token_count,
+                                 COLI_TOKENIZER_ENCODE_DEFAULT) == COLI_OK);
+    assert(token_count == 1);
+    assert(token_ids[0] == TEST_TOKEN_CANT);
+
+    const char punctuation[] = "!//\n/";
+    assert(coli_tokenizer_encode(&tokenizer, (const uint8_t *)punctuation,
+                                 strlen(punctuation), token_ids,
+                                 sizeof(token_ids) / sizeof(token_ids[0]),
+                                 &token_count,
+                                 COLI_TOKENIZER_ENCODE_DEFAULT) == COLI_OK);
+    assert(token_count == 1);
+    assert(token_ids[0] == TEST_TOKEN_BANG_SLASH_SLASH_NL_SLASH);
+
+    assert(coli_tokenizer_decode(&tokenizer, token_ids, token_count, decoded,
+                                 sizeof(decoded), &decoded_bytes) == COLI_OK);
+    assert_text(decoded, decoded_bytes, punctuation);
+
+    const char role_text[] = "x<|user|>y";
+    assert(coli_tokenizer_encode(&tokenizer, (const uint8_t *)role_text,
+                                 strlen(role_text), token_ids,
+                                 sizeof(token_ids) / sizeof(token_ids[0]),
+                                 &token_count,
+                                 COLI_TOKENIZER_ENCODE_ALLOW_SPECIAL) ==
+           COLI_OK);
+    assert(token_count == 3);
+    assert(token_ids[0] == byte_token('x'));
+    assert(token_ids[1] == TEST_TOKEN_ROLE_USER);
+    assert(token_ids[2] == byte_token('y'));
 
     coli_tokenizer_close(&tokenizer);
     coli_store_close(store);

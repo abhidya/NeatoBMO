@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "coli_tok_unicode.h"
+#include "coli_tok_unicode_o200k.h"
+
 #define COLI_TOKEN_FLAG_SPECIAL 0x0001u
 #define COLI_TOKEN_FLAG_BYTE 0x0002u
 
@@ -186,6 +189,33 @@ static coli_status_t match_special(const coli_tokenizer_t *tokenizer,
     return COLI_OK;
 }
 
+static coli_status_t match_any_special(const coli_tokenizer_t *tokenizer,
+                                       const uint8_t *text, size_t text_bytes,
+                                       size_t position, uint32_t *token_id,
+                                       size_t *matched_bytes, bool *matched)
+{
+    *matched = false;
+    *matched_bytes = 0;
+    *token_id = 0;
+    for (uint32_t i = 0; i < tokenizer->special_token_count; ++i) {
+        uint32_t candidate = tokenizer->special_token_ids[i];
+        bool candidate_matched = false;
+        size_t candidate_bytes = 0;
+        coli_status_t status =
+            match_special(tokenizer, candidate, text, text_bytes, position,
+                          &candidate_bytes, &candidate_matched);
+        if (status != COLI_OK) {
+            return status;
+        }
+        if (candidate_matched && candidate_bytes > *matched_bytes) {
+            *matched = true;
+            *matched_bytes = candidate_bytes;
+            *token_id = candidate;
+        }
+    }
+    return COLI_OK;
+}
+
 static coli_status_t push_token(uint32_t token_id, uint32_t *token_ids,
                                 size_t token_capacity, size_t *token_count)
 {
@@ -241,11 +271,16 @@ static coli_status_t apply_bpe_merges(const coli_tokenizer_t *tokenizer,
     }
 }
 
-static bool is_special_token_id(const coli_tokenizer_t *tokenizer,
-                                uint32_t token_id)
+static coli_status_t is_special_token_id(const coli_tokenizer_t *tokenizer,
+                                         uint32_t token_id, bool *out_special)
 {
-    return token_id == tokenizer->eos_token_id ||
-           token_id == tokenizer->pad_token_id;
+    coli_token_entry_t entry;
+    coli_status_t status = read_token_entry(tokenizer, token_id, &entry);
+    if (status != COLI_OK) {
+        return status;
+    }
+    *out_special = (entry.flags & COLI_TOKEN_FLAG_SPECIAL) != 0;
+    return COLI_OK;
 }
 
 static coli_status_t apply_bpe_merges_to_plain_spans(
@@ -254,21 +289,33 @@ static coli_status_t apply_bpe_merges_to_plain_spans(
 {
     size_t start = 0;
     while (start < *token_count) {
-        if (is_special_token_id(tokenizer, token_ids[start])) {
+        bool special = false;
+        coli_status_t status =
+            is_special_token_id(tokenizer, token_ids[start], &special);
+        if (status != COLI_OK) {
+            return status;
+        }
+        if (special) {
             ++start;
             continue;
         }
 
         size_t end = start;
-        while (end < *token_count &&
-               !is_special_token_id(tokenizer, token_ids[end])) {
+        while (end < *token_count) {
+            status = is_special_token_id(tokenizer, token_ids[end], &special);
+            if (status != COLI_OK) {
+                return status;
+            }
+            if (special) {
+                break;
+            }
             ++end;
         }
 
         size_t old_span_count = end - start;
         size_t new_span_count = old_span_count;
-        coli_status_t status = apply_bpe_merges(tokenizer, token_ids + start,
-                                                &new_span_count);
+        status = apply_bpe_merges(tokenizer, token_ids + start,
+                                  &new_span_count);
         if (status != COLI_OK) {
             return status;
         }
@@ -284,6 +331,297 @@ static coli_status_t apply_bpe_merges_to_plain_spans(
         start = end;
     }
     return COLI_OK;
+}
+
+static coli_status_t encode_byte_piece(const coli_tokenizer_t *tokenizer,
+                                       const uint8_t *text, size_t start,
+                                       size_t end, uint32_t *token_ids,
+                                       size_t token_capacity,
+                                       size_t *token_count)
+{
+    size_t span_start = *token_count;
+    for (size_t position = start; position < end; ++position) {
+        uint8_t byte_value = text[position];
+        if (!tokenizer->has_byte_token[byte_value]) {
+            return COLI_ERR_FORMAT;
+        }
+        coli_status_t status =
+            push_token(tokenizer->byte_token_ids[byte_value], token_ids,
+                       token_capacity, token_count);
+        if (status != COLI_OK) {
+            return status;
+        }
+    }
+
+    size_t span_count = *token_count - span_start;
+    coli_status_t status =
+        apply_bpe_merges(tokenizer, token_ids + span_start, &span_count);
+    if (status != COLI_OK) {
+        return status;
+    }
+    if (span_count < *token_count - span_start) {
+        *token_count = span_start + span_count;
+    }
+    return COLI_OK;
+}
+
+static size_t u8_advance(const uint8_t *text, size_t text_bytes,
+                         size_t position, uint32_t *out_cp)
+{
+    uint8_t c = text[position];
+    if (c < 0x80u) {
+        *out_cp = c;
+        return position + 1u;
+    }
+    if ((c >> 5) == 0x6u && position + 1u < text_bytes) {
+        *out_cp = ((uint32_t)(c & 0x1fu) << 6) |
+                  (uint32_t)(text[position + 1u] & 0x3fu);
+        return position + 2u;
+    }
+    if ((c >> 4) == 0xeu && position + 2u < text_bytes) {
+        *out_cp = ((uint32_t)(c & 0x0fu) << 12) |
+                  ((uint32_t)(text[position + 1u] & 0x3fu) << 6) |
+                  (uint32_t)(text[position + 2u] & 0x3fu);
+        return position + 3u;
+    }
+    if ((c >> 3) == 0x1eu && position + 3u < text_bytes) {
+        *out_cp = ((uint32_t)(c & 0x07u) << 18) |
+                  ((uint32_t)(text[position + 1u] & 0x3fu) << 12) |
+                  ((uint32_t)(text[position + 2u] & 0x3fu) << 6) |
+                  (uint32_t)(text[position + 3u] & 0x3fu);
+        return position + 4u;
+    }
+    *out_cp = c;
+    return position + 1u;
+}
+
+static bool is_newline(uint32_t cp)
+{
+    return cp == '\r' || cp == '\n';
+}
+
+static uint32_t ascii_lower(uint32_t cp)
+{
+    return cp >= 'A' && cp <= 'Z' ? cp + 32u : cp;
+}
+
+static bool o200k_s1(uint32_t cp)
+{
+    return is_U(cp) || is_X(cp);
+}
+
+static bool o200k_s2(uint32_t cp)
+{
+    return is_X(cp) || (is_L(cp) && !is_U(cp));
+}
+
+static size_t o200k_contraction_end(const uint8_t *text, size_t text_bytes,
+                                    size_t position)
+{
+    uint32_t cp;
+    if (position >= text_bytes ||
+        u8_advance(text, text_bytes, position, &cp) != position + 1u ||
+        cp != '\'' || position + 1u >= text_bytes) {
+        return position;
+    }
+    uint32_t d;
+    size_t after_d = u8_advance(text, text_bytes, position + 1u, &d);
+    d = ascii_lower(d);
+    if (after_d < text_bytes) {
+        uint32_t e;
+        size_t after_e = u8_advance(text, text_bytes, after_d, &e);
+        e = ascii_lower(e);
+        if ((d == 'r' && e == 'e') || (d == 'v' && e == 'e') ||
+            (d == 'l' && e == 'l')) {
+            return after_e;
+        }
+    }
+    if (d == 's' || d == 't' || d == 'm' || d == 'd') {
+        return after_d;
+    }
+    return position;
+}
+
+static size_t o200k_letters_end(const uint8_t *text, size_t text_bytes,
+                                size_t position)
+{
+    for (int pfx = 1; pfx >= 0; --pfx) {
+        uint32_t first;
+        size_t j0 = position;
+        if (pfx) {
+            size_t first_next = u8_advance(text, text_bytes, position, &first);
+            if (is_newline(first) || is_L(first) || is_N(first) ||
+                first_next >= text_bytes) {
+                continue;
+            }
+            j0 = first_next;
+        }
+
+        size_t scan = j0;
+        size_t last_s2 = SIZE_MAX;
+        while (scan < text_bytes) {
+            uint32_t cp;
+            size_t next = u8_advance(text, text_bytes, scan, &cp);
+            if (!o200k_s1(cp)) {
+                break;
+            }
+            if (o200k_s2(cp)) {
+                last_s2 = scan;
+            }
+            scan = next;
+        }
+        size_t s = scan;
+        if (s < text_bytes) {
+            uint32_t cp;
+            (void)u8_advance(text, text_bytes, s, &cp);
+            if (!o200k_s2(cp)) {
+                s = last_s2;
+            }
+        } else {
+            s = last_s2;
+        }
+        if (s != SIZE_MAX) {
+            scan = s;
+            while (scan < text_bytes) {
+                uint32_t cp;
+                size_t next = u8_advance(text, text_bytes, scan, &cp);
+                if (!o200k_s2(cp)) {
+                    break;
+                }
+                scan = next;
+            }
+            return o200k_contraction_end(text, text_bytes, scan);
+        }
+    }
+
+    for (int pfx = 1; pfx >= 0; --pfx) {
+        uint32_t first;
+        size_t j0 = position;
+        if (pfx) {
+            size_t first_next = u8_advance(text, text_bytes, position, &first);
+            if (is_newline(first) || is_L(first) || is_N(first) ||
+                first_next >= text_bytes) {
+                continue;
+            }
+            j0 = first_next;
+        }
+
+        size_t scan = j0;
+        while (scan < text_bytes) {
+            uint32_t cp;
+            size_t next = u8_advance(text, text_bytes, scan, &cp);
+            if (!o200k_s1(cp)) {
+                break;
+            }
+            scan = next;
+        }
+        if (scan > j0) {
+            while (scan < text_bytes) {
+                uint32_t cp;
+                size_t next = u8_advance(text, text_bytes, scan, &cp);
+                if (!o200k_s2(cp)) {
+                    break;
+                }
+                scan = next;
+            }
+            return o200k_contraction_end(text, text_bytes, scan);
+        }
+    }
+    return position;
+}
+
+static size_t o200k_next_piece_end(const uint8_t *text, size_t text_bytes,
+                                   size_t position)
+{
+    uint32_t cp;
+    size_t next = u8_advance(text, text_bytes, position, &cp);
+
+    size_t end = o200k_letters_end(text, text_bytes, position);
+    if (end > position) {
+        return end;
+    }
+
+    if (is_N(cp)) {
+        size_t scan = position;
+        int count = 0;
+        while (scan < text_bytes && count < 3) {
+            uint32_t digit_cp;
+            size_t digit_next = u8_advance(text, text_bytes, scan, &digit_cp);
+            if (!is_N(digit_cp)) {
+                break;
+            }
+            scan = digit_next;
+            ++count;
+        }
+        return scan;
+    }
+
+    size_t scan = position;
+    if (cp == ' ' && next < text_bytes) {
+        uint32_t following;
+        (void)u8_advance(text, text_bytes, next, &following);
+        if (!is_S(following) && !is_L(following) && !is_N(following)) {
+            scan = next;
+            cp = following;
+        }
+    }
+    if (!is_S(cp) && !is_L(cp) && !is_N(cp)) {
+        while (scan < text_bytes) {
+            uint32_t punct;
+            size_t punct_next = u8_advance(text, text_bytes, scan, &punct);
+            if (is_S(punct) || is_L(punct) || is_N(punct)) {
+                break;
+            }
+            scan = punct_next;
+        }
+        while (scan < text_bytes) {
+            uint32_t tail;
+            size_t tail_next = u8_advance(text, text_bytes, scan, &tail);
+            if (!is_newline(tail) && tail != '/') {
+                break;
+            }
+            scan = tail_next;
+        }
+        return scan;
+    }
+
+    scan = position;
+    while (scan < text_bytes) {
+        uint32_t ws;
+        size_t ws_next = u8_advance(text, text_bytes, scan, &ws);
+        if (!is_S(ws)) {
+            break;
+        }
+        scan = ws_next;
+    }
+    if (scan > position) {
+        size_t last_newline_end = SIZE_MAX;
+        size_t ws_scan = position;
+        while (ws_scan < scan) {
+            uint32_t ws;
+            size_t ws_next = u8_advance(text, text_bytes, ws_scan, &ws);
+            if (is_newline(ws)) {
+                last_newline_end = ws_next;
+            }
+            ws_scan = ws_next;
+        }
+        if (last_newline_end != SIZE_MAX) {
+            return last_newline_end;
+        }
+        if (scan < text_bytes) {
+            size_t prev = position;
+            size_t cur = position;
+            while (cur < scan) {
+                prev = cur;
+                uint32_t ws;
+                cur = u8_advance(text, text_bytes, cur, &ws);
+            }
+            return prev == position ? cur : prev;
+        }
+        return scan;
+    }
+
+    return next;
 }
 
 static coli_status_t validate_token_entry(const coli_tokenizer_t *tokenizer,
@@ -337,10 +675,17 @@ coli_status_t coli_tokenizer_open(coli_store_t *store,
     tokenizer->pad_token_id = get_u32(header + 52);
     tokenizer->eos_token_id = get_u32(header + 56);
     tokenizer->max_token_bytes = get_u16(header + 60);
+    tokenizer->pretokenizer_family = get_u16(header + 62);
+    tokenizer->special_token_count = get_u32(header + 64);
+    tokenizer->special_token_offset = get_u64(header + 68);
 
     if (tokenizer->vocab_size == 0 ||
         tokenizer->max_token_bytes == 0 ||
         tokenizer->max_token_bytes > COLI_TOKENIZER_MAX_TOKEN_BYTES ||
+        tokenizer->pretokenizer_family > COLI_TOKENIZER_PRETOKENIZER_O200K ||
+        tokenizer->special_token_count > COLI_TOKENIZER_MAX_SPECIAL_TOKENS ||
+        (tokenizer->special_token_count > 0 &&
+         tokenizer->special_token_offset == 0) ||
         byte_token_count != 256u ||
         tokenizer->vocab_offset < COLI_TOKENIZER_HEADER_BYTES ||
         tokenizer->vocab_offset > coli_store_size(store) ||
@@ -358,7 +703,11 @@ coli_status_t coli_tokenizer_open(coli_store_t *store,
     if (vocab_bytes > coli_store_size(store) - tokenizer->vocab_offset ||
         tokenizer->merge_offset > coli_store_size(store) ||
         merge_bytes > coli_store_size(store) - tokenizer->merge_offset ||
-        tokenizer->token_data_offset > coli_store_size(store)) {
+        tokenizer->token_data_offset > coli_store_size(store) ||
+        (tokenizer->special_token_count > 0 &&
+         (tokenizer->special_token_offset > coli_store_size(store) ||
+          (uint64_t)tokenizer->special_token_count * sizeof(uint32_t) >
+              coli_store_size(store) - tokenizer->special_token_offset))) {
         return COLI_ERR_FORMAT;
     }
 
@@ -384,6 +733,42 @@ coli_status_t coli_tokenizer_open(coli_store_t *store,
         if (!tokenizer->has_byte_token[byte_value]) {
             coli_tokenizer_close(tokenizer);
             return COLI_ERR_FORMAT;
+        }
+    }
+
+    if (tokenizer->special_token_count > 0) {
+        for (uint32_t i = 0; i < tokenizer->special_token_count; ++i) {
+            uint8_t raw[4];
+            status = coli_store_read_at(
+                tokenizer->store,
+                tokenizer->special_token_offset + (uint64_t)i * sizeof(raw),
+                raw, sizeof(raw));
+            if (status != COLI_OK) {
+                coli_tokenizer_close(tokenizer);
+                return status;
+            }
+            uint32_t token_id = get_u32(raw);
+            coli_token_entry_t entry;
+            status = read_token_entry(tokenizer, token_id, &entry);
+            if (status != COLI_OK ||
+                (entry.flags & COLI_TOKEN_FLAG_SPECIAL) == 0) {
+                coli_tokenizer_close(tokenizer);
+                return status == COLI_OK ? COLI_ERR_FORMAT : status;
+            }
+            tokenizer->special_token_ids[i] = token_id;
+            for (uint32_t j = 0; j < i; ++j) {
+                if (tokenizer->special_token_ids[j] == token_id) {
+                    coli_tokenizer_close(tokenizer);
+                    return COLI_ERR_FORMAT;
+                }
+            }
+        }
+    } else {
+        tokenizer->special_token_ids[tokenizer->special_token_count++] =
+            tokenizer->eos_token_id;
+        if (tokenizer->pad_token_id != tokenizer->eos_token_id) {
+            tokenizer->special_token_ids[tokenizer->special_token_count++] =
+                tokenizer->pad_token_id;
         }
     }
 
@@ -438,52 +823,48 @@ coli_status_t coli_tokenizer_encode(const coli_tokenizer_t *tokenizer,
     size_t position = 0;
     while (position < text_bytes) {
         if ((flags & COLI_TOKENIZER_ENCODE_ALLOW_SPECIAL) != 0) {
-            const uint32_t special_ids[] = {tokenizer->eos_token_id,
-                                            tokenizer->pad_token_id};
-            bool matched_any = false;
-            for (size_t i = 0; i < sizeof(special_ids) / sizeof(special_ids[0]);
-                 ++i) {
-                bool matched = false;
-                size_t matched_bytes = 0;
-                coli_status_t status = match_special(tokenizer, special_ids[i],
-                                                     text, text_bytes, position,
-                                                     &matched_bytes, &matched);
+            bool matched = false;
+            size_t matched_bytes = 0;
+            uint32_t special_id = 0;
+            coli_status_t status =
+                match_any_special(tokenizer, text, text_bytes, position,
+                                  &special_id, &matched_bytes, &matched);
+            if (status != COLI_OK) {
+                return status;
+            }
+            if (matched) {
+                status = push_token(special_id, token_ids, token_capacity,
+                                    &token_count);
                 if (status != COLI_OK) {
                     return status;
                 }
-                if (matched) {
-                    status = push_token(special_ids[i], token_ids,
-                                        token_capacity, &token_count);
-                    if (status != COLI_OK) {
-                        return status;
-                    }
-                    position += matched_bytes;
-                    matched_any = true;
-                    break;
-                }
-            }
-            if (matched_any) {
+                position += matched_bytes;
                 continue;
             }
         }
 
-        uint8_t byte_value = text[position];
-        if (!tokenizer->has_byte_token[byte_value]) {
-            return COLI_ERR_FORMAT;
+        size_t plain_end = position + 1u;
+        if (tokenizer->pretokenizer_family ==
+            COLI_TOKENIZER_PRETOKENIZER_O200K) {
+            plain_end = o200k_next_piece_end(text, text_bytes, position);
         }
-        coli_status_t status = push_token(tokenizer->byte_token_ids[byte_value],
-                                          token_ids, token_capacity,
-                                          &token_count);
+        coli_status_t status =
+            encode_byte_piece(tokenizer, text, position, plain_end, token_ids,
+                              token_capacity, &token_count);
         if (status != COLI_OK) {
             return status;
         }
-        ++position;
+        position = plain_end;
     }
 
-    coli_status_t status = apply_bpe_merges_to_plain_spans(tokenizer, token_ids,
-                                                           &token_count);
-    if (status != COLI_OK) {
-        return status;
+    if (tokenizer->pretokenizer_family ==
+        COLI_TOKENIZER_PRETOKENIZER_BYTE_BPE) {
+        coli_status_t status =
+            apply_bpe_merges_to_plain_spans(tokenizer, token_ids,
+                                            &token_count);
+        if (status != COLI_OK) {
+            return status;
+        }
     }
     *out_token_count = token_count;
     return COLI_OK;

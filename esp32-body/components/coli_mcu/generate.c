@@ -86,7 +86,11 @@ coli_status_t coli_generate_olmoe_greedy(coli_store_t *model_store,
         config->context_tokens == 0 || config->max_prompt_tokens == 0 ||
         config->max_new_tokens == 0 ||
         config->context_tokens < config->max_prompt_tokens ||
-        config->context_tokens < config->max_prompt_tokens + config->max_new_tokens ||
+        config->max_new_tokens >
+            config->context_tokens - config->max_prompt_tokens ||
+        config->max_prompt_tokens + config->max_new_tokens >
+            SIZE_MAX / sizeof(uint32_t) ||
+        config->context_tokens > UINT32_MAX ||
         config->workspace_bytes == 0 || config->decoded_chunk_bytes == 0 ||
         (config->kv_cache_path && config->kv_page_bytes == 0))
         return COLI_ERR_ARGUMENT;
@@ -113,10 +117,9 @@ coli_status_t coli_generate_olmoe_greedy(coli_store_t *model_store,
     }
 
     result->stage = COLI_GENERATE_STAGE_ALLOCATE;
-    uint32_t *prompt_ids =
-        generate_alloc(config->max_prompt_tokens * sizeof(*prompt_ids));
-    uint32_t *output_ids =
-        generate_alloc(config->context_tokens * sizeof(*output_ids));
+    const size_t token_capacity =
+        config->max_prompt_tokens + config->max_new_tokens;
+    uint32_t *token_ids = generate_alloc(token_capacity * sizeof(*token_ids));
     uint8_t *decoded =
         generate_alloc(config->decoded_chunk_bytes);
     void *workspace = generate_alloc(config->workspace_bytes);
@@ -142,7 +145,7 @@ coli_status_t coli_generate_olmoe_greedy(coli_store_t *model_store,
     } else {
         status = COLI_ERR_RANGE;
     }
-    if (!prompt_ids || !output_ids || !decoded || !workspace || !kv_cache) {
+    if (!token_ids || !decoded || !workspace || !kv_cache) {
         if (status == COLI_OK) status = COLI_ERR_NO_MEMORY;
         goto cleanup;
     }
@@ -161,7 +164,7 @@ coli_status_t coli_generate_olmoe_greedy(coli_store_t *model_store,
     result->stage = COLI_GENERATE_STAGE_ENCODE_PROMPT;
     size_t prompt_count = 0;
     status = coli_tokenizer_encode(&tokenizer, config->prompt,
-                                   config->prompt_bytes, prompt_ids,
+                                   config->prompt_bytes, token_ids,
                                    config->max_prompt_tokens, &prompt_count,
                                    COLI_TOKENIZER_ENCODE_DEFAULT);
     if (status != COLI_OK) goto cleanup;
@@ -182,12 +185,12 @@ coli_status_t coli_generate_olmoe_greedy(coli_store_t *model_store,
         .decoded = decoded,
     };
     status = coli_olmoe_generate_greedy_stream(
-        &model, prompt_ids, prompt_count, output_ids, config->context_tokens,
+        &model, token_ids, prompt_count, token_ids, token_capacity,
         config->max_new_tokens, &output_count, kv_cache, workspace,
         config->workspace_bytes, stream_token, &stream, &generate_stats);
     if (status != COLI_OK) goto cleanup;
     result->generated_tokens = generate_stats.generated_tokens;
-    if (output_count > 0) result->last_token_id = output_ids[output_count - 1u];
+    if (output_count > 0) result->last_token_id = token_ids[output_count - 1u];
     maybe_yield(config);
     if (cancelled(config)) {
         status = COLI_ERR_REMOVED;
@@ -201,8 +204,7 @@ coli_status_t coli_generate_olmoe_greedy(coli_store_t *model_store,
 cleanup:
     generate_free(workspace);
     generate_free(decoded);
-    generate_free(output_ids);
-    generate_free(prompt_ids);
+    generate_free(token_ids);
     coli_kv_cache_close(kv_cache);
     generate_free(kv_memory);
     coli_tokenizer_close(&tokenizer);
@@ -229,6 +231,8 @@ coli_status_t coli_generate_glm52_greedy(coli_store_t *model_store,
         config->context_tokens > UINT32_MAX ||
         config->max_prompt_tokens > SIZE_MAX / sizeof(uint32_t) ||
         config->context_tokens > SIZE_MAX / sizeof(uint32_t) ||
+        config->max_prompt_tokens + config->max_new_tokens >
+            SIZE_MAX / sizeof(uint32_t) ||
         config->workspace_bytes == 0 || config->decoded_chunk_bytes == 0 ||
         (config->kv_cache_path && config->kv_page_bytes == 0))
         return COLI_ERR_ARGUMENT;
@@ -259,10 +263,9 @@ coli_status_t coli_generate_glm52_greedy(coli_store_t *model_store,
     }
 
     result->stage = COLI_GENERATE_STAGE_ALLOCATE;
-    uint32_t *prompt_ids =
-        generate_alloc(config->max_prompt_tokens * sizeof(*prompt_ids));
-    uint32_t *output_ids =
-        generate_alloc(config->context_tokens * sizeof(*output_ids));
+    const size_t token_capacity =
+        config->max_prompt_tokens + config->max_new_tokens;
+    uint32_t *token_ids = generate_alloc(token_capacity * sizeof(*token_ids));
     uint8_t *decoded = generate_alloc(config->decoded_chunk_bytes);
     void *workspace = generate_alloc(config->workspace_bytes);
     uint8_t *state_memory = NULL;
@@ -284,7 +287,7 @@ coli_status_t coli_generate_glm52_greedy(coli_store_t *model_store,
     } else {
         status = COLI_ERR_RANGE;
     }
-    if (!prompt_ids || !output_ids || !decoded || !workspace || !state) {
+    if (!token_ids || !decoded || !workspace || !state) {
         if (status == COLI_OK) status = COLI_ERR_NO_MEMORY;
         goto cleanup;
     }
@@ -303,7 +306,7 @@ coli_status_t coli_generate_glm52_greedy(coli_store_t *model_store,
     result->stage = COLI_GENERATE_STAGE_ENCODE_PROMPT;
     size_t prompt_count = 0;
     status = coli_tokenizer_encode(&tokenizer, config->prompt,
-                                   config->prompt_bytes, prompt_ids,
+                                   config->prompt_bytes, token_ids,
                                    config->max_prompt_tokens, &prompt_count,
                                    COLI_TOKENIZER_ENCODE_DEFAULT);
     if (status != COLI_OK) goto cleanup;
@@ -325,13 +328,13 @@ coli_status_t coli_generate_glm52_greedy(coli_store_t *model_store,
         .decoded = decoded,
     };
     status = coli_glm52_generate_greedy_stream(
-        &model, &glm_config, prompt_ids, prompt_count, output_ids,
-        config->context_tokens, config->max_new_tokens, &output_count, state,
+        &model, &glm_config, token_ids, prompt_count, token_ids,
+        token_capacity, config->max_new_tokens, &output_count, state,
         workspace, config->workspace_bytes, stream_token, &stream,
         &generate_stats);
     if (status != COLI_OK) goto cleanup;
     result->generated_tokens = generate_stats.generated_tokens;
-    if (output_count > 0) result->last_token_id = output_ids[output_count - 1u];
+    if (output_count > 0) result->last_token_id = token_ids[output_count - 1u];
     maybe_yield(config);
     if (cancelled(config)) {
         status = COLI_ERR_REMOVED;
@@ -344,8 +347,7 @@ coli_status_t coli_generate_glm52_greedy(coli_store_t *model_store,
 cleanup:
     generate_free(workspace);
     generate_free(decoded);
-    generate_free(output_ids);
-    generate_free(prompt_ids);
+    generate_free(token_ids);
     coli_kv_cache_close(state);
     generate_free(state_memory);
     coli_tokenizer_close(&tokenizer);

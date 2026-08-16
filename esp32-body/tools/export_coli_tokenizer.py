@@ -20,9 +20,13 @@ VERSION = 1
 PAD_ID = 1
 EOS_ID = 50279
 MAX_TOKEN_BYTES = 256
+MAX_SPECIAL_TOKENS = 512
 
 TOKEN_FLAG_SPECIAL = 0x0001
 TOKEN_FLAG_BYTE = 0x0002
+
+PRETOKENIZER_BYTE_BPE = 0
+PRETOKENIZER_O200K = 1
 
 
 def bytes_to_unicode() -> dict[int, str]:
@@ -66,8 +70,56 @@ def model_payload(tokenizer_json: dict) -> dict:
     return model
 
 
-def special_ids(tokenizer_json: dict, vocab: dict[str, int]) -> set[int]:
-    ids = {PAD_ID, EOS_ID}
+def token_id_from_declared(tokenizer_json: dict, vocab: dict[str, int], key: str) -> int | None:
+    value = tokenizer_json.get(key)
+    if isinstance(value, str):
+        return vocab.get(value)
+    if isinstance(value, dict):
+        content = value.get("content")
+        token_id = value.get("id")
+        if isinstance(token_id, int):
+            return token_id
+        if isinstance(content, str):
+            return vocab.get(content)
+    return None
+
+
+def infer_pad_eos_ids(tokenizer_json: dict, vocab: dict[str, int], vocab_size: int) -> tuple[int, int]:
+    pad_id = token_id_from_declared(tokenizer_json, vocab, "pad_token")
+    eos_id = token_id_from_declared(tokenizer_json, vocab, "eos_token")
+    for item in tokenizer_json.get("added_tokens", []):
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content")
+        token_id = item.get("id")
+        if not isinstance(content, str):
+            continue
+        if not isinstance(token_id, int):
+            token_id = vocab.get(content)
+        if not isinstance(token_id, int):
+            continue
+        lowered = content.lower()
+        if pad_id is None and "pad" in lowered:
+            pad_id = token_id
+        if eos_id is None and (
+            "eos" in lowered or "endoftext" in lowered or content in {"</s>", "<|im_end|>"}
+        ):
+            eos_id = token_id
+    if pad_id is None and PAD_ID < vocab_size:
+        pad_id = PAD_ID
+    if eos_id is None and EOS_ID < vocab_size:
+        eos_id = EOS_ID
+    if pad_id is None:
+        pad_id = eos_id if eos_id is not None else 0
+    if eos_id is None:
+        eos_id = pad_id
+    if not (0 <= pad_id < vocab_size and 0 <= eos_id < vocab_size):
+        raise ValueError("could not infer in-range pad/eos token ids")
+    return pad_id, eos_id
+
+
+def special_ids(tokenizer_json: dict, vocab: dict[str, int], pad_id: int, eos_id: int) -> set[int]:
+    ids = {pad_id, eos_id}
     for item in tokenizer_json.get("added_tokens", []):
         if isinstance(item, dict):
             token_id = item.get("id")
@@ -91,14 +143,33 @@ def parse_merge(merge: object) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
+def pretokenizer_family(tokenizer_json: dict) -> int:
+    pretokenizer = tokenizer_json.get("pre_tokenizer")
+    candidates = []
+    if isinstance(pretokenizer, dict):
+        candidates.append(pretokenizer)
+        pretoks = pretokenizer.get("pretokenizers")
+        if isinstance(pretoks, list):
+            candidates.extend(item for item in pretoks if isinstance(item, dict))
+    for item in candidates:
+        pattern = item.get("pattern")
+        regex = pattern.get("Regex") if isinstance(pattern, dict) else None
+        if isinstance(regex, str):
+            if "\\p{Han}" in regex:
+                raise ValueError("Kimi o200k+Han pretokenizer is not CTOK-supported yet")
+            if "\\p{Lu}" in regex:
+                return PRETOKENIZER_O200K
+    return PRETOKENIZER_BYTE_BPE
+
+
 def build_ctok(tokenizer_json: dict) -> bytes:
     model = model_payload(tokenizer_json)
+    family = pretokenizer_family(tokenizer_json)
     vocab: dict[str, int] = {str(token): int(token_id) for token, token_id in model["vocab"].items()}
     vocab_size = max(vocab.values()) + 1
     if len(set(vocab.values())) != len(vocab):
         raise ValueError("vocab contains duplicate token ids")
-    if EOS_ID >= vocab_size or PAD_ID >= vocab_size:
-        raise ValueError("vocab does not contain expected OLMoE pad/eos ids")
+    pad_id, eos_id = infer_pad_eos_ids(tokenizer_json, vocab, vocab_size)
 
     tokens_by_id: list[bytes] = [b""] * vocab_size
     for token, token_id in vocab.items():
@@ -107,7 +178,9 @@ def build_ctok(tokenizer_json: dict) -> bytes:
             raise ValueError(f"token {token_id} exceeds {MAX_TOKEN_BYTES} bytes")
         tokens_by_id[token_id] = token_bytes
 
-    specials = special_ids(tokenizer_json, vocab)
+    specials = special_ids(tokenizer_json, vocab, pad_id, eos_id)
+    if len(specials) > MAX_SPECIAL_TOKENS:
+        raise ValueError(f"tokenizer has {len(specials)} special tokens; CTOK cap is {MAX_SPECIAL_TOKENS}")
     byte_token_for_value: dict[int, int] = {}
     for token_id, token_bytes in enumerate(tokens_by_id):
         if token_id in specials:
@@ -145,17 +218,23 @@ def build_ctok(tokenizer_json: dict) -> bytes:
             struct.pack("<QHHIII", data_offset, len(token_bytes), flags, byte_value, 0, 0)
         )
 
-    merge_offset = token_data_offset + len(token_data)
+    special_token_ids = sorted(specials)
+    special_token_offset = token_data_offset + len(token_data)
+    merge_offset = special_token_offset + len(special_token_ids) * 4
     header = bytearray(HEADER_BYTES)
     header[0:4] = b"CTOK"
     struct.pack_into("<HHIIIIQQQIIIH", header, 4, VERSION, HEADER_BYTES,
                      vocab_size, len(merge_records), ENTRY_BYTES, MERGE_BYTES,
-                     vocab_offset, token_data_offset, merge_offset, 256, PAD_ID,
-                     EOS_ID, MAX_TOKEN_BYTES)
+                     vocab_offset, token_data_offset, merge_offset, 256, pad_id,
+                     eos_id, MAX_TOKEN_BYTES)
+    struct.pack_into("<H", header, 62, family)
+    struct.pack_into("<IQ", header, 64, len(special_token_ids), special_token_offset)
 
     output = bytearray(header)
     output.extend(entries)
     output.extend(token_data)
+    for token_id in special_token_ids:
+        output.extend(struct.pack("<I", token_id))
     for left, right, result, rank in merge_records:
         output.extend(struct.pack("<IIII", left, right, result, rank))
     return bytes(output)

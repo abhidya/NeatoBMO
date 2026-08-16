@@ -84,6 +84,18 @@ and safetensors shards. It streams rows into grouped symmetric Q4, writes BMOQ
 version 2, and emits the bounded binary config tensor used by the ESP32 GLM
 loader for MLA ranks, RoPE dimensions, MoE routing, and stop-token metadata.
 
+Inspect or export a local Inkling text safetensors checkpoint to BMOQ v2:
+
+```sh
+python3 tools/export_inkling_bmoq.py /path/to/Inkling --inspect-only
+python3 tools/export_inkling_bmoq.py /path/to/Inkling model.bmoq
+```
+
+The exporter follows the upstream text-only `c/inkling.c` snapshot contract and
+streams local/global GQA projections, relative-bias banks, q/k norms, short
+convs, dense MLPs, shared experts, and fused routed expert tensors without
+loading the checkpoint into memory.
+
 Inspect or export a local Gemma 3 GGUF (the matching host check is
 `test_coli_gemma`, built and run by the Makefile above):
 
