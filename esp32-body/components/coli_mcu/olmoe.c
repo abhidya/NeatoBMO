@@ -190,6 +190,30 @@ coli_status_t coli_olmoe_layer_decode(const coli_model_t *model,
     if (status != COLI_OK) return status;
     accumulate_q4(&stats->attention_q4, &q4_stats);
 
+    /* QK normalization, applied across the whole projected vector before RoPE
+     * exactly as OlmoeAttention does. norm_weight aliases `projected`, which
+     * is not written until the output projection below.
+     *
+     * Treated as optional so models exported before these tensors existed
+     * still load; the exporter now requires them and fails on any checkpoint
+     * tensor it does not consume, which is what keeps a missing architectural
+     * component from being read as quantization loss again. */
+    if (coli_model_find(model, coli_olmoe_q_norm_id(layer))) {
+        status = read_dense_f32(model, coli_olmoe_q_norm_id(layer), norm_weight,
+                                hidden_count);
+        if (status != COLI_OK) return status;
+        status = coli_ops_rmsnorm(query, norm_weight, query, hidden_count,
+                                  1.0e-5f);
+        if (status != COLI_OK) return status;
+    }
+    if (coli_model_find(model, coli_olmoe_k_norm_id(layer))) {
+        status = read_dense_f32(model, coli_olmoe_k_norm_id(layer), norm_weight,
+                                hidden_count);
+        if (status != COLI_OK) return status;
+        status = coli_ops_rmsnorm(key, norm_weight, key, hidden_count, 1.0e-5f);
+        if (status != COLI_OK) return status;
+    }
+
     status = coli_ops_rope_apply(query, key, kv_layout->heads,
                                  kv_layout->head_dim, position,
                                  (float)model->config.rope_theta);

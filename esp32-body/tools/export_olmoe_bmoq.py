@@ -144,6 +144,12 @@ def expected_logical_tensors(config: OlmoeConfig) -> list[LogicalTensor]:
                 LogicalTensor(base + 11, f"{prefix}.self_attn.k_proj.weight", f"{tag}.k", (h, h)),
                 LogicalTensor(base + 12, f"{prefix}.self_attn.v_proj.weight", f"{tag}.v", (h, h)),
                 LogicalTensor(base + 13, f"{prefix}.self_attn.o_proj.weight", f"{tag}.o", (h, h)),
+                # OLMoE RMS-normalizes projected query and key before RoPE.
+                # These were missing from the export, so the runtime ran a
+                # different architecture and its degradation looked like
+                # quantization loss.
+                LogicalTensor(base + 14, f"{prefix}.self_attn.q_norm.weight", f"{tag}.qnorm", (h,)),
+                LogicalTensor(base + 15, f"{prefix}.self_attn.k_norm.weight", f"{tag}.knorm", (h,)),
                 LogicalTensor(base + 20, f"{prefix}.mlp.gate.weight", f"{tag}.router", (experts, h)),
             ]
         )
@@ -305,8 +311,32 @@ def q4_writers(source: TensorSource, tensor: LogicalTensor, group_size: int) -> 
     return write_weights, write_scales
 
 
+def assert_checkpoint_fully_consumed(source: TensorSource, config: OlmoeConfig) -> None:
+    """Fail if the checkpoint holds a tensor the export would silently drop.
+
+    q_norm/k_norm were present in allenai/OLMoE-1B-7B-0924 and absent from the
+    expected-tensor list, so they were quietly discarded. The export still
+    validated, the runtime still ran, and the resulting degradation was
+    indistinguishable from quantization loss until it was traced back here.
+    Shape checks alone cannot catch that; only a completeness check can.
+    """
+    available = getattr(source, "tensor_names", None)
+    if available is None:
+        return
+    expected = {tensor.hf_name for tensor in expected_logical_tensors(config)}
+    unconsumed = sorted(set(available()) - expected)
+    if unconsumed:
+        preview = ", ".join(unconsumed[:6])
+        raise ValueError(
+            f"checkpoint has {len(unconsumed)} tensor(s) the exporter does not "
+            f"consume, which would silently change the architecture: {preview}"
+            + (" ..." if len(unconsumed) > 6 else "")
+        )
+
+
 def physical_tensors(source: TensorSource, config: OlmoeConfig, group_size: int) -> list[PhysicalTensor]:
     result: list[PhysicalTensor] = []
+    assert_checkpoint_fully_consumed(source, config)
     for logical in expected_logical_tensors(config):
         actual_shape = source.shape(logical.hf_name)
         if actual_shape != logical.shape:
@@ -437,6 +467,9 @@ class SafetensorSource:
         with path.open("rb") as file:
             header_len = struct.unpack("<Q", file.read(8))[0]
             return json.loads(file.read(header_len).decode("utf-8"))
+
+    def tensor_names(self) -> list[str]:
+        return list(self.index)
 
     def _shard_header(self, path: Path) -> tuple[dict, int]:
         """Parse each shard header once; re-parsing it per row made export of a

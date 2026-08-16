@@ -70,6 +70,20 @@ static inline uint32_t coli_olmoe_o_proj_id(uint32_t layer)
     return coli_olmoe_layer_base(layer) + 13u;
 }
 
+/* OLMoE RMS-normalizes the projected query and key vectors before RoPE
+ * (OlmoeAttention applies q_norm/k_norm across the full num_heads*head_dim
+ * vector). Omitting these tensors silently changes the architecture, not just
+ * its precision. */
+static inline uint32_t coli_olmoe_q_norm_id(uint32_t layer)
+{
+    return coli_olmoe_layer_base(layer) + 14u;
+}
+
+static inline uint32_t coli_olmoe_k_norm_id(uint32_t layer)
+{
+    return coli_olmoe_layer_base(layer) + 15u;
+}
+
 static inline uint32_t coli_olmoe_router_id(uint32_t layer)
 {
     return coli_olmoe_layer_base(layer) + 20u;
