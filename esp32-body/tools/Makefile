@@ -91,7 +91,8 @@ $(BUILD)/test_coli_glm52: test_coli_glm52.c $(MCU)/model_format.c \
 
 $(BUILD)/test_coli_inkling: test_coli_inkling.c $(MCU)/model_format.c \
 		$(MCU)/store_file.c $(MCU)/kv_cache.c $(MCU)/ops.c \
-		$(MCU)/inkling.c $(MCU)/inkling_generate.c | $(BUILD)
+		$(MCU)/q4_matvec.c $(MCU)/inkling.c \
+		$(MCU)/inkling_generate.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(BUILD)/bmoq-eval-olmoe: bmoq_eval_olmoe.c $(MCU)/model_format.c \

@@ -6,6 +6,7 @@
 
 #include "coli_kv_cache.h"
 #include "coli_model.h"
+#include "coli_q4.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,6 +16,159 @@ extern "C" {
 #define COLI_INKLING_MAX_TOP_K 8u
 #define COLI_INKLING_MAX_SHARED_EXPERTS 8u
 #define COLI_INKLING_MAX_LAYERS 256u
+#define COLI_INKLING_SCALE_ID_OFFSET 0x00800000u
+
+typedef enum {
+    COLI_INKLING_TENSOR_EMBED_TOKENS = 1u,
+    COLI_INKLING_TENSOR_EMBED_NORM = 2u,
+    COLI_INKLING_TENSOR_FINAL_NORM = 3u,
+    COLI_INKLING_TENSOR_LM_HEAD = 4u,
+} coli_inkling_global_tensor_id_t;
+
+static inline uint32_t coli_inkling_layer_base(uint32_t layer)
+{
+    return 1000u + layer * 10000u;
+}
+
+static inline uint32_t coli_inkling_input_norm_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 1u;
+}
+
+static inline uint32_t coli_inkling_post_attention_norm_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 2u;
+}
+
+static inline uint32_t coli_inkling_q_proj_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 10u;
+}
+
+static inline uint32_t coli_inkling_k_proj_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 11u;
+}
+
+static inline uint32_t coli_inkling_v_proj_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 12u;
+}
+
+static inline uint32_t coli_inkling_r_proj_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 13u;
+}
+
+static inline uint32_t coli_inkling_o_proj_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 14u;
+}
+
+static inline uint32_t coli_inkling_q_norm_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 15u;
+}
+
+static inline uint32_t coli_inkling_k_norm_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 16u;
+}
+
+static inline uint32_t coli_inkling_rel_proj_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 17u;
+}
+
+static inline uint32_t coli_inkling_k_conv_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 18u;
+}
+
+static inline uint32_t coli_inkling_v_conv_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 19u;
+}
+
+static inline uint32_t coli_inkling_attn_conv_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 20u;
+}
+
+static inline uint32_t coli_inkling_mlp_conv_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 21u;
+}
+
+static inline uint32_t coli_inkling_dense_gate_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 40u;
+}
+
+static inline uint32_t coli_inkling_dense_up_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 41u;
+}
+
+static inline uint32_t coli_inkling_dense_down_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 42u;
+}
+
+static inline uint32_t coli_inkling_dense_scale_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 43u;
+}
+
+static inline uint32_t coli_inkling_router_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 50u;
+}
+
+static inline uint32_t coli_inkling_router_bias_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 51u;
+}
+
+static inline uint32_t coli_inkling_router_scale_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 52u;
+}
+
+static inline uint32_t coli_inkling_shared_gate_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 60u;
+}
+
+static inline uint32_t coli_inkling_shared_up_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 61u;
+}
+
+static inline uint32_t coli_inkling_shared_down_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 62u;
+}
+
+static inline uint32_t coli_inkling_routed_gate_bundle_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 70u;
+}
+
+static inline uint32_t coli_inkling_routed_up_bundle_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 71u;
+}
+
+static inline uint32_t coli_inkling_routed_down_bundle_id(uint32_t layer)
+{
+    return coli_inkling_layer_base(layer) + 72u;
+}
+
+static inline uint32_t coli_inkling_scale_id(uint32_t tensor_id)
+{
+    return tensor_id + COLI_INKLING_SCALE_ID_OFFSET;
+}
 
 typedef struct {
     uint32_t hidden_size;
@@ -66,6 +220,22 @@ typedef struct {
     size_t shared_count;
 } coli_inkling_moe_stats_t;
 
+typedef struct {
+    coli_q4_stats_t attention_q4;
+    coli_q4_stats_t mlp_q4;
+    coli_inkling_moe_stats_t moe;
+    size_t peak_workspace_bytes;
+} coli_inkling_layer_stats_t;
+
+typedef struct {
+    coli_q4_stats_t embedding_q4;
+    coli_q4_stats_t lm_head_q4;
+    coli_inkling_layer_stats_t last_layer;
+    uint32_t layers_executed;
+    float selected_logit;
+    size_t peak_workspace_bytes;
+} coli_inkling_decode_stats_t;
+
 typedef coli_status_t (*coli_inkling_token_fn)(void *context,
                                                uint32_t token_id,
                                                size_t generated_index);
@@ -88,6 +258,17 @@ float coli_inkling_global_tau(const coli_inkling_config_t *config,
 
 size_t coli_inkling_conv_state_floats(const coli_inkling_config_t *config,
                                       uint32_t channels);
+
+size_t coli_inkling_layer_conv_state_floats(
+    const coli_inkling_config_t *config, uint32_t layer);
+
+coli_status_t coli_inkling_conv_state_layouts(
+    const coli_inkling_config_t *config, coli_kv_cache_layout_t *out_kv_conv,
+    coli_kv_cache_layout_t *out_residual_conv);
+
+size_t coli_inkling_decode_required_workspace(
+    const coli_inkling_config_t *config, uint32_t position,
+    size_t q4_workspace_bytes);
 
 coli_status_t coli_inkling_short_conv_step(const float *input,
                                            const float *weights,
@@ -140,6 +321,13 @@ coli_status_t coli_inkling_logits_argmax(const float *hidden,
                                          float mup_width_multiplier,
                                          uint32_t *out_token_id,
                                          float *out_logit);
+
+coli_status_t coli_inkling_decode_next_token(
+    const coli_model_t *model, const coli_inkling_config_t *config,
+    uint32_t input_token_id, uint32_t position, coli_kv_cache_t *kv_cache,
+    coli_kv_cache_t *conv_kv_cache, coli_kv_cache_t *conv_residual_cache,
+    void *workspace, size_t workspace_bytes, uint32_t *out_token_id,
+    coli_inkling_decode_stats_t *stats);
 
 coli_status_t coli_inkling_generate_greedy_stream(
     const coli_inkling_config_t *config, uint32_t seed_token,
