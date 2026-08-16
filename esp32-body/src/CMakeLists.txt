@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.c" "neato_usb.c" "neato_protocol.c"
+idf_component_register(SRCS "main.c" "neato_usb.c" "neato_usb_health.c" "neato_protocol.c"
                             "wifi_log.c" "wifi_mgr.c" "web.c" "debug_uart.c"
                             "neato_audio.c" "remote_soundboard.c" "faces.c"
                        INCLUDE_DIRS "."

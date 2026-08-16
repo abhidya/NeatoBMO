@@ -10,6 +10,7 @@ RUNNER = ROOT / "tools" / "jtag" / "run_neato_p10_autoprobe.sh"
 P6_TRIGGER = ROOT / "tools" / "jtag" / "neato_p10_p6_trigger.py"
 EDGE_WATCH = ROOT / "tools" / "jtag" / "neato_p10_boot_edge_watch.py"
 TRANSITION_CAPTURE = ROOT / "tools" / "jtag" / "neato_firmware_transition_capture.py"
+HALT_RUNNER = ROOT / "tools" / "jtag" / "run_neato_p10_halt.sh"
 SESSION = ROOT / "captures" / "jtag" / "jtag-p10-20260813T061756Z"
 
 FORBIDDEN_OPENOCD_PATTERNS = (
@@ -125,3 +126,17 @@ def test_existing_openocd_logs_do_not_claim_a_detected_tap() -> None:
         if "-expected-id" in text:
             stable_idcode_recommendations.append(log.name)
     assert stable_idcode_recommendations == []
+
+
+def test_halt_runner_keeps_private_dumps_outside_git() -> None:
+    text = HALT_RUNNER.read_text(encoding="utf-8")
+    assert "NEATO_JTAG_PRIVATE_ROOT" in text
+    assert "/Volumes/2TB/neato-jtag-private" in text
+    assert "refusing to store private memory dumps inside the Git worktree" in text
+    assert "captures/jtag/${session_id}" not in text
+    assert "adapter deassert trst" not in text
+    assert "NEATO_P10_IDCODE:?" in text
+    assert "NEATO_P10_IRLEN:?" in text
+    assert "tap/device found" in text
+    assert "refusing halt" in text
+    assert "trap resume_target EXIT" in text

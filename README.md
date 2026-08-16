@@ -43,6 +43,11 @@ full architecture and milestones.
 
 ### Hard-won hardware notes
 
+- Permanent installation plan: [power the ESP32-S3 and wire its USB host
+  directly to the Cruz motherboard](docs/esp32-neato-direct-wiring.md). It
+  preserves the Neato LCD, uses a fused battery-to-5 V automotive supply, and
+  includes board-revision-safe pad identification and bring-up checks.
+
 - The Neato's USB port is a **device** port → the controller must be a USB
   **host**: ESP32-**S3** required (OTG), classic ESP32 won't work.
 - On YD-style ESP32-S3 devkits the native USB port ships with **no 5 V

@@ -133,6 +133,11 @@ application acceptance; it does not identify the field as a checksum rather
 than a MAC, nonce, or other validated metadata. Exact stock 2.5 was restored
 again and verified over P6 and USB.
 
+The separate Cruz P10 JTAG bring-up session stayed read-only and did not find a
+stable TAP/IDCODE/IR length. That means the ARM926 execution-probe track is
+still unresolved; it does not change the Phase A contract or the already
+verified clean-room serial slice.
+
 ## Clean-room v0 scope
 
 NeatoOS v0 is a serial/API compatibility target, not a proprietary-source copy.

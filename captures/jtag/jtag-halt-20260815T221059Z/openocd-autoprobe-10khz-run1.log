@@ -1,0 +1,11 @@
+Open On-Chip Debugger 0.12.0
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+cmsis-dap <cmd>
+  cmsis-dap cmd
+  cmsis-dap info
+/Users/abdulrehmanbhidya/Documents/neato/tools/jtag/neato_p10_autoprobe.cfg:9: Error: 
+in procedure 'script' 
+at file "embedded:startup.tcl", line 28
+at file "/Users/abdulrehmanbhidya/Documents/neato/tools/jtag/neato_p10_autoprobe.cfg", line 9

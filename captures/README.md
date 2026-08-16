@@ -502,3 +502,14 @@ any reflash or baud change.** Details: `analysis/{at91-baud-research,hypothesis-
   checks. `final-health-result.json` verifies USB identity and the installed
   application; it does not claim full electromechanical or factory-fallback
   health.
+
+## Late P10 control scans (2026-08-15)
+
+- `jtag/jtag-halt-20260815T221059Z/` preserves one adapter-configuration
+  failure caused by the obsolete `cmsis-dap backend usb_bulk` directive.
+- `jtag/jtag-halt-20260815T221148Z/` and
+  `jtag/jtag-halt-20260815T223257Z/` preserve two completed 10 kHz controls.
+  Both again returned all ones/no TAP; neither justified creating an ARM
+  target or running the separately gated halt helper.
+- These raw logs are append-only evidence. They do not change the published
+  conclusion from the 149 powered scans in the primary P10 session.

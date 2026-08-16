@@ -19,6 +19,10 @@ neato-jtag-private/
 *-jtag-private/
 esp32-before-jtag-full.bin
 *.dump.bin
+captures/jtag/**/sram*.bin
+captures/jtag/**/sdram*.bin
+captures/jtag/*/private/
+.worktrees/
 
 # NeatoOS local build/probe outputs (reference-header probe contains
 # caller-supplied vendor header bytes and must never be committed)

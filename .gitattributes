@@ -3,3 +3,4 @@
 # whitespace even though it is part of the captured serial protocol.
 captures/jtag/**/final-usb-getversion.txt -text -whitespace
 captures/jtag/**/usb-snapshot-*/**/transcript.txt -text -whitespace
+captures/jtag/jtag-halt-*/*.log -text -whitespace

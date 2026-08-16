@@ -14,13 +14,17 @@
 #include "esp_log.h"
 #include "usb/usb_host.h"
 #include "usb/cdc_acm_host.h"
+#include "usb/cdc_acm_host_ops.h"
 #include "neato_usb.h"
+#include "neato_usb_health.h"
 
 static const char *TAG = "neato_usb";
 static cdc_acm_dev_hdl_t s_dev = NULL;
 static SemaphoreHandle_t s_tx_mutex;
 static QueueHandle_t s_binary_events;
+static QueueHandle_t s_reconnect_events;
 static volatile bool s_binary_active;
+static neato_usb_health_t s_health;
 
 enum {
     BINARY_ENQ = 0x05,
@@ -29,6 +33,40 @@ enum {
     BINARY_TERM = 0x1a,
     BINARY_DISCONNECTED = 0xff,
 };
+
+static uint32_t now_ms(void)
+{
+    return (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+}
+
+static void signal_binary_disconnected(void)
+{
+    if (s_binary_active) {
+        uint8_t disconnected = BINARY_DISCONNECTED;
+        xQueueSend(s_binary_events, &disconnected, 0);
+    }
+}
+
+static void request_reconnect(neato_usb_health_result_t reason)
+{
+    if (reason == NEATO_USB_HEALTH_OK || !s_reconnect_events) return;
+    xQueueSend(s_reconnect_events, &reason, 0);
+}
+
+static void record_ascii_tx(esp_err_t err)
+{
+    neato_usb_health_result_t reason =
+        neato_usb_health_tx(&s_health, err == ESP_OK, now_ms());
+    request_reconnect(reason);
+}
+
+static void record_tx_failure(esp_err_t err)
+{
+    if (err == ESP_OK) return;
+    neato_usb_health_result_t reason =
+        neato_usb_health_tx(&s_health, false, now_ms());
+    request_reconnect(reason);
+}
 
 /* ---- rx fan-out --------------------------------------------------------- */
 
@@ -47,6 +85,7 @@ esp_err_t neato_rx_subscribe(neato_rx_fn fn)
 static bool on_rx(const uint8_t *data, size_t len, void *arg)
 {
     /* Neato replies are ASCII lines terminated by 0x1A (Ctrl-Z). */
+    neato_usb_health_rx(&s_health, now_ms());
     fwrite(data, 1, len, stdout);
     fflush(stdout);
     for (size_t i = 0; i < s_rx_sub_count; i++)
@@ -68,11 +107,11 @@ static void on_event(const cdc_acm_host_dev_event_data_t *event, void *ctx)
 {
     if (event->type == CDC_ACM_HOST_DEVICE_DISCONNECTED) {
         ESP_LOGW(TAG, "Neato disconnected");
-        cdc_acm_host_close(event->data.cdc_hdl);
-        s_dev = NULL;
-        if (s_binary_active) {
-            uint8_t disconnected = BINARY_DISCONNECTED;
-            xQueueSend(s_binary_events, &disconnected, 0);
+        if (s_dev == event->data.cdc_hdl) {
+            cdc_acm_host_close(event->data.cdc_hdl);
+            s_dev = NULL;
+            neato_usb_health_disconnected(&s_health);
+            signal_binary_disconnected();
         }
     }
 }
@@ -92,7 +131,9 @@ esp_err_t neato_usb_install(void)
 {
     s_tx_mutex = xSemaphoreCreateMutex();
     s_binary_events = xQueueCreate(8, sizeof(uint8_t));
-    if (!s_tx_mutex || !s_binary_events) return ESP_ERR_NO_MEM;
+    s_reconnect_events = xQueueCreate(4, sizeof(neato_usb_health_result_t));
+    if (!s_tx_mutex || !s_binary_events || !s_reconnect_events) return ESP_ERR_NO_MEM;
+    neato_usb_health_init(&s_health);
 
     const usb_host_config_t host_config = {
         .intr_flags = ESP_INTR_FLAG_LEVEL1,
@@ -133,14 +174,43 @@ static void connection_task(void *arg)
             continue;
         }
         ESP_LOGI(TAG, "Neato connected!");
+        neato_usb_health_connected(&s_health, now_ms());
         cdc_acm_line_coding_t coding = {
             .dwDTERate = 115200, .bDataBits = 8, .bParityType = 0, .bCharFormat = 0,
         };
-        cdc_acm_host_line_coding_set(s_dev, &coding);
+        esp_err_t line_err = cdc_acm_host_line_coding_set(s_dev, &coding);
+        if (line_err != ESP_OK && line_err != ESP_ERR_NOT_SUPPORTED)
+            ESP_LOGW(TAG, "line coding failed: %s", esp_err_to_name(line_err));
+        esp_err_t ctrl_err = cdc_acm_host_set_control_line_state(s_dev, true, false);
+        if (ctrl_err != ESP_OK && ctrl_err != ESP_ERR_NOT_SUPPORTED)
+            ESP_LOGW(TAG, "DTR/RTS setup failed: %s", esp_err_to_name(ctrl_err));
 
         vTaskDelay(pdMS_TO_TICKS(500));
         if (on_connect) on_connect();
-        while (s_dev) vTaskDelay(pdMS_TO_TICKS(500));
+        while (s_dev) {
+            neato_usb_health_result_t reason;
+            if (xQueueReceive(s_reconnect_events, &reason,
+                              pdMS_TO_TICKS(500)) != pdTRUE) {
+                continue;
+            }
+            ESP_LOGW(TAG, "USB health recovery: %s",
+                     neato_usb_health_reason_name(reason));
+            if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
+                request_reconnect(reason);
+                continue;
+            }
+            cdc_acm_dev_hdl_t dev = s_dev;
+            s_dev = NULL;
+            neato_usb_health_disconnected(&s_health);
+            signal_binary_disconnected();
+            xSemaphoreGive(s_tx_mutex);
+            if (dev) {
+                esp_err_t close_err = cdc_acm_host_close(dev);
+                if (close_err != ESP_OK)
+                    ESP_LOGW(TAG, "health close failed: %s",
+                             esp_err_to_name(close_err));
+            }
+        }
     }
 }
 
@@ -172,6 +242,7 @@ esp_err_t neato_send(const char *cmd)
         ESP_LOGE(TAG, "tx failed: %s", esp_err_to_name(err));
     }
     xSemaphoreGive(s_tx_mutex);
+    record_ascii_tx(err);
     return err;
 }
 
@@ -222,7 +293,10 @@ esp_err_t neato_binary_begin(const char *cmd, size_t payload_len,
     result = cdc_acm_host_data_tx_blocking(
         dev, (const uint8_t *)header, header_len, timeout_ms
     );
-    if (result != ESP_OK) goto fail;
+    if (result != ESP_OK) {
+        record_tx_failure(result);
+        goto fail;
+    }
     result = wait_binary_event(BINARY_ENQ, timeout_ms);
     if (result != ESP_OK) goto fail;
 
@@ -252,7 +326,10 @@ esp_err_t neato_binary_write(neato_txn_t *txn, const uint8_t *data,
         esp_err_t result = cdc_acm_host_data_tx_blocking(
             dev, data + offset, chunk_len, timeout_ms
         );
-        if (result != ESP_OK) return result;
+        if (result != ESP_OK) {
+            record_tx_failure(result);
+            return result;
+        }
     }
     return ESP_OK;
 }
@@ -272,6 +349,7 @@ esp_err_t neato_binary_end(neato_txn_t *txn, bool poison_checksum,
         result = cdc_acm_host_data_tx_blocking(
             dev, checksum_le, sizeof(checksum_le), timeout_ms
         );
+        record_tx_failure(result);
         if (result == ESP_OK)
             result = wait_binary_event(BINARY_ACK, timeout_ms);
         if (result == ESP_OK && poison_checksum)

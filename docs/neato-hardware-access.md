@@ -126,3 +126,32 @@ The next OS-acquisition experiment is duplicate external-NAND capture, ideally
 on a second scavenged Rev113 robot. On-chip key storage remains unknown. None
 of this is required to run BMO: the sound bank is unencrypted and the speech
 pipeline does not require application-firmware decryption.
+
+## P10 JTAG bring-up note (2026-08-13)
+
+The first non-destructive P10 session on the Cruz Rev113 board was a read-only
+adapter/TAP characterization, not a halt or readback attempt. The experiment
+used the ESP32-S3 CMSIS-DAP adapter from `CherryDAP` and the Mac-visible
+OpenOCD 0.12.0 command path.
+
+What was learned:
+
+- the adapter enumerated normally on macOS;
+- P10 TDO was electrically responsive — low with the target off, high with the
+  target powered when only GND/TDO were attached;
+- repeated scans at 5, 10, 50, and 100 kHz did not produce a stable TAP,
+  IDCODE, or IR length;
+- a forced TAP declaration on the factory-boot path still failed with an IR
+  capture mismatch;
+- no halt, register read, or memory read was attempted.
+
+What was not done:
+
+- no VDDIO measurement, because the meter step was waived for this session;
+- no series resistors were installed, because that step was also waived;
+- J3 / ERASE remained untouched;
+- the Neato was never powered from the ESP32.
+
+The detailed evidence record is
+[neato-p10-jtag-result.md](neato-p10-jtag-result.md), and the raw
+session files live under `captures/jtag/jtag-p10-20260813T061756Z/`.
