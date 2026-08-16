@@ -17,6 +17,12 @@ class SoundboardVoiceTests(unittest.TestCase):
         self.assertIsNotNone(wav)
         self.assertTrue(wav.startswith(b"RIFF"))
 
+    def test_contraction_alias_and_intent_suggestions_reach_real_lines(self):
+        board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
+        self.assertIsNotNone(board.synth("It is BMO time"))
+        suggestions = board.suggestions("Tell me that you love me")
+        self.assertIn("i love you", suggestions)
+
     def test_normalization_handles_bmo_catalog_spelling(self):
         self.assertEqual(normalize_phrase("Hello, BEEMO!"), "hello bmo")
 

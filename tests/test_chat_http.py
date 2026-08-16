@@ -128,6 +128,25 @@ class ChatHttpTests(unittest.TestCase):
             conn.close()
         self.assertEqual(rejected["error"], "unknown thinking sound")
 
+    def test_voice_catalog_and_clip_routes_expose_the_runtime_library(self):
+        conn, response = self.request("GET", "/voice/catalog?q=hello%20there")
+        try:
+            catalog = json.loads(response.read())
+        finally:
+            conn.close()
+        self.assertGreaterEqual(catalog["count"], 200)
+        self.assertEqual(catalog["mode"], "soundboard")
+        self.assertIsNotNone(catalog["exact"])
+
+        conn, response = self.request(
+            "GET", "/voice/clip?text=hello%20there")
+        try:
+            wav = response.read()
+        finally:
+            conn.close()
+        self.assertEqual(response.getheader("Content-Type"), "audio/wav")
+        self.assertTrue(wav.startswith(b"RIFF"))
+
 
 if __name__ == "__main__":
     unittest.main()

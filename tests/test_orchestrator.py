@@ -1,6 +1,7 @@
 """Tests for the deepened orchestrator seams: BurstBudget, BodyController,
 and chat_turn wiring — all through their interfaces with fakes."""
 import threading
+import time
 import unittest
 
 from neatobmo import cues
@@ -288,8 +289,11 @@ class ChatTurnTests(unittest.TestCase):
 
     def test_sound_cue_does_not_replace_streamed_semantic_speech(self):
         class CapturingSpeech:
+            def __init__(self):
+                self.calls = []
+
             def speak(self, text, units=None):
-                self.units = units
+                self.calls.append((text, units))
                 return {"stop": threading.Event()}, None
 
         class CueBrain:
@@ -310,9 +314,93 @@ class ChatTurnTests(unittest.TestCase):
             self.assertTrue(streamed)
             self.assertIsNone(err)
             self.assertEqual(reply, "Entropy increases. [sound:beep]")
-            self.assertEqual(list(speech.units), ["Entropy increases."])
+            self.assertEqual(speech.calls, [("Entropy increases.", None)])
         finally:
             self.web.CFG.speech_mode = old_mode
+
+    def test_spoken_soundboard_cue_suppresses_generated_stream_speech(self):
+        class CapturingSpeech:
+            def __init__(self):
+                self.calls = []
+
+            def active(self):
+                return False
+
+            def speak(self, text, units=None):
+                self.calls.append((text, units))
+                return {"stop": threading.Event()}, None
+
+        class GreetingBrain:
+            def stream(self, text, on_sentence, **kwargs):
+                on_sentence("Hello, friend! [sound:hello] [happy]")
+                return "Hello, friend! [sound:hello] [happy]"
+
+        old_mode = self.web.CFG.speech_mode
+        self.web.CFG.speech_mode = "soundboard"
+        try:
+            speech = CapturingSpeech()
+            self.web.brain = GreetingBrain()
+            self.web.body = BodyController()
+            self.web.speech = speech
+
+            reply, streamed, err = self.web._streamed_reply("hello")
+
+            self.assertTrue(streamed)
+            self.assertIsNone(err)
+            self.assertIn("Hello, friend!", reply)
+            self.assertEqual(speech.calls, [])
+        finally:
+            self.web.CFG.speech_mode = old_mode
+
+    def test_catalog_hint_is_added_before_brain_generation(self):
+        prompt = self.web._compound_prompt(
+            "tell me that you love me", "tell me that you love me", "")
+        self.assertIn("Authentic recorded BMO lines available", prompt)
+        self.assertIn("i love you", prompt)
+
+    def test_chat_to_catalog_to_esp32_uses_no_synth_or_flash(self):
+        from neatobmo.speech import SpeechService
+
+        class CatalogBrain:
+            def stream(self, text, on_sentence, **kwargs):
+                on_sentence("I love you")
+                return "I love you"
+
+        class Esp32:
+            def __init__(self):
+                self.wavs = []
+
+            def speak(self, wav):
+                self.wavs.append(wav)
+
+            def emote(self, _text):
+                pass
+
+        board = self.web.soundboard_voice
+
+        class Voice:
+            default_voice = "bmo-rvc"
+            soundboard = board
+
+            def synth(self, _text, _voice=None):
+                raise AssertionError("catalog hit reached synthetic voice")
+
+        esp32 = Esp32()
+        body = BodyController(robot=FakeRobot(), esp32=esp32)
+        service = SpeechService(body, Voice())
+        self.web.brain = CatalogBrain()
+        self.web.body = body
+        self.web.speech = service
+
+        events = list(self.web.chat_events("tell me that you love me", True))
+        deadline = time.time() + 2
+        while not esp32.wavs and time.time() < deadline:
+            time.sleep(0.01)
+
+        self.assertTrue(events[-1]["spoke"])
+        self.assertEqual(len(esp32.wavs), 1)
+        self.assertTrue(esp32.wavs[0].startswith(b"RIFF"))
+        self.assertEqual(service.flash_writes, 0)
 
     def test_residual_subject_change_clears_pending_followup(self):
         class FakeBrain:
@@ -408,6 +496,73 @@ class ChatTurnTests(unittest.TestCase):
         self.assertEqual(self.web.brain.chat_calls, 0)
         self.assertIn("Partial answer!", events[-1]["reply"])
         self.assertTrue(events[-1]["partial"])
+
+    def test_legacy_robot_turn_returns_and_remembers_streamed_partial(self):
+        class PartialBrain:
+            def __init__(self):
+                self.remembered = []
+
+            def stream(self, text, on_sentence, **kwargs):
+                on_sentence("Partial answer! [happy]")
+                raise RuntimeError("stream stopped")
+
+            def chat(self, text, **kwargs):
+                raise AssertionError("must not retry after delivery")
+
+            def remember(self, user, reply):
+                self.remembered.append((user, reply))
+
+        class FakeSpeech:
+            def speak(self, text, units=None):
+                return {"stop": threading.Event()}, None
+
+        self.web.brain = PartialBrain()
+        self.web.body = BodyController()
+        self.web.speech = FakeSpeech()
+
+        out = self.web.chat_turn("explain entropy", True)
+
+        self.assertIn("Partial answer!", out["reply"])
+        self.assertTrue(out["partial"])
+        self.assertIn("stream stopped", out["error"])
+        self.assertEqual(self.web.brain.remembered, [
+            ("explain entropy", "Partial answer! [happy]"),
+        ])
+
+    def test_deferred_residual_speech_can_be_cancelled_before_launch(self):
+        class WaitingSpeech:
+            def __init__(self):
+                self.busy = True
+                self.calls = []
+
+            def active(self):
+                return self.busy
+
+            def speak(self, text, units=None):
+                self.calls.append((text, units))
+                return {"stop": threading.Event()}, None
+
+        class OneSentenceBrain:
+            def stream(self, text, on_sentence, **kwargs):
+                on_sentence("Residual answer.")
+                return "Residual answer."
+
+        speech = WaitingSpeech()
+        self.web.brain = OneSentenceBrain()
+        self.web.body = BodyController()
+        self.web.speech = speech
+
+        reply, streamed, err = self.web._streamed_reply(
+            "compound", defer_speech=True)
+        cancelled = self.web._cancel_deferred_speech()
+        speech.busy = False
+        threading.Event().wait(0.1)
+
+        self.assertEqual(reply, "Residual answer.")
+        self.assertTrue(streamed)
+        self.assertIsNone(err)
+        self.assertTrue(cancelled)
+        self.assertEqual(speech.calls, [])
 
 
 if __name__ == "__main__":

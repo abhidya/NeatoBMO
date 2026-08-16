@@ -147,8 +147,22 @@ def ensure_brain():
 
 # ---- chat orchestration --------------------------------------------------
 
+_deferred_speech_lock = threading.Lock()
+_deferred_speech_stops = set()
+
+
+def _cancel_deferred_speech():
+    """Cancel residual voice jobs that have not entered SpeechService yet."""
+    with _deferred_speech_lock:
+        pending = list(_deferred_speech_stops)
+        _deferred_speech_stops.clear()
+    for stop in pending:
+        stop.set()
+    return bool(pending)
+
 def chat_events(text, speak_on_robot):
     """Yield ordered progress events for one compound conversation turn."""
+    _cancel_deferred_speech()
     turn_id = f"turn-{time.time_ns()}"
     seq = 0
 
@@ -190,7 +204,7 @@ def chat_events(text, speak_on_robot):
 
     if not turn_plan.requires_brain:
         reply = " ".join(local_displays)
-        local_has_sound = any(kind == "sound" for kind, _ in local_steps)
+        local_has_sound = cues.has_voice_sound(local_steps)
         if (speak_on_robot and local_speech and
                 not (CFG.speech_mode == "soundboard" and local_has_sound)):
             speech.speak(" ".join(local_speech))
@@ -203,7 +217,9 @@ def chat_events(text, speak_on_robot):
     assistant_prefix = " ".join(local_replies)
     prompt = _compound_prompt(text, turn_plan.residual, assistant_prefix)
     local_voice_job = None
-    if speak_on_robot and local_speech:
+    local_has_sound = cues.has_voice_sound(local_steps)
+    if (speak_on_robot and local_speech and
+            not (CFG.speech_mode == "soundboard" and local_has_sound)):
         # The deterministic answer is useful now, not after model latency.
         # Residual speech is deferred behind this job below so the two voice
         # jobs never compete for the ESP32/body transport.
@@ -239,6 +255,7 @@ def chat_events(text, speak_on_robot):
 
     threading.Thread(target=generate, daemon=True).start()
     brain_displays = []
+    brain_sentences = []
     brain_steps = []
     partial = False
     spoke = False
@@ -246,6 +263,7 @@ def chat_events(text, speak_on_robot):
     while True:
         kind, value = result_queue.get()
         if kind == "sentence":
+            brain_sentences.append(value)
             plan = cues.parse(value)
             brain_displays.append(plan.display)
             brain_steps.extend(plan.steps)
@@ -260,7 +278,7 @@ def chat_events(text, speak_on_robot):
             yield event("turn_error", scope="brain", message=str(value),
                         recoverable=bool(local_displays or brain_displays))
             if hasattr(brain, "remember"):
-                delivered = " ".join(local_replies + brain_displays)
+                delivered = " ".join(local_replies + brain_sentences)
                 if delivered:
                     brain.remember(text, delivered)
             break
@@ -288,6 +306,7 @@ def chat_turn(text, speak_on_robot):
 
     Returns the JSON-ready response dict.
     """
+    _cancel_deferred_speech()
     routine = None
     routine_names = []
     streamed = False
@@ -318,7 +337,9 @@ def chat_turn(text, speak_on_robot):
             local_voice_job = None
             if assistant_prefix:
                 local_plan = cues.parse(assistant_prefix)
-                if local_plan.speech:
+                if (local_plan.speech and
+                        not (CFG.speech_mode == "soundboard" and
+                             cues.has_voice_sound(local_plan.steps))):
                     local_voice_job, _ = speech.speak(local_plan.speech)
             brain_reply, streamed, err = _streamed_reply(
                 text, prompt=prompt, assistant_prefix=assistant_prefix,
@@ -326,6 +347,10 @@ def chat_turn(text, speak_on_robot):
             if brain_reply:
                 reply = " ".join(x for x in (assistant_prefix, brain_reply)
                                  if x)
+                if err:
+                    partial = True
+                    if hasattr(brain, "remember"):
+                        brain.remember(text, reply)
             elif err and assistant_prefix:
                 reply, partial = assistant_prefix, True
         else:
@@ -378,13 +403,23 @@ def chat_turn(text, speak_on_robot):
 
 
 def _compound_prompt(original, residual, assistant_prefix):
-    if not assistant_prefix:
+    target = residual or original
+    authentic = soundboard_voice.suggestions(target)
+    if not assistant_prefix and not authentic:
         return None
-    return (
-        "Original request: " + original + "\n"
-        "Already answered locally: " + assistant_prefix + "\n"
-        "Answer only the unresolved request: " + residual
-    )
+    lines = ["Original request: " + original]
+    if assistant_prefix:
+        lines += ["Already answered locally: " + assistant_prefix,
+                  "Answer only the unresolved request: " + residual]
+    if authentic:
+        lines.append(
+            "Authentic recorded BMO lines available: " +
+            " | ".join(authentic) +
+            ". If one naturally answers the request, reply with that exact "
+            "line and no [sound:] cue. Otherwise answer normally in at most "
+            "3 words with an appropriate stage cue."
+        )
+    return "\n".join(lines)
 
 
 def _brain_chat(text, prompt=None, assistant_prefix=""):
@@ -408,21 +443,44 @@ def _streamed_reply(text, *, prompt=None, assistant_prefix="",
                 return
             yield unit
 
-    if defer_speech:
+    soundboard_mode = CFG.speech_mode == "soundboard"
+    if soundboard_mode:
+        # Do not pre-open the generated-speech pipeline. Sentence parsing must
+        # first decide whether an authentic stage cue or catalog clip owns the
+        # voice; only an unmatched line is allowed to reach synthesis.
+        deferred_stop = threading.Event()
+        stream_job = {"stop": deferred_stop}
+        if defer_speech:
+            with _deferred_speech_lock:
+                _deferred_speech_stops.add(deferred_stop)
+        stream_err = None
+    elif defer_speech:
         # A compound turn may already be speaking its immediate local
         # answer. Buffer residual sentences while the model generates, then
         # hand them to SpeechService as soon as that first job is idle.
         deferred_stop = threading.Event()
         stream_job = {"stop": deferred_stop}
+        with _deferred_speech_lock:
+            _deferred_speech_stops.add(deferred_stop)
 
         def start_when_idle():
-            active = getattr(speech, "active", lambda: False)
-            while active():
-                if deferred_stop.wait(0.05):
-                    return
-            actual_job, _ = speech.speak(text, units=unit_iter())
-            if deferred_stop.is_set() and actual_job is not None:
-                actual_job["stop"].set()
+            try:
+                active = getattr(speech, "active", lambda: False)
+                while active():
+                    if deferred_stop.wait(0.05):
+                        return
+                # Serialize launch with cancellation: after this lock is
+                # released, /stop can see the real SpeechService job.
+                with _deferred_speech_lock:
+                    if deferred_stop.is_set():
+                        return
+                    actual_job, _ = speech.speak(text, units=unit_iter())
+                    _deferred_speech_stops.discard(deferred_stop)
+                if deferred_stop.is_set() and actual_job is not None:
+                    actual_job["stop"].set()
+            finally:
+                with _deferred_speech_lock:
+                    _deferred_speech_stops.discard(deferred_stop)
 
         threading.Thread(target=start_when_idle, daemon=True).start()
         stream_err = None
@@ -440,10 +498,39 @@ def _streamed_reply(text, *, prompt=None, assistant_prefix="",
     # whole generation.
     budget = (cues.BurstBudget(burst_seconds=CFG.speech_burst)
               if CFG.speech_mode in ("soundbyte", "soundboard") else None)
-    state = {"faced": False, "steps": [], "delivered": False}
+    state = {"faced": False, "steps": [], "sentences": [],
+             "voice_started": False, "voice_job": None}
+
+    def start_single_voice(speech_text):
+        """Play one tiny catalog-or-fallback line without blocking decode."""
+        def start():
+            try:
+                active = getattr(speech, "active", lambda: False)
+                while active():
+                    if stream_job["stop"].wait(0.05):
+                        return
+                with _deferred_speech_lock:
+                    if stream_job["stop"].is_set():
+                        return
+                    job, _ = speech.speak(speech_text)
+                    state["voice_job"] = job
+                    _deferred_speech_stops.discard(stream_job["stop"])
+                if stream_job["stop"].is_set() and job is not None:
+                    job["stop"].set()
+            finally:
+                with _deferred_speech_lock:
+                    _deferred_speech_stops.discard(stream_job["stop"])
+
+        active = getattr(speech, "active", lambda: False)
+        if defer_speech or active():
+            with _deferred_speech_lock:
+                _deferred_speech_stops.add(stream_job["stop"])
+            threading.Thread(target=start, daemon=True).start()
+        else:
+            start()
 
     def on_sentence(sentence):
-        state["delivered"] = True
+        state["sentences"].append(sentence)
         if on_sentence_event is not None:
             on_sentence_event(sentence)
         plan = cues.parse(sentence)
@@ -455,35 +542,54 @@ def _streamed_reply(text, *, prompt=None, assistant_prefix="",
         speech_text = tts_bank.sanitize_speech_text(plan.speech)
         if not speech_text:
             return
+        if soundboard_mode and cues.has_voice_sound(plan.steps):
+            return
         if budget is not None:
             speech_text = budget.feed(speech_text)
             if speech_text is None:
                 return
-        unit_queue.put(speech_text)
+        if soundboard_mode:
+            if state["voice_started"]:
+                return
+            state["voice_started"] = True
+            start_single_voice(speech_text)
+        else:
+            unit_queue.put(speech_text)
 
     try:
         reply = brain.stream(text, on_sentence, prompt=prompt,
                              assistant_prefix=assistant_prefix)
-        if budget is not None:
+        if CFG.speech_mode == "soundbyte":
             # same guarantee as condense(): the performance always has a
             # soundbyte, even when the model gave no sound cue
+            sound = cues.BurstBudget.fallback_sound(state["steps"])
+            if sound:
+                body.perform([("sound", sound)])
+        elif soundboard_mode and not state["voice_started"]:
             sound = cues.BurstBudget.fallback_sound(state["steps"])
             if sound:
                 body.perform([("sound", sound)])
         return reply, True, None
     except Exception as e:
         stream_job["stop"].set()
+        if state["voice_job"] is not None:
+            state["voice_job"]["stop"].set()
         # Once a sentence reached the user, a hidden blocking retry would
         # duplicate or contradict it. Preserve the partial turn and surface
         # the failure so the event stream can mark it recoverable.
-        if state["delivered"]:
-            return None, True, f"stream: {e}"
+        if state["sentences"]:
+            return " ".join(state["sentences"]), True, f"stream: {e}"
         try:
             return _brain_chat(text, prompt, assistant_prefix), False, None
         except Exception as e2:
             return None, False, f"stream: {e}; retry: {e2}"
     finally:
-        unit_queue.put(None)
+        if soundboard_mode:
+            if not state["voice_started"]:
+                with _deferred_speech_lock:
+                    _deferred_speech_stops.discard(stream_job["stop"])
+        else:
+            unit_queue.put(None)
 
 
 # ---- HTTP ----------------------------------------------------------------
@@ -521,6 +627,28 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": str(e)})
 
     def do_GET(self):
+        if self.path.startswith("/voice/catalog"):
+            query = urllib.parse.parse_qs(
+                urllib.parse.urlparse(self.path).query).get("q", [""])[0]
+            exact = soundboard_voice.resolve(query) if query else None
+            return self._json({
+                "mode": CFG.speech_mode,
+                "count": soundboard_voice.count,
+                "query": query,
+                "exact": ({"key": exact.get("key"),
+                           "label": exact.get("label"),
+                           "source_page_url": exact.get("source_page_url"),
+                           "verification": exact.get("verification")}
+                          if exact else None),
+                "suggestions": soundboard_voice.suggestions(query),
+            })
+        if self.path.startswith("/voice/clip"):
+            query = urllib.parse.parse_qs(
+                urllib.parse.urlparse(self.path).query).get("text", [""])[0]
+            wav = soundboard_voice.synth(query)
+            if wav is None:
+                return self._json({"error": "no exact authentic clip"})
+            return self._reply(wav, "audio/wav")
         if self.path.startswith("/thinking-sound?"):
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             names = {
@@ -611,7 +739,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "id": job["id"],
                                "state": job["state"]})
         if self.path == "/tts-bank/stop":
+            deferred_cancelled = _cancel_deferred_speech()
             error = speech.stop()
+            if deferred_cancelled and error == "no TTS job":
+                error = None
             return self._json({"error": error} if error else {"ok": True})
         if self.path == "/tts-bank/restore":
             error = speech.restore()

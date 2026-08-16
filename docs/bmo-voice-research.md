@@ -37,10 +37,13 @@ See `docs/bmo-soundboard/catalog.json`.
 ## Runtime ladder
 
 1. An exact transcript/alias match selects an authentic catalog clip.
-2. ESP32 `/speak` extracts and relays that clip without a sound-bank flash.
-3. Explicit stage sound cues use the installed instant-reaction bank.
-4. Only an unmatched sentence reaches the neural BMO voice model.
-5. Colibri espeak and local espeak-ng are survival fallbacks.
+2. Prompt-time retrieval gives Colibri a small relevant set of exact recorded
+   lines instead of injecting the entire catalog into every request.
+3. ESP32 `/speak` extracts and relays that clip without a sound-bank flash.
+4. Spoken stage cues use the instant-reaction bank and suppress generated
+   speech. Decorative beeps do not suppress factual words.
+5. Only an unmatched sentence reaches the neural BMO voice model.
+6. Colibri espeak and local espeak-ng are survival fallbacks.
 
 Matching stays conservative. A wrong television line is worse than a clearly
 synthetic fallback, so the resolver ignores punctuation and catalog prefixes
@@ -53,3 +56,9 @@ host catalog holds hundreds of lines. Large-library playback uses runtime WAV
 relay where patched firmware supports `PlaySound File`; module installation is
 reserved for firmware without that path and for curated offline pages.
 
+## Diagnostics
+
+- `GET /voice/catalog?q=<request>` reports catalog size, exact resolution, and
+  prompt-time suggestions without exposing filesystem paths.
+- `GET /voice/clip?text=<exact line>` returns the extracted 22050 Hz mono PCM
+  WAV used by the runtime, so the browser audits the same artifact BMO plays.

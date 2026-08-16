@@ -61,6 +61,16 @@ SOUND_CUES = {
     "beep": "short_reaction",
 }
 
+# Spoken canonical lines can own the voice channel. Short reactions such as
+# beep/yeah/json only decorate factual speech; treating them as replacements
+# would make answers like the current time inaudible.
+VOICE_SOUND_CUES = frozenset({"hello", "bmotime", "videogames", "homeboys"})
+
+
+def has_voice_sound(steps):
+    return any(kind == "sound" and name in VOICE_SOUND_CUES
+               for kind, name in steps)
+
 # sound-namespace inventions -> real slots. The model freely makes up sound
 # names; every one observed by tools/cue_profile.py maps to the closest
 # installed clip (json_bmon IS the surprised reaction, yeah covers cheers).
@@ -290,7 +300,7 @@ def condense(plan, max_words=None, burst_seconds=SPEECH_BURST_SECONDS,
     face so the performance always has a voice.
     """
     budget = BurstBudget(burst_seconds=burst_seconds, max_words=max_words)
-    explicit_sound = any(kind == "sound" for kind, _ in plan.steps)
+    explicit_sound = has_voice_sound(plan.steps)
     speech = "" if prefer_soundboard and explicit_sound else budget.feed(plan.speech)
     if speech is None:
         speech = plan.speech
