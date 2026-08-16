@@ -505,11 +505,15 @@ any reflash or baud change.** Details: `analysis/{at91-baud-research,hypothesis-
 
 ## Late P10 control scans (2026-08-15)
 
+Six `jtag/jtag-halt-20260815T*` directories preserve the follow-up session that
+root-caused and narrowed the P10 verdict (see `docs/neato-p10-jtag-result.md`):
+
 - `jtag/jtag-halt-20260815T221059Z/` preserves one adapter-configuration
   failure caused by the obsolete `cmsis-dap backend usb_bulk` directive.
-- `jtag/jtag-halt-20260815T221148Z/` and
-  `jtag/jtag-halt-20260815T223257Z/` preserve two completed 10 kHz controls.
-  Both again returned all ones/no TAP; neither justified creating an ARM
-  target or running the separately gated halt helper.
-- These raw logs are append-only evidence. They do not change the published
-  conclusion from the 149 powered scans in the primary P10 session.
+- `jtag/jtag-halt-20260815T221148Z/`, `...T223257Z/`, `...T224138Z/`,
+  `...T224331Z/`, and `...T224544Z/` preserve the completed 10 kHz controls and
+  the mandatory VDDIO→TRST jumper scans. All returned all ones/no TAP; none
+  justified creating an ARM target or running the separately gated halt helper.
+- These raw logs are append-only evidence. They narrow the primary P10 session
+  conclusion to "AT91 security bit set, or dead VDDIO rail" rather than leaving
+  it open-ended.

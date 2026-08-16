@@ -9,6 +9,11 @@
 > `../p6_1786481459.log` (counters 47–70), proving the ESP32 RX/capture chain.
 > Noise with GPIO18 floating became clean ASCII immediately after loopback,
 > strongly supporting a floating-input explanation for the old gibberish.
+>
+> **Host-tooling fix (2026-08-11):** findings 4 and 5 were fixed in
+> `tools/p6_capture.py` — it now configures `dtr=False`, `rts=False`, and
+> `exclusive=True` before opening, so opening no longer pulses the ESP32 reset
+> and a second reader cannot silently split the stream.
 
 **Scope:** firmware (`esp32-body/src/debug_uart.c`, `main.c`, `neato_usb.c`),
 host (`tools/p6_capture.py`), build/console config (`sdkconfig.esp32s3`,

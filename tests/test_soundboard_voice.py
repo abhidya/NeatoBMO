@@ -44,6 +44,9 @@ class SoundboardVoiceTests(unittest.TestCase):
     def test_rejected_qa_clips_cannot_resolve(self):
         board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
         self.assertIsNone(board.resolve("BMO BMO"))
+        self.assertEqual(board.rejected_keys, {
+            "101-24002778-bmo", "101-24101202-bmo-bmo",
+        })
 
     def test_official_clip_wins_over_unreviewed_transcript_collision(self):
         board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")

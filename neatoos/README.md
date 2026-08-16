@@ -24,6 +24,12 @@ This subtree is intentionally conservative:
 - `manifests/reference-images.json` — metadata-only external reference image
   locations and hashes; no firmware bytes are committed.
 - `Makefile` — build/test helpers.
+- `src/neato_serial.c` / `include/neato_serial.h` — freestanding clean-room
+  serial parser slice (LF/CRLF commands, `0x1A`-terminated replies, `GetVersion`,
+  `Help`, `Help TestMode`, `TestMode`).
+- `tools/serial_simulator.c` — host simulator exposing the same serial slice.
+- `tools/receiver_probe.py`, `tools/header_field_probe.py`,
+  `tools/application_probe.py` — read-only probe generators.
 
 ## Build
 
@@ -49,7 +55,7 @@ The output is written under `build/` and is ignored by git:
 ## Probe generator
 
 The generator never decrypts, flashes, uploads, or patches firmware. It creates
-two `.enc` probe containers from one raw payload:
+three `.enc` probe containers from one raw payload:
 
 - `neatoos-structural-probe.bin.enc` — a synthetic Neato-like header: length, format byte `0x02`,
   ASCII `neato`, zero fill, deterministic 16-byte experimental field, then the
@@ -80,7 +86,7 @@ python3 neatoos/tools/probe_generator.py build/neatoos-raw.bin \
 Run the offline test suite:
 
 ```sh
-python3 -m pytest tests/test_neatoos_phase_a.py
+python3 -m pytest tests/test_neatoos_phase_a.py tests/test_neatoos_serial.py
 ```
 
 ## Serial compatibility slice
@@ -91,7 +97,7 @@ simulator. It implements:
 - ASCII commands terminated by either LF or CRLF;
 - CRLF replies terminated by byte `0x1A`;
 - `GetVersion` with a deliberately non-vendor `NEATOOS` identity;
-- a truthful reduced `Help` surface;
+- a truthful reduced `Help` surface, including `Help TestMode`;
 - stateful `TestMode On` and `TestMode Off`, with no actuator side effects.
 
 Build the simulator and send it commands on standard input:

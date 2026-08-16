@@ -67,10 +67,18 @@ class PublishedFlashLibraryTests(unittest.TestCase):
         sounds = {sound["key"]: sound for sound in self.catalog["sounds"]}
         games = sounds["101-28055268-who-wants-to-play-video-games"]
         love = sounds["101-28062487-i-love-you"]
+        hello = sounds["101-24061886-bmo-hello"]
+        bounce = sounds["101-28054910-bmo-always-bounces-back"]
+        butt = sounds["101-24061869-bmobutt"]
         self.assertEqual(games["editorial_trim_start_seconds"], 2.25)
         self.assertLess(games["content_seconds"], 3.5)
         self.assertEqual(love["editorial_trim_start_seconds"], 1.57)
         self.assertLess(love["content_seconds"], 1.8)
+        self.assertEqual(hello["editorial_trim_start_seconds"], 1.48)
+        self.assertLess(hello["content_seconds"], 1.5)
+        self.assertEqual(bounce["editorial_trim_start_seconds"], 2.02)
+        self.assertLess(bounce["content_seconds"], 2.0)
+        self.assertEqual(butt["label"], "It goes in my butt")
 
 
 class BuilderTests(unittest.TestCase):
