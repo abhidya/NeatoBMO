@@ -1,0 +1,5 @@
+# Preserve device-emitted CRLF bytes in append-only USB evidence. Git's generic
+# whitespace checker would otherwise report each carriage return as trailing
+# whitespace even though it is part of the captured serial protocol.
+captures/jtag/**/final-usb-getversion.txt -text -whitespace
+captures/jtag/**/usb-snapshot-*/**/transcript.txt -text -whitespace

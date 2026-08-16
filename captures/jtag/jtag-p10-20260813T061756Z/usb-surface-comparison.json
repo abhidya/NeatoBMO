@@ -1,0 +1,57 @@
+{
+  "schema": "neatobmo-usb-surface-comparison/v1",
+  "target": "WTD41611DD-0037829-P",
+  "usb_identity": {
+    "vid_pid": "2108:780B",
+    "observed_port": "/dev/cu.usbmodem143301"
+  },
+  "snapshots": {
+    "2.5.15893": "usb-snapshot-25/WTD41611DD-0037829-P_sw-2-5-15893_20260816T041607Z/snapshot.json",
+    "2.7.16621": "usb-snapshot-27/WTD41611DD-0037829-P_sw-2-7-16621_20260816T041711Z/snapshot.json",
+    "3.1.17844": "usb-snapshot-31/WTD41611DD-0037829-P_sw-3-1-17844_20260816T041425Z/snapshot.json"
+  },
+  "reply_sha256": {
+    "Help": {
+      "2.5.15893": "1704c9611ee5abb6102bbc88c7d6779011c42768d8d8aff53a667f43720736f2",
+      "2.7.16621": "1704c9611ee5abb6102bbc88c7d6779011c42768d8d8aff53a667f43720736f2",
+      "3.1.17844": "198d73faa718351e242e0420586d9d6872e1163b28df1087de38dac628abb4af"
+    },
+    "Help Upload": {
+      "2.5.15893": "412fa066ad78e7229600e4f297e159ca5891f10301147a09037f1dbc8f13c7cd",
+      "2.7.16621": "412fa066ad78e7229600e4f297e159ca5891f10301147a09037f1dbc8f13c7cd",
+      "3.1.17844": "0b9fe602bd2c822dda9104c7185a1230f1a281640e44881c078577695b1b503b"
+    },
+    "Help PlaySound": {
+      "2.5.15893": "d92e29126ed1b2b8121d3a66a073516900e122b871acb655c1d66a0045e31722",
+      "2.7.16621": "d92e29126ed1b2b8121d3a66a073516900e122b871acb655c1d66a0045e31722",
+      "3.1.17844": "d92e29126ed1b2b8121d3a66a073516900e122b871acb655c1d66a0045e31722"
+    },
+    "Help SetConfig": {
+      "2.5.15893": "0828ae0661bd4cc57c067e076d12e2afb6e104cb55f607a47e7bb579758ec6d8",
+      "2.7.16621": "0828ae0661bd4cc57c067e076d12e2afb6e104cb55f607a47e7bb579758ec6d8",
+      "3.1.17844": "0828ae0661bd4cc57c067e076d12e2afb6e104cb55f607a47e7bb579758ec6d8"
+    },
+    "Help SetSystemMode": {
+      "2.5.15893": "7d3d1800eec90a337801109cafc3bf6615ebcc7dd1f813e188a07d196f2b3079",
+      "2.7.16621": "7d3d1800eec90a337801109cafc3bf6615ebcc7dd1f813e188a07d196f2b3079",
+      "3.1.17844": "7d3d1800eec90a337801109cafc3bf6615ebcc7dd1f813e188a07d196f2b3079"
+    }
+  },
+  "differences": {
+    "2.5_vs_2.7": "probed help replies are byte-identical",
+    "3.1_help_missing": [
+      "GetLifeStatLog",
+      "GetSysLog",
+      "SetDistanceCal",
+      "SetWallFollower"
+    ],
+    "3.1_upload_help_missing": [
+      "dump",
+      "xmodem"
+    ]
+  },
+  "reenumeration": {
+    "observation": "Updater reboot did not reliably recreate the Neato USB device after the 3.1 and final 2.5 writes; physical cable reconnect restored the same VID:PID and exposed the expected application identity.",
+    "controller_requirement": "Rediscover by VID:PID/robot identity, tolerate port disappearance and renaming, and provide a manual or controllable-hub VBUS-cycle recovery path. Reopening a serial pathname alone is insufficient when the device is absent from the USB bus."
+  }
+}

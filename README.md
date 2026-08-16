@@ -50,6 +50,12 @@ full architecture and milestones.
   can power the robot's transceiver, or put a powered hub in between.
 - ESP-IDF's USB host stack ships with **hub support disabled**
   (`CONFIG_USB_HOST_HUBS_SUPPORTED=y` in `sdkconfig.defaults` enables it).
+- The ESP32 controller binds the Neato CDC device by USB VID:PID
+  **`2108:780B`**, not by a persistent `/dev` path. Stock-updater reboots do
+  not always cause macOS to recreate the serial device; rediscover it by
+  VID:PID and verify `GetVersion`, with a physical or controllable-hub VBUS
+  cycle as the fallback when the device is absent. Reopening a stale pathname
+  cannot recover a device that is no longer enumerated.
 - The Neato replies in ASCII, each response terminated by `0x1A` (Ctrl-Z).
   A full 360° lidar scan is ≈ 14 KB — size read timeouts accordingly.
 - The LCD draws **full-span lines only** (`SetLCD HLine <row>` /
@@ -61,10 +67,11 @@ full architecture and milestones.
   explicitly needed; it may optionally connect to GPIO17. The raw 115200 8N1
   stream is available over the diagnostic bridge. P6 exposes Neato boot/update
   logs on a healthy board, **not plaintext firmware or a SAM-BA unlock**.
-- Hardware-research state (2026-08-11): exact Cruz-P 2.5 build 15893 is
-  installed, BACK still boots factory 2.4 build 15667, and neither firmware
-  exposed application readback. The accepted factory LCD face probe made no
-  visible change in the stripped bench setup; cause remains unresolved. See
+- Hardware-research state (2026-08-15): exact Cruz-P builds 2.5.15893,
+  2.7.16621, and 3.1.17844 were installed and returned to 2.5.15893; BACK
+  still boots factory 2.4.15667. P10 produced no stable TAP during repeated
+  pre-, during-, or post-update scans, and no tested firmware exposed
+  application readback. See
   [captures/README.md](captures/README.md) and
   [FIRMWARE_ARCHIVE.md](FIRMWARE_ARCHIVE.md).
 

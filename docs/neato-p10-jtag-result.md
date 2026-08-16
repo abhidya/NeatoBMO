@@ -54,11 +54,21 @@ waivers, not as validated best practice.
 - `firmware-27-write-result.json` records the later exact stock Cruz-P 2.7
   application transition from installed 2.5.15893 to 2.7.16621; proprietary
   application bytes remain outside Git.
+- `firmware-31-write-result.json` records the initial automatic USB
+  rediscovery timeout after an ACKed exact stock Cruz-P 3.1 write. Physical USB
+  reconnect then exposed healthy 3.1.17844; `usb-snapshot-31/` preserves the
+  complete read-only identity and command surface.
+- `firmware-27b-write-result.json` and `firmware-25b-write-result.json` preserve
+  the final comparison transition and exact stock 2.5 restore.
 - `openocd-sound-vendor-*` and `openocd-firmware-27-*` preserve scan-chain
-  observations during those later software windows; they remained all-ones/no
-  TAP and do not change the no-TAP classification.
+  observations during those later software windows. `openocd-firmware-31-*`
+  preserves the 3.1 window. They remained all-ones/no TAP and do not change the
+  no-TAP classification.
 - `manifest.json` records adapter, target, software metadata, private ESP
   backup hash, counts, and explicit non-actions.
+- `usb-surface-comparison.json` records exact help-reply hashes and the observed
+  controller recovery requirement: rediscover VID:PID `2108:780B` after updater
+  reboot and provide a manual or hub-controlled USB VBUS-cycle fallback.
 
 ## Compatible software policy
 
@@ -68,6 +78,13 @@ backups, keys, and raw dumps must remain outside the public repository.
 
 The side-jack Cruz Rev113 target remains hard-capped at the 3.1 P-family line;
 3.2 P-family metadata is recorded only as a blocked image for this board.
+
+Exact stock 2.5, 2.7, and 3.1 all booted and answered `GetVersion` on this
+specific robot. P10 remained all-ones/no-TAP before, during, and after every
+application transition. The firmware-transition P6 recorder files are
+header-only; concurrent CherryDAP CDC capture did not preserve those UART
+bursts, so application identity is grounded in the USB result files and
+read-only snapshots.
 
 ## Next safest experiment
 

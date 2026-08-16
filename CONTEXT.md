@@ -90,7 +90,13 @@ here in the same change.
 - **NeatoLink** (`src/neato_usb.c`) — the firmware's Neato USB transport:
   tx mutex, ENQ/ACK binary protocol, streaming checksum, rx fan-out.
   Binary streams use a **transaction handle** (`neato_txn_t`) so only the
-  task that opened a stream can write or close it.
+  task that opened a stream can write or close it. The host binds only USB
+  VID:PID `2108:780B`; serial paths are ephemeral. After an updater reboot it
+  must rediscover and re-identify the robot with `GetVersion`, and an absent
+  USB device requires a physical or controllable-hub VBUS cycle rather than
+  merely reopening the old path. Command capabilities are version-sensitive:
+  2.5 and 2.7 matched in the captured help surface, while 3.1 omitted several
+  diagnostic/calibration commands and the Upload `dump`/`xmodem` verbs.
 - **neato_protocol** (`src/neato_protocol.c`) — the command vocabulary
   above the transport (LCD ops, PlaySound, TestMode, LEDs). Encodes the
   hardware footguns so callers speak intent, not strings.

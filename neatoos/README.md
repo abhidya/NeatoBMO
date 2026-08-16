@@ -156,3 +156,18 @@ CherryDAP/OpenOCD worked at the Mac adapter layer, and P10 TDO was
 target-power-sensitive, but installed, factory, and P6-triggered scans all
 returned no TAP. This keeps NeatoOS on the clean-room serial/API track until a
 separate readout path is proven. See `docs/neato-p10-jtag-result.md`.
+
+## Version-aware USB compatibility
+
+The 2026-08-15 stock transition matrix adds three complete read-only USB
+snapshots. Stock 2.5.15893 and 2.7.16621 expose identical probed `Help`, upload,
+sound, configuration, and system-mode help replies. Stock 3.1.17844 omits
+`GetLifeStatLog`, `GetSysLog`, `SetDistanceCal`, `SetWallFollower`, `dump`, and
+`xmodem`. NeatoOS must therefore make command availability version/capability
+driven rather than hard-code a single superset.
+
+The ESP32 NeatoBMO controller must also treat USB CDC as removable state.
+Updater reboot did not reliably re-enumerate VID:PID `2108:780B`; reopening the
+old serial pathname cannot recover a device absent from the bus. Rediscover by
+VID:PID plus `GetVersion` identity, tolerate pathname changes, and expose a
+manual reconnect or controllable-hub VBUS-cycle recovery path.

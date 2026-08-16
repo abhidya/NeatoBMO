@@ -2,9 +2,10 @@
 
 Scope: static, repo-local evidence only. All paths are repo files.
 
-Live-state update (2026-08-11): the exact Cruz-P 2.5 build 15893 is installed;
-BACK still selects the separate factory 2.4 build 15667. The 2.5 help surface
-is byte-identical for the probed commands, `PowerCycleCDC` remains absent, and
+Live-state update (2026-08-15): exact stock Cruz-P 2.5, 2.7, and 3.1 were each
+installed and captured on the same XV-12/mainboard 7.1, then exact 2.5.15893 was
+restored. The 2.5 and 2.7 probed help surfaces are byte-identical; 3.1 has a
+smaller command/upload surface. `PowerCycleCDC` remains absent, and
 application `dump`/`readflash` returned no firmware bytes. The accepted factory
 LCD happy-face commands produced no visible change on the stripped bench setup;
 the cause remains unresolved.
@@ -25,6 +26,7 @@ the cause remains unresolved.
 | TestMode gating | `neato_protocol_dump.txt` marks several controls test-only (`SetMotor`, `SetLED`, `SetLCD`, `SetLDSRotation`, `SetSystemMode`) | Commands are only accepted once `TestMode On` is set in normal operation |
 | Rejected transition attempt | `FIRMWARE_ARCHIVE.md` (2026-08-10 status) reports `TestMode On` + `SetSystemMode PowerCycleCDC` rejected as unrecognized | Bootloader-style CDC transition via system mode was unavailable on live stock firmware |
 | Possible stale enum mismatch | `neato-driver-python/neato_driver.py` still exposes `PowerCycle` enum value | Potential mismatch risk with live firmware; both 2.4 and 2.5 lack `PowerCycleCDC` in live help |
+| Updater-reboot USB recovery | P10 session `usb-surface-comparison.json` plus 3.1 and final 2.5 transition logs | Updater reboot did not reliably recreate `2108:780B` on macOS; physically reconnecting the Neato USB cable restored the expected application. A serial-port reopen is insufficient while the device is absent. |
 
 ## USB transport + bridge observability
 
@@ -35,6 +37,7 @@ the cause remains unresolved.
 | ESP32 web bridge | `/Users/abdulrehmanbhidya/Documents/neato/esp32-body/src/main.c`, `/Users/abdulrehmanbhidya/Documents/neato/esp32-body/src/web.c` | On connect sends proof commands (`TestMode On`, `SetLED`, `PlaySound 1`, `GetVersion`, heartbeat). `/ws` for raw text relay, `/speak` for WAV relay. Binary PlaySound relay over USB is only direct-USB path (`/speak` uses direct-USB `send_binary` and refuses on pure bridge). |
 | Debug capture | `/Users/abdulrehmanbhidya/Documents/neato/esp32-body/src/debug_uart.c` | TCP 3334 bridges P6 UART lines to capture recovery/debug output; isolated from `/ws` command plane. |
 | Read-only capture safety | `/Users/abdulrehmanbhidya/Documents/neato/tools/firmware_probe.py` | Explicitly read-only: allows `Upload dump/readflash` only and blocks reboot/reburn-style commands. |
+| ESP32 NeatoBMO reconnect contract | `captures/jtag/jtag-p10-20260813T061756Z/usb-surface-comparison.json` | Treat `/dev/cu.usbmodem*` as ephemeral; rediscover Neato by VID:PID `2108:780B` and verify robot identity. Expose a manual reconnect prompt or controllable-hub VBUS-cycle fallback after updater reboot. |
 
 ## Read-only observability and non-destructive evidence gates
 
@@ -59,6 +62,8 @@ the cause remains unresolved.
 | Speaker slot availability | `PlaySound 0..20` sweep yields accepted: `0-3,6-10,19`; others `out of range` | `FIRMWARE_SOUND_PATCH.md` |
 | Response format | ASCII text output with `0x1A` terminator | README + transport + protocol dump |
 | Backup profile restore assumptions | `docs/SOUND_BANK_UPDATE.md` and `neatobmo/tts_bank.py` validate by post-write `GetVersion` + slot-sweep | Operational gate for destructive writes |
+| 2.5 versus 2.7 USB API | Complete read-only session snapshots | `Help`, `Help Upload`, `Help PlaySound`, `Help SetConfig`, and `Help SetSystemMode` are byte-identical. |
+| 3.1 USB API | Complete read-only session snapshot | `Help` omits `GetLifeStatLog`, `GetSysLog`, `SetDistanceCal`, and `SetWallFollower`; `Help Upload` omits `dump` and `xmodem`. Other probed help replies above remain identical. |
 
 ## Known unknowns / next safe checks
 
@@ -67,8 +72,8 @@ the cause remains unresolved.
 3. Whether a different service/developer image exposes additional system modes;
    stock 2.4 and 2.5 do not.
 4. Whether the 0x1A-terminated ASCII parser is complete enough when firmware emits mixed binary text + telemetry bursts outside command mode.  
-5. Full command universe beyond `Help` output; the probed 2.4/2.5 help replies
-   are byte-identical, but undocumented service commands may still exist.
+5. Full command universe beyond `Help` output; 2.5/2.7 match for the probed
+   replies while 3.1 is smaller, but undocumented service commands may exist.
 
 Recommended next acquisition pass: make two independent raw external-NAND
 captures with page/OOB/ECC preservation, preferably on a donor Cruz board.

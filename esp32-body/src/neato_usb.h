@@ -11,13 +11,18 @@
  * binary transfer relayed to the robot. */
 #define NEATO_MAX_BINARY_BYTES (896U * 1024U)
 #define NEATO_SOUND_BANK_BYTES 770048U
+#define NEATO_USB_VID 0x2108U
+#define NEATO_USB_PID 0x780BU
 
 /* ---- lifecycle ----------------------------------------------------------
  * install: create transport state, install the USB host + CDC-ACM drivers
  * and spawn the USB library task.  Call once; peer USB class clients
  * (coli_mcu MSC) may register after this.
  * start: spawn the connection-manager task that waits for the robot,
- * sets line coding, and invokes on_connect after each (re)connect. */
+ * opens only the observed Neato VID/PID, sets line coding, and invokes
+ * on_connect after each (re)connect. Updater reboot may leave the device absent
+ * until USB VBUS is physically or externally power-cycled; this task keeps
+ * waiting but cannot manufacture enumeration from a missing device. */
 esp_err_t neato_usb_install(void);
 void neato_usb_start(void (*on_connect)(void));
 bool neato_usb_connected(void);

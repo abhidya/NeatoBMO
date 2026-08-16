@@ -87,6 +87,10 @@ LCD/button panel. To reach it:
   > reset-assisted attach, flash write, GPNVM operation, or J3/ERASE action was
   > performed. See [neato-p10-jtag-result.md](neato-p10-jtag-result.md) and
   > `../captures/jtag/jtag-p10-20260813T061756Z/`.
+  > Later operator-authorized stock sound and application writes were observed
+  > with scan-only P10 commands before/during/after. Exact stock 2.5, 2.7, and
+  > 3.1 all booted on this robot; every transition scan remained all-ones/no
+  > TAP. These NAND/sound writes used the Neato USB updater, not JTAG.
 
 - **`J3` — ERASE jumper. DO NOT TOUCH.** Direct connection to the AT91 ERASE
   line. **Shorting it and rebooting wipes the CPU's programming with no known

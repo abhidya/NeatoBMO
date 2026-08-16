@@ -7,7 +7,34 @@
       "sha256": "e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697",
       "proprietary": true,
       "repo_policy": "metadata-only; do not copy image into repository"
+    },
+    {
+      "label": "cruz-p-2.7.16621-public-update",
+      "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware2.7/XV11App.16621.P.bin.enc",
+      "sha256": "2e6033b1ef5440bed949de20e89563d7cb3dda41e0eb5e371c9d86dceeb1633f",
+      "proprietary": true,
+      "repo_policy": "metadata-only; do not copy image into repository"
+    },
+    {
+      "label": "cruz-p-3.1.17844-public-update",
+      "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware3.1.17844/XV11App.17844.P.bin.enc",
+      "sha256": "03396329a1a47a7358d09bd414d01eddaa5806a50a18f4d9ce2f96edc2d5fab7",
+      "proprietary": true,
+      "repo_policy": "metadata-only; do not copy image into repository"
+    },
+    {
+      "label": "cruz-p-3.2.18755-public-update-blocked-on-side-jack-cruz",
+      "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware_3.2/XV11App.18755.P.bin.enc",
+      "sha256": "373775d3d59f1569e9886c4aef4449ee847e74455c806e75ef916693841e27c3",
+      "proprietary": true,
+      "repo_policy": "metadata-only; incompatible with this oldest side-jack Cruz Rev113 target"
+    },
+    {
+      "label": "vendor-default-sound-bank",
+      "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware25/DfltSoundLib.Rev1.0.bin",
+      "sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+      "proprietary": true,
+      "repo_policy": "metadata-only; do not copy sound image into repository"
     }
   ]
 }
-

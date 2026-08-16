@@ -1,8 +1,9 @@
 # Vorwerk VR100 cross-flash path (Cruz Rev113) — archived reference
 
-**Status:** unverified community procedure, archived 2026-08-10. Not yet
-attempted on our robot. This documents a flashing path we had overlooked;
-read the **Why we missed it** and **Project risk** sections before acting.
+**Status:** the stock Cruz-P update transport was exercised on this robot in
+2026-08. Exact builds 2.5.15893, 2.7.16621, and 3.1.17844 installed and booted;
+the robot was returned to 2.5.15893. The Vorwerk ModelID cross-flash procedure
+itself was not attempted, and 3.2 remains forbidden.
 
 Source of the write-up: myneatoxv.com, "The Forbidden Upgrade" (simon,
 2026-01-11) — an affiliate/SEO blog; capability claims ("increased suction
@@ -29,12 +30,13 @@ image, then set the ModelID back — no decryption or RE required.
 > cleaning time for NiMH), so for the BMO project the upside is zero and
 > the only outcome on offer is a brick.
 
-This boundary is enforced by `tools/neato_code_noburn.py`. The harness accepts
-only the exact verified hashes for Cruz-P 2.5 build 15893, 2.7 build 16621, and
-3.1 build 17844; hardcodes `Upload code noburn`; requires the target robot's
-2.4 identity; explicitly rejects the archived 3.2 build 18755 hash; and rejects
-every unknown image before opening the serial port. This guard applies to
-no-burn diagnostics only and does not authorize an application flash write.
+This boundary is enforced by both the no-burn diagnostic harness and the
+session-specific guarded write harness. They accept only the exact verified
+hashes for Cruz-P 2.5 build 15893, 2.7 build 16621, and 3.1 build 17844;
+explicitly reject the archived 3.2 build 18755 hash; and reject every unknown
+image before opening the serial port. The write harness additionally verifies
+the target identity, requires an exact confirmation token, performs one
+transfer only, and does not automatically retry after a missing USB reattach.
 
 > **Live result (2026-08-11):** exact Cruz-P 2.5 build 15893 was explicitly
 > authorized and installed successfully from the BACK-selected factory app.
@@ -42,6 +44,15 @@ no-burn diagnostics only and does not authorize an application flash write.
 > passed software reboot and cold boot. BACK still selects the untouched factory
 > 2.4.15667 image. The 2.5 command surface and readback behavior remained
 > unchanged, so this proves stock update/recovery—not a CFW unlock.
+
+> **Live compatibility result (2026-08-15):** exact stock 2.7.16621 and
+> 3.1.17844 also installed and reported their expected identities on this Cruz
+> Rev113/P board. The transition to 3.1 required physically reconnecting the
+> Neato USB cable before macOS recreated the same `2108:780B` CDC device; the
+> application itself was healthy. The robot was subsequently returned through
+> 2.7 to 2.5.15893. These results establish a tested stock-update ceiling at
+> 3.1 for this unit; they do not make 3.2 safe and do not prove custom-image
+> signing, filesystem access, or plaintext firmware readback.
 
 ## Why we missed it
 

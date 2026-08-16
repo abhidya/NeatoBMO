@@ -121,9 +121,12 @@ static void connection_task(void *arg)
     };
 
     while (1) {
-        ESP_LOGI(TAG, "Waiting for Neato on USB...");
-        /* VID/PID any: match the first CDC-ACM device that shows up. */
-        esp_err_t err = cdc_acm_host_open(CDC_HOST_ANY_VID, CDC_HOST_ANY_PID,
+        ESP_LOGI(TAG, "Waiting for Neato USB %04x:%04x...",
+                 NEATO_USB_VID, NEATO_USB_PID);
+        /* 2.5, 2.7, and 3.1 all enumerate as 2108:780B. Matching any CDC
+         * device can bind the controller to a debug adapter or another modem
+         * after updater reboot changes connection timing. */
+        esp_err_t err = cdc_acm_host_open(NEATO_USB_VID, NEATO_USB_PID,
                                           0, &dev_config, &s_dev);
         if (err != ESP_OK) {
             vTaskDelay(pdMS_TO_TICKS(1000));

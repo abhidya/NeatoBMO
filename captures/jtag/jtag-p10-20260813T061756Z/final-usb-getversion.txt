@@ -1,0 +1,25 @@
+GetVersion
+Component,Major,Minor,Build
+ModelID,-1,XV12,
+ConfigID,1,,
+Serial Number,WTD41611DD,0037829,P
+Software,2,5,15893
+BatteryType,1,NIMH_12CELL,
+BlowerType,1,BLOWER_ORIG,
+BrushSpeed,1200,,
+BrushMotorType,1,BRUSH_MOTOR_ORIG,
+SideBrushType,1,SIDE_BRUSH_NONE,
+WheelPodType,1,WHEEL_POD_ORIG,
+DropSensorType,1,DROP_SENSOR_ORIG,
+MagSensorType,1,MAG_SENSOR_ORIG,
+WallSensorType,1,WALL_SENSOR_ORIG,
+Locale,1,LOCALE_USA,
+LDS Software,V2.6.15295,0000000000,
+LDS Serial,WTD41411AA-0061795,,
+LDS CPU,F2802x/c001,,
+MainBoard Vendor ID,543,,
+MainBoard Serial Number,25810,,
+MainBoard Version,7,1,
+ChassisRev,1,,
+UIPanelRev,1,,
+

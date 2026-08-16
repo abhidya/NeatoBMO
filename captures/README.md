@@ -440,3 +440,25 @@ any reflash or baud change.** Details: `analysis/{at91-baud-research,hypothesis-
 - Evidence: `20260812_E12_header_field_bitflip_noburn_{p6.log,usb.json}`,
   `20260812_E13_header_field_bitflip_burn_{p6.log,usb.json}`, and
   `20260812_E14_stock_25_restore_{p6.log,usb.json}`.
+
+## P10 plus stock-software transition matrix (2026-08-13/15)
+
+- Session evidence: `jtag/jtag-p10-20260813T061756Z/`.
+- CherryDAP/OpenOCD worked as a Mac-visible JTAG adapter, but 149 completed
+  powered scans—including boot-triggered, factory, vendor sound-write, and
+  stock 2.5/2.7/3.1 transition windows—returned all-ones/no TAP. Eight early or
+  target-off controls returned all-zeroes. No stable IDCODE or IR length was
+  observed, so no ARM target, halt, register, SRAM, or flash read was attempted.
+- The exact vendor default sound bank was written once and ACKed. Exact stock
+  Cruz-P 2.7 and 3.1 were each written and verified, followed by a final exact
+  stock 2.5.15893 restore. Proprietary image bytes remain outside Git.
+- Complete USB snapshots show 2.5 and 2.7 have identical probed help replies.
+  3.1 omits four top-level commands and the `dump`/`xmodem` upload options; see
+  `usb-surface-comparison.json` for exact hashes.
+- After updater reboot, macOS did not reliably recreate the Neato CDC device.
+  Physical Neato USB reconnect restored VID:PID `2108:780B` and the expected
+  application. Controller software must rediscover by USB and robot identity
+  and offer a manual or controllable-hub VBUS-cycle fallback.
+- Application-transition P6 files are header-only: the CherryDAP CDC path did
+  not preserve UART bytes while CMSIS-DAP bulk scans were repeated. USB result
+  JSON and snapshots, not those P6 files, establish the application versions.

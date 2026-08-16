@@ -2,8 +2,11 @@
   "schema": "neatobmo-jtag-session/v1",
   "session_id": "jtag-p10-20260813T061756Z",
   "utc_start": "2026-08-13T06:17:56Z",
-  "utc_end": "2026-08-16T04:30:00Z",
+  "utc_end": "2026-08-16T04:30:58Z",
   "starting_repo_commit": "c2af62d3d4cb3601ba19c4a47a100473d6d33a47",
+  "evidence_base_commit": "25ef4c14fd2941bedc1176e14e1d6798ee42c4c2",
+  "publication_commit": null,
+  "publication_commit_note": "The commit containing this manifest is reported after push; embedding its own SHA would be self-referential.",
   "target_identity": {
     "robot": "Neato XV-12",
     "board_family": "Cruz Rev113 / P",
@@ -11,10 +14,11 @@
     "cpu": "Atmel AT91SAM9XE128-QU",
     "cpu_core": "ARM926EJ-S",
     "installed_app_at_jtag_start": "NEROS 2.5.15893",
-    "installed_app_after_software_collection": "NEROS 2.7.16621",
+    "installed_app_after_software_collection": "NEROS 2.5.15893",
     "factory_fallback": "NEROS 2.4.15667",
     "esp_adapter": "ESP32-S3 N16R8",
-    "host": "macOS x86_64"
+    "host": "macOS x86_64",
+    "installed_app_final_usb": "NEROS 2.5.15893"
   },
   "adapter": {
     "firmware": "CherryDAP",
@@ -61,19 +65,19 @@
         "build": "2.5.15893",
         "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware25/XV11App.15893.P.bin.enc",
         "sha256": "e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697",
-        "status": "installed and verified before this JTAG session; later replaced by 2.7.16621 in the compatible-software collection"
+        "status": "installed before the session and restored/USB-verified at the end of the compatible-software collection"
       },
       {
         "build": "2.7.16621",
         "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware2.7/XV11App.16621.P.bin.enc",
         "sha256": "2e6033b1ef5440bed949de20e89563d7cb3dda41e0eb5e371c9d86dceeb1633f",
-        "status": "installed and USB-verified during the later compatible-software collection"
+        "status": "installed and USB-verified twice during the compatible-software collection"
       },
       {
         "build": "3.1.17844",
         "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware3.1.17844/XV11App.17844.P.bin.enc",
         "sha256": "03396329a1a47a7358d09bd414d01eddaa5806a50a18f4d9ce2f96edc2d5fab7",
-        "status": "ceiling-version metadata only; not installed in this session"
+        "status": "installed and USB-verified after physical USB reconnect; complete read-only snapshot preserved"
       },
       {
         "build": "3.2.18755",
@@ -93,10 +97,10 @@
     "esp32_full_flash_backup_sha256": "922a5be10417a24a267506a964967d25d0bb72eb605fd28e3baa1cdace6053ef"
   },
   "capture_summary": {
-    "openocd_log_count": 111,
-    "raw_p6_file_count": 11,
-    "cmsis_dap_opened_count": 110,
-    "all_ones_count": 102,
+    "openocd_log_count": 158,
+    "raw_p6_file_count": 14,
+    "cmsis_dap_opened_count": 157,
+    "all_ones_count": 149,
     "all_zeroes_count": 8,
     "ir_capture_error_count": 9,
     "stable_idcode_count": 0,
@@ -116,9 +120,10 @@
   },
   "tracked_hashes": {
     "sha256sums_file": "SHA256SUMS",
-    "sha256sums_file_sha256": "b66f329043f46d6cdf191d047da187a13e7893de48c5dd44cc7635820c46b51d",
-    "analysis_md_sha256": "8f89a6b254e576970fe0d1a6f344ee5271d599d85a163d9cd55e5c724e49d088",
-    "usb_enumeration_probe_sha256": "16bdab85d1487c47c6c906627e9f6ffe0c562a8e4f012b4ec8583fbecd261ed7"
+    "analysis_md_sha256": "3e4e32809d91310f0c0a5b3f1e46996290c6ea2a3b6235f16e1f0848c0a8738e",
+    "usb_enumeration_probe_sha256": "16bdab85d1487c47c6c906627e9f6ffe0c562a8e4f012b4ec8583fbecd261ed7",
+    "final_usb_getversion_sha256": "38c934121250eea706fa39f8d2f9fe82730ceb94a44e0c2d2cd6af28bb96979f",
+    "usb_surface_comparison_sha256": "bafdab9de92a1891405b0febcd4ca320aef1affa105fdb74ba555429651e890d"
   },
   "actions_not_performed": [
     "J3/ERASE",
@@ -143,13 +148,63 @@
       "proprietary_image_committed": false,
       "jtag_result": "all-ones/no TAP during preserved transition scans"
     },
-    "stock_cruz_p_3_1_attempted_window": {
-      "result_file": null,
+    "stock_cruz_p_3_1_write": {
+      "result_file": "firmware-31-write-result.json",
       "p6_file": "firmware-31-transition-p6.raw",
       "openocd_pattern": "openocd-firmware-31-*.log",
-      "write_evidence": "none preserved; P6 raw contains only the capture session header",
+      "command": "Upload code reboot",
+      "image_sha256": "03396329a1a47a7358d09bd414d01eddaa5806a50a18f4d9ce2f96edc2d5fab7",
+      "before": "Software,2,7,16621",
+      "post_version_expected": false,
+      "post_timeout_resolution": "physical Neato USB reconnect",
+      "verified_after_reconnect": "Software,3,1,17844",
+      "snapshot": "usb-snapshot-31/WTD41611DD-0037829-P_sw-3-1-17844_20260816T041425Z/snapshot.json",
       "proprietary_image_committed": false,
-      "jtag_result": "all-ones/no TAP in preserved before/during scan logs"
+      "jtag_result": "all-ones/no TAP during preserved transition scans"
+    },
+    "stock_cruz_p_2_7_snapshot_repeat": {
+      "result_file": "firmware-27b-write-result.json",
+      "p6_file": "firmware-27b-transition-p6.raw",
+      "openocd_pattern": "openocd-firmware-27b-*.log",
+      "before": "Software,2,5,15893",
+      "after": "Software,2,7,16621",
+      "snapshot": "usb-snapshot-27/WTD41611DD-0037829-P_sw-2-7-16621_20260816T041711Z/snapshot.json",
+      "jtag_result": "all-ones/no TAP"
+    },
+    "final_stock_cruz_p_2_5_restore": {
+      "result_file": "firmware-25b-write-result.json",
+      "p6_file": "firmware-25b-transition-p6.raw",
+      "openocd_pattern": "openocd-firmware-25b-*.log",
+      "before": "Software,2,7,16621",
+      "after": "Software,2,5,15893",
+      "snapshot": "usb-snapshot-25/WTD41611DD-0037829-P_sw-2-5-15893_20260816T041607Z/snapshot.json",
+      "post_timeout_resolution": "physical Neato USB reconnect",
+      "jtag_result": "all-ones/no TAP"
+    },
+    "vendor_sound_restore": {
+      "result_file": "sound-vendor-write-result.json",
+      "p6_file": "sound-vendor-write-p6.raw",
+      "openocd_pattern": "openocd-sound-vendor-*.log",
+      "image_sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+      "after": "healthy USB identity and vendor slot map",
+      "jtag_result": "all-ones/no TAP"
     }
+  },
+  "usb_surface_comparison": {
+    "result_file": "usb-surface-comparison.json",
+    "versions": [
+      "2.5.15893",
+      "2.7.16621",
+      "3.1.17844"
+    ],
+    "controller_requirement": "rediscover 2108:780B and verify robot identity after updater reboot; provide manual or controllable-hub VBUS-cycle fallback"
+  },
+  "checksum_policy": "SHA256SUMS hashes captured evidence files; it intentionally excludes itself to avoid recursive checksums.",
+  "final_health": {
+    "neato_usb": "Software,2,5,15893 on WTD41611DD,0037829,P mainboard 7.1",
+    "evidence": "final-usb-getversion.txt",
+    "esp": "CherryDAP operational; restore to BMO firmware pending physical disconnect from P10/P6",
+    "temporary_wires": "still connected pending physical closeout",
+    "j3": "reported untouched; final inspection pending"
   }
 }

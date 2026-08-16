@@ -72,3 +72,13 @@ all-ones/no TAP. The result does not identify the cause: AT91 security, runtime
 debug disablement, missing reset behavior, wrong/incomplete signal reach,
 voltage-domain uncertainty, and signal-integrity limits remain alternatives.
 See [neato-p10-jtag-result.md](neato-p10-jtag-result.md).
+
+## Versioned USB contract update
+
+Complete read-only USB snapshots collected on the same robot show that stock
+2.5.15893 and 2.7.16621 have byte-identical probed help surfaces. Stock
+3.1.17844 is smaller: its top-level help omits `GetLifeStatLog`, `GetSysLog`,
+`SetDistanceCal`, and `SetWallFollower`, while `Help Upload` omits `dump` and
+`xmodem`. The clean-room rewrite must model capabilities from the live version
+instead of assuming one universal XV command table. Exact hashes and snapshots
+are under `captures/jtag/jtag-p10-20260813T061756Z/`.

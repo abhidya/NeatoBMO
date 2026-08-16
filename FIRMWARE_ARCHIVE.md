@@ -173,6 +173,27 @@ Known state:
 - Incompatible 3.2 build 18755 was not transmitted. The checked-in no-burn
   harness explicitly rejects its archived SHA-256 and every unknown image
   before opening the serial port.
+- Compatible Cruz-P application images and the vendor default sound bank are
+  now also recorded as metadata-only references in
+  `neatoos/manifests/reference-images.json` and the P10 session manifest. Do
+  not commit the proprietary `.enc` images, sound-bank bytes, ESP backups, raw
+  dumps, or recovered secrets.
+- During the P10 software-transition observation, the exact stock Cruz-P 2.7
+  build 16621 image was written once with `Upload code reboot`; the result JSON
+  records a healthy identity change from software 2.5.15893 to 2.7.16621. This
+  was an operator-requested stock transition, not a JTAG unlock.
+- A subsequent exact stock Cruz-P 3.1 build 17844 write returned ACK. Automatic
+  post-reboot USB discovery timed out, but a physical Neato USB reconnect
+  exposed healthy `Software,3,1,17844` on the same serial/mainboard. A complete
+  read-only USB snapshot preserves the 3.1 command surface. The target was then
+  moved through 2.7 again for a comparable snapshot and restored to exact stock
+  2.5.15893.
+- USB help comparison found 2.5 and 2.7 byte-identical for the probed help
+  replies. 3.1 omits `GetLifeStatLog`, `GetSysLog`, `SetDistanceCal`, and
+  `SetWallFollower` from `Help`, and omits `dump` and `xmodem` from
+  `Help Upload`. Updater reboot did not reliably recreate macOS USB CDC after
+  the 3.1 and final 2.5 writes; the NeatoBMO controller must rediscover by USB
+  identity and expose a physical or controllable-hub VBUS-cycle fallback.
 - Exact Cruz-P 2.5 build 15893 was subsequently installed from the confirmed
   factory application with `Upload code reboot`. USB returned ACK; P6 showed a
   successful 805892-byte write to NAND region `0x10000`; software reboot and
