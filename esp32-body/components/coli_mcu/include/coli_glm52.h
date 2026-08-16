@@ -6,12 +6,75 @@
 
 #include "coli_kv_cache.h"
 #include "coli_model.h"
+#include "coli_q4.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define COLI_GLM52_MAX_STOP_TOKENS 8u
+#define COLI_GLM52_SCALE_ID_OFFSET 0x00800000u
+
+typedef enum {
+    COLI_GLM52_TENSOR_EMBED_TOKENS = 1u,
+    COLI_GLM52_TENSOR_FINAL_NORM = 2u,
+    COLI_GLM52_TENSOR_LM_HEAD = 3u,
+} coli_glm52_global_tensor_id_t;
+
+static inline uint32_t coli_glm52_layer_base(uint32_t layer)
+{
+    return 1000u + layer * 10000u;
+}
+
+static inline uint32_t coli_glm52_input_norm_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 1u;
+}
+
+static inline uint32_t coli_glm52_post_attention_norm_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 2u;
+}
+
+static inline uint32_t coli_glm52_q_a_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 10u;
+}
+
+static inline uint32_t coli_glm52_q_a_norm_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 11u;
+}
+
+static inline uint32_t coli_glm52_q_b_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 12u;
+}
+
+static inline uint32_t coli_glm52_kv_a_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 13u;
+}
+
+static inline uint32_t coli_glm52_kv_a_norm_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 14u;
+}
+
+static inline uint32_t coli_glm52_kv_b_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 15u;
+}
+
+static inline uint32_t coli_glm52_o_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 16u;
+}
+
+static inline uint32_t coli_glm52_scale_id(uint32_t tensor_id)
+{
+    return tensor_id + COLI_GLM52_SCALE_ID_OFFSET;
+}
 
 typedef struct {
     uint32_t hidden_size;
@@ -42,6 +105,11 @@ typedef struct {
     bool normalize_topk;
 } coli_glm52_config_t;
 
+typedef struct {
+    coli_q4_stats_t projections;
+    size_t peak_workspace_bytes;
+} coli_glm52_attention_stats_t;
+
 /** Decode and validate the bounded GLM-5.2 metadata stored in BMOQ v2. */
 coli_status_t coli_glm52_config_load(const coli_model_t *model,
                                      coli_glm52_config_t *out_config);
@@ -68,6 +136,18 @@ coli_status_t coli_glm52_attention_absorb_head(
     size_t output_count, float *score_workspace, size_t score_count,
     float *latent_scratch, size_t latent_scratch_count, float *rope_scratch,
     size_t rope_scratch_count);
+
+size_t coli_glm52_attention_required_workspace(
+    const coli_glm52_config_t *config, uint32_t token_count,
+    size_t q4_workspace_bytes);
+
+/** Execute one complete GLM-5.2 MLA attention block from SSD-backed weights/state. */
+coli_status_t coli_glm52_attention_decode(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t layer, uint32_t position, const float *input,
+    size_t input_count, float *output, size_t output_count,
+    coli_kv_cache_t *state, void *workspace, size_t workspace_bytes,
+    coli_glm52_attention_stats_t *stats);
 
 #ifdef __cplusplus
 }

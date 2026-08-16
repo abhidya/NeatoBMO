@@ -192,6 +192,21 @@ int main(void)
                                COLUMNS, row_range, 2, workspace,
                                sizeof(workspace), &stats) == COLI_ERR_RANGE);
 
+    const float transpose_input[3] = {0.25f, -0.5f, 1.25f};
+    float transposed[COLUMNS];
+    assert(coli_q4_transposed_rows(
+               &model, weights, scales, 123, 3, transpose_input, 3,
+               transposed, COLUMNS, workspace, sizeof(workspace), &stats) ==
+           COLI_OK);
+    for (uint32_t column = 0; column < COLUMNS; ++column) {
+        float expected = 0.0f;
+        for (uint32_t row = 0; row < 3; ++row)
+            expected += transpose_input[row] *
+                        (float)fixture_q(123 + row, column) *
+                        fixture_scale(123 + row, column / GROUP_SIZE);
+        assert(fabsf(transposed[column] - expected) < 0.000001f);
+    }
+
     float dequantized[COLUMNS];
     assert(coli_q4_dequantize_row(&model, weights, scales, 123, dequantized,
                                   COLUMNS, workspace, sizeof(workspace),

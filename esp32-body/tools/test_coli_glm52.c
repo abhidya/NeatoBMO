@@ -10,6 +10,8 @@
 #include "coli_store.h"
 
 #define CONFIG_OFFSET 8192u
+#define FIXTURE_TENSOR_COUNT 14u
+#define QUANT_GROUP 2u
 
 static void put_u16(uint8_t *p, uint16_t value)
 {
@@ -44,6 +46,40 @@ static size_t add_u32(uint8_t *buffer, size_t cursor, uint32_t key,
 {
     return add_value(buffer, cursor, key, BMOQ_CONFIG_U32, &value, 1);
 }
+
+static uint64_t align_up(uint64_t value)
+{
+    return (value + BMOQ_DATA_ALIGNMENT - 1u) / BMOQ_DATA_ALIGNMENT *
+           BMOQ_DATA_ALIGNMENT;
+}
+
+static void write_tensor_entry(FILE *file, uint32_t id, uint16_t dtype,
+                               uint16_t quant_group, uint32_t rows,
+                               uint32_t columns, uint64_t offset,
+                               uint64_t length, uint32_t layout,
+                               const char *name)
+{
+    uint8_t tensor[64] = {0};
+    put_u32(tensor, id);
+    put_u16(tensor + 4, dtype);
+    put_u16(tensor + 6, quant_group);
+    put_u32(tensor + 8, rows);
+    put_u32(tensor + 12, columns);
+    put_u32(tensor + 16, 1);
+    put_u32(tensor + 20, 1);
+    put_u64(tensor + 24, offset);
+    put_u64(tensor + 32, length);
+    put_u32(tensor + 40, layout);
+    strncpy((char *)tensor + 48, name, BMOQ_TENSOR_NAME_BYTES);
+    assert(fwrite(tensor, 1, sizeof(tensor), file) == sizeof(tensor));
+}
+
+typedef struct {
+    uint32_t id;
+    uint32_t rows;
+    uint32_t columns;
+    const char *name;
+} q4_fixture_t;
 
 static void write_fixture(const char *path)
 {
@@ -85,7 +121,7 @@ static void write_fixture(const char *path)
     put_u16(header + 4, BMOQ_VERSION_EXTENDED_CONFIG);
     put_u32(header + 8, 0x01020304u);
     put_u32(header + 12, BMOQ_HEADER_BYTES);
-    put_u32(header + 16, 1);
+    put_u32(header + 16, FIXTURE_TENSOR_COUNT);
     put_u32(header + 20, 64);
     put_u64(header + 24, BMOQ_HEADER_BYTES);
     uint8_t *fixed = header + BMOQ_MODEL_CONFIG_OFFSET;
@@ -101,18 +137,76 @@ static void write_fixture(const char *path)
     put_u32(fixed + 44, 10000);
     assert(fwrite(header, 1, sizeof(header), file) == sizeof(header));
 
-    uint8_t tensor[64] = {0};
-    put_u32(tensor, BMOQ_CONFIG_TENSOR_ID);
-    put_u32(tensor + 8, sizeof(config));
-    put_u32(tensor + 12, 1);
-    put_u32(tensor + 16, 1);
-    put_u32(tensor + 20, 1);
-    put_u64(tensor + 24, CONFIG_OFFSET);
-    put_u64(tensor + 32, sizeof(config));
-    memcpy(tensor + 48, "config.v2", 9);
-    assert(fwrite(tensor, 1, sizeof(tensor), file) == sizeof(tensor));
+    write_tensor_entry(file, BMOQ_CONFIG_TENSOR_ID, BMOQ_DTYPE_OPAQUE, 0,
+                       sizeof(config), 1, CONFIG_OFFSET, sizeof(config),
+                       BMOQ_LAYOUT_OPAQUE, "config.v2");
+    const q4_fixture_t matrices[] = {
+        {coli_glm52_q_a_id(0), 32, 64, "q_a"},
+        {coli_glm52_kv_a_id(0), 14, 64, "kv_a"},
+        {coli_glm52_q_b_id(0), 32, 32, "q_b"},
+        {coli_glm52_kv_b_id(0), 56, 12, "kv_b"},
+        {coli_glm52_o_id(0), 64, 32, "o"},
+    };
+    uint64_t offsets[sizeof(matrices) / sizeof(matrices[0])][2];
+    uint64_t data_offset = align_up(CONFIG_OFFSET + sizeof(config));
+    for (size_t i = 0; i < sizeof(matrices) / sizeof(matrices[0]); ++i) {
+        const uint64_t weight_bytes =
+            (uint64_t)matrices[i].rows * matrices[i].columns / 2u;
+        const uint64_t scale_bytes =
+            (uint64_t)matrices[i].rows *
+            (matrices[i].columns / QUANT_GROUP) * sizeof(float);
+        offsets[i][0] = data_offset;
+        write_tensor_entry(file, matrices[i].id, BMOQ_DTYPE_Q4_SYM,
+                           QUANT_GROUP, matrices[i].rows, matrices[i].columns,
+                           data_offset, weight_bytes,
+                           BMOQ_LAYOUT_Q4_ROW_MAJOR, matrices[i].name);
+        data_offset = align_up(data_offset + weight_bytes);
+        offsets[i][1] = data_offset;
+        write_tensor_entry(file, coli_glm52_scale_id(matrices[i].id),
+                           BMOQ_DTYPE_F32, QUANT_GROUP, matrices[i].rows,
+                           matrices[i].columns / QUANT_GROUP, data_offset,
+                           scale_bytes, BMOQ_LAYOUT_GROUP_SCALES_F32, "scale");
+        data_offset = align_up(data_offset + scale_bytes);
+    }
+    const uint32_t norm_ids[] = {coli_glm52_input_norm_id(0),
+                                 coli_glm52_q_a_norm_id(0),
+                                 coli_glm52_kv_a_norm_id(0)};
+    const uint32_t norm_counts[] = {64, 32, 12};
+    uint64_t norm_offsets[3];
+    for (size_t i = 0; i < 3; ++i) {
+        norm_offsets[i] = data_offset;
+        write_tensor_entry(file, norm_ids[i], BMOQ_DTYPE_F32, 0,
+                           norm_counts[i], 1, data_offset,
+                           (uint64_t)norm_counts[i] * sizeof(float),
+                           BMOQ_LAYOUT_DENSE_F32, "norm");
+        data_offset =
+            align_up(data_offset + (uint64_t)norm_counts[i] * sizeof(float));
+    }
     assert(fseeko(file, CONFIG_OFFSET, SEEK_SET) == 0);
     assert(fwrite(config, 1, sizeof(config), file) == sizeof(config));
+    for (size_t i = 0; i < sizeof(matrices) / sizeof(matrices[0]); ++i) {
+        const size_t weight_bytes =
+            (size_t)matrices[i].rows * matrices[i].columns / 2u;
+        uint8_t *zeros = calloc(weight_bytes, 1);
+        assert(zeros);
+        assert(fseeko(file, (off_t)offsets[i][0], SEEK_SET) == 0);
+        assert(fwrite(zeros, 1, weight_bytes, file) == weight_bytes);
+        free(zeros);
+        assert(fseeko(file, (off_t)offsets[i][1], SEEK_SET) == 0);
+        const size_t scale_count =
+            (size_t)matrices[i].rows * matrices[i].columns / QUANT_GROUP;
+        for (size_t scale = 0; scale < scale_count; ++scale) {
+            const float one = 1.0f;
+            assert(fwrite(&one, 1, sizeof(one), file) == sizeof(one));
+        }
+    }
+    for (size_t i = 0; i < 3; ++i) {
+        assert(fseeko(file, (off_t)norm_offsets[i], SEEK_SET) == 0);
+        for (uint32_t element = 0; element < norm_counts[i]; ++element) {
+            const float one = 1.0f;
+            assert(fwrite(&one, 1, sizeof(one), file) == sizeof(one));
+        }
+    }
     assert(fclose(file) == 0);
 }
 
@@ -182,6 +276,47 @@ int main(void)
     assert(fabsf(output_latent[0] - expected0) < 1.0e-6f);
     assert(fabsf(output_latent[1] - expected1) < 1.0e-6f);
     coli_kv_cache_close(state);
+
+    uint8_t *full_state_bytes = calloc(1, (size_t)layout.total_bytes);
+    assert(full_state_bytes);
+    assert(coli_kv_cache_open_ram(&layout, full_state_bytes,
+                                  (size_t)layout.total_bytes, &state) ==
+           COLI_OK);
+    const size_t attention_workspace_bytes =
+        coli_glm52_attention_required_workspace(&config, 1, 64);
+    assert(attention_workspace_bytes > 64);
+    void *attention_workspace = malloc(attention_workspace_bytes);
+    assert(attention_workspace);
+    float input[64];
+    float output[64];
+    for (size_t i = 0; i < 64; ++i) input[i] = (float)i / 64.0f;
+    coli_glm52_attention_stats_t attention_stats;
+    assert(coli_glm52_attention_decode(
+               &model, &config, 0, 0, input, 64, output, 64, state,
+               attention_workspace, attention_workspace_bytes,
+               &attention_stats) == COLI_OK);
+    for (size_t i = 0; i < 64; ++i) assert(output[i] == 0.0f);
+    assert(attention_stats.projections.weight_bytes_read > 0);
+    assert(attention_stats.peak_workspace_bytes <= attention_workspace_bytes);
+    free(attention_workspace);
+    coli_kv_cache_close(state);
+    free(full_state_bytes);
+
+    coli_glm52_config_t production_shape = config;
+    production_shape.hidden_size = 6144;
+    production_shape.num_heads = 64;
+    production_shape.q_lora_rank = 2048;
+    production_shape.kv_lora_rank = 512;
+    production_shape.qk_nope_head_dim = 192;
+    production_shape.qk_rope_head_dim = 64;
+    production_shape.qk_head_dim = 256;
+    production_shape.v_head_dim = 256;
+    production_shape.max_context_tokens = 4096;
+    const size_t production_workspace =
+        coli_glm52_attention_required_workspace(&production_shape, 4096,
+                                                64u * 1024u);
+    assert(production_workspace > 0);
+    assert(production_workspace < 224u * 1024u);
 
     coli_model_close(&model);
     coli_store_close(store);

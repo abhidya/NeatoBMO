@@ -5,6 +5,93 @@
 #include <stdbool.h>
 #include <string.h>
 
+static bool add_size(size_t left, size_t right, size_t *out)
+{
+    if (left > SIZE_MAX - right) return false;
+    *out = left + right;
+    return true;
+}
+
+static bool mul_size(size_t left, size_t right, size_t *out)
+{
+    if (left != 0 && right > SIZE_MAX / left) return false;
+    *out = left * right;
+    return true;
+}
+
+static bool align_float(size_t bytes, size_t *out)
+{
+    if (!out || bytes > SIZE_MAX - (sizeof(float) - 1u)) return false;
+    *out = (bytes + sizeof(float) - 1u) / sizeof(float) * sizeof(float);
+    return true;
+}
+
+static bool add_floats(size_t *total, size_t count)
+{
+    size_t bytes;
+    size_t aligned;
+    return mul_size(count, sizeof(float), &bytes) &&
+           align_float(bytes, &aligned) && add_size(*total, aligned, total);
+}
+
+static bool carve_floats(void **cursor, size_t *remaining, size_t count,
+                         float **out)
+{
+    size_t bytes;
+    if (!mul_size(count, sizeof(float), &bytes)) return false;
+    if (!align_float(bytes, &bytes)) return false;
+    if (*remaining < bytes) return false;
+    *out = *cursor;
+    *cursor = (uint8_t *)*cursor + bytes;
+    *remaining -= bytes;
+    return true;
+}
+
+static void accumulate_q4(coli_q4_stats_t *total,
+                          const coli_q4_stats_t *delta)
+{
+    total->weight_bytes_read += delta->weight_bytes_read;
+    total->scale_bytes_read += delta->scale_bytes_read;
+    total->storage_reads += delta->storage_reads;
+    total->page_boundary_crossings += delta->page_boundary_crossings;
+    if (total->peak_workspace_bytes < delta->peak_workspace_bytes)
+        total->peak_workspace_bytes = delta->peak_workspace_bytes;
+}
+
+static bool dense_f32_compatible(const bmoq_tensor_t *tensor, size_t count)
+{
+    if (!tensor || tensor->dtype != BMOQ_DTYPE_F32 ||
+        tensor->layout != BMOQ_LAYOUT_DENSE_F32 ||
+        tensor->byte_length != count * sizeof(float))
+        return false;
+    uint64_t elements = 1;
+    for (size_t i = 0; i < 4; ++i) {
+        uint32_t dimension = tensor->dimensions[i] ? tensor->dimensions[i] : 1u;
+        if (elements > UINT64_MAX / dimension) return false;
+        elements *= dimension;
+    }
+    return elements == count;
+}
+
+static coli_status_t read_dense_f32(const coli_model_t *model,
+                                    uint32_t tensor_id, float *output,
+                                    size_t count)
+{
+    const bmoq_tensor_t *tensor = coli_model_find(model, tensor_id);
+    if (!dense_f32_compatible(tensor, count)) return COLI_ERR_FORMAT;
+    return coli_tensor_read(model, tensor, 0, output, count * sizeof(float));
+}
+
+static coli_status_t find_q4_pair(const coli_model_t *model,
+                                  uint32_t tensor_id,
+                                  const bmoq_tensor_t **weights,
+                                  const bmoq_tensor_t **scales)
+{
+    *weights = coli_model_find(model, tensor_id);
+    *scales = coli_model_find(model, coli_glm52_scale_id(tensor_id));
+    return *weights && *scales ? COLI_OK : COLI_ERR_NOT_FOUND;
+}
+
 static coli_status_t read_u32_required(const coli_model_t *model, uint32_t key,
                                        uint32_t *value)
 {
@@ -130,19 +217,30 @@ coli_status_t coli_glm52_config_load(const coli_model_t *model,
                               &config.attention_scale);
     if (status != COLI_OK) return status;
 
-    if (config.hidden_size == 0 || config.num_layers == 0 ||
+    if (config.hidden_size == 0 || config.hidden_size > (1u << 20) ||
+        config.num_layers == 0 ||
         config.num_layers > 128 || config.num_heads == 0 ||
-        config.num_experts == 0 || config.experts_per_token == 0 ||
+        config.num_heads > 1024 || config.num_experts == 0 ||
+        config.num_experts > 4096 || config.experts_per_token == 0 ||
+        config.experts_per_token > 64 ||
         config.experts_per_token > config.num_experts ||
         config.moe_intermediate_size == 0 ||
+        config.moe_intermediate_size > (1u << 20) ||
         config.dense_intermediate_size == 0 ||
+        config.dense_intermediate_size > (1u << 24) ||
         config.first_dense_layers > config.num_layers ||
-        config.q_lora_rank == 0 || config.kv_lora_rank == 0 ||
-        config.qk_nope_head_dim == 0 || config.qk_rope_head_dim == 0 ||
-        config.v_head_dim == 0 || config.expert_groups != 1 ||
-        config.topk_groups == 0 || config.stop_token_count == 0 ||
+        config.q_lora_rank == 0 || config.q_lora_rank > (1u << 20) ||
+        config.kv_lora_rank == 0 || config.kv_lora_rank > (1u << 20) ||
+        config.qk_nope_head_dim == 0 ||
+        config.qk_nope_head_dim > (1u << 16) ||
+        config.qk_rope_head_dim == 0 ||
+        config.qk_rope_head_dim > (1u << 16) ||
+        config.v_head_dim == 0 || config.v_head_dim > (1u << 16) ||
+        config.shared_experts > 64 || config.expert_groups != 1 ||
+        config.topk_groups != 1 || config.stop_token_count == 0 ||
         config.stop_token_count > COLI_GLM52_MAX_STOP_TOKENS ||
-        config.vocab_size == 0 || config.max_context_tokens == 0 ||
+        config.vocab_size == 0 || config.vocab_size > (1u << 24) ||
+        config.max_context_tokens == 0 ||
         !(config.rms_norm_epsilon > 0.0f) ||
         !(config.rope_theta > 0.0f) || !(config.attention_scale > 0.0f) ||
         !(config.routed_scale > 0.0f))
@@ -248,5 +346,236 @@ coli_status_t coli_glm52_attention_absorb_head(
         for (size_t i = 0; i < latent_count; ++i)
             output_latent[i] += weight * latent_scratch[i];
     }
+    return COLI_OK;
+}
+
+size_t coli_glm52_attention_required_workspace(
+    const coli_glm52_config_t *config, uint32_t token_count,
+    size_t q4_workspace_bytes)
+{
+    if (!config || token_count == 0 || token_count > config->max_context_tokens)
+        return 0;
+    size_t total = 0;
+    size_t comp;
+    size_t context;
+    size_t q4_aligned;
+    if (!add_size(config->kv_lora_rank, config->qk_rope_head_dim, &comp) ||
+        !mul_size(config->num_heads, config->v_head_dim, &context) ||
+        !align_float(q4_workspace_bytes, &q4_aligned))
+        return 0;
+    size_t norm = config->hidden_size > config->q_lora_rank
+                      ? config->hidden_size
+                      : config->q_lora_rank;
+    if (norm < config->kv_lora_rank) norm = config->kv_lora_rank;
+    return add_floats(&total, config->hidden_size) &&
+                   add_floats(&total, norm) &&
+                   add_floats(&total, config->q_lora_rank) &&
+                   add_floats(&total, comp) &&
+                   add_floats(&total, config->qk_head_dim) &&
+                   add_floats(&total, config->kv_lora_rank) &&
+                   add_floats(&total, config->kv_lora_rank) &&
+                   add_floats(&total, token_count) &&
+                   add_floats(&total, config->kv_lora_rank) &&
+                   add_floats(&total, config->qk_rope_head_dim) &&
+                   add_floats(&total, context) &&
+                   add_size(total, q4_aligned, &total)
+               ? total
+               : 0;
+}
+
+coli_status_t coli_glm52_attention_decode(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t layer, uint32_t position, const float *input,
+    size_t input_count, float *output, size_t output_count,
+    coli_kv_cache_t *state, void *workspace, size_t workspace_bytes,
+    coli_glm52_attention_stats_t *stats)
+{
+    const coli_kv_cache_layout_t *layout = coli_kv_cache_get_layout(state);
+    if (!model || !config || !input || !output || !state || !layout ||
+        !workspace || !stats || layer >= config->num_layers ||
+        position >= config->max_context_tokens ||
+        input_count != config->hidden_size || output_count != input_count ||
+        layout->layers < config->num_layers ||
+        layout->max_tokens < config->max_context_tokens ||
+        layout->key_token_bytes !=
+            (uint64_t)config->kv_lora_rank * sizeof(float) ||
+        layout->value_token_bytes !=
+            (uint64_t)config->qk_rope_head_dim * sizeof(float))
+        return COLI_ERR_ARGUMENT;
+
+    memset(stats, 0, sizeof(*stats));
+    void *cursor = workspace;
+    size_t remaining = workspace_bytes;
+    size_t comp_count;
+    size_t context_count;
+    size_t q_b_rows;
+    size_t kv_b_stride;
+    size_t kv_b_rows;
+    if (!add_size(config->kv_lora_rank, config->qk_rope_head_dim,
+                  &comp_count) ||
+        !mul_size(config->num_heads, config->v_head_dim, &context_count) ||
+        !mul_size(config->num_heads, config->qk_head_dim, &q_b_rows) ||
+        !add_size(config->qk_nope_head_dim, config->v_head_dim,
+                  &kv_b_stride) ||
+        !mul_size(config->num_heads, kv_b_stride, &kv_b_rows) ||
+        q_b_rows > UINT32_MAX || kv_b_rows > UINT32_MAX)
+        return COLI_ERR_RANGE;
+    size_t norm_count = config->hidden_size > config->q_lora_rank
+                            ? config->hidden_size
+                            : config->q_lora_rank;
+    if (norm_count < config->kv_lora_rank) norm_count = config->kv_lora_rank;
+    float *normalized;
+    float *norm_weight;
+    float *q_latent;
+    float *comp;
+    float *q_head;
+    float *query_absorbed;
+    float *context_latent;
+    float *scores;
+    float *latent_scratch;
+    float *rope_scratch;
+    float *context;
+    if (!carve_floats(&cursor, &remaining, config->hidden_size, &normalized) ||
+        !carve_floats(&cursor, &remaining, norm_count, &norm_weight) ||
+        !carve_floats(&cursor, &remaining, config->q_lora_rank, &q_latent) ||
+        !carve_floats(&cursor, &remaining, comp_count, &comp) ||
+        !carve_floats(&cursor, &remaining, config->qk_head_dim, &q_head) ||
+        !carve_floats(&cursor, &remaining, config->kv_lora_rank,
+                      &query_absorbed) ||
+        !carve_floats(&cursor, &remaining, config->kv_lora_rank,
+                      &context_latent) ||
+        !carve_floats(&cursor, &remaining, position + 1u, &scores) ||
+        !carve_floats(&cursor, &remaining, config->kv_lora_rank,
+                      &latent_scratch) ||
+        !carve_floats(&cursor, &remaining, config->qk_rope_head_dim,
+                      &rope_scratch) ||
+        !carve_floats(&cursor, &remaining, context_count, &context))
+        return COLI_ERR_RANGE;
+    void *q4_workspace = cursor;
+    const size_t q4_workspace_bytes = remaining;
+
+    coli_status_t status = read_dense_f32(
+        model, coli_glm52_input_norm_id(layer), norm_weight,
+        config->hidden_size);
+    if (status != COLI_OK) return status;
+    status = coli_ops_rmsnorm(input, norm_weight, normalized,
+                              config->hidden_size,
+                              config->rms_norm_epsilon);
+    if (status != COLI_OK) return status;
+
+    const bmoq_tensor_t *weights;
+    const bmoq_tensor_t *scales;
+    coli_q4_stats_t q4;
+    status = find_q4_pair(model, coli_glm52_q_a_id(layer), &weights, &scales);
+    if (status != COLI_OK) return status;
+    status = coli_q4_matvec(model, weights, scales, normalized,
+                            config->hidden_size, q_latent,
+                            config->q_lora_rank, q4_workspace,
+                            q4_workspace_bytes, &q4);
+    if (status != COLI_OK) return status;
+    accumulate_q4(&stats->projections, &q4);
+    status = read_dense_f32(model, coli_glm52_q_a_norm_id(layer), norm_weight,
+                            config->q_lora_rank);
+    if (status != COLI_OK) return status;
+    status = coli_ops_rmsnorm(q_latent, norm_weight, q_latent,
+                              config->q_lora_rank,
+                              config->rms_norm_epsilon);
+    if (status != COLI_OK) return status;
+
+    status = find_q4_pair(model, coli_glm52_kv_a_id(layer), &weights, &scales);
+    if (status != COLI_OK) return status;
+    status = coli_q4_matvec(model, weights, scales, normalized,
+                            config->hidden_size, comp, comp_count,
+                            q4_workspace, q4_workspace_bytes, &q4);
+    if (status != COLI_OK) return status;
+    accumulate_q4(&stats->projections, &q4);
+    status = read_dense_f32(model, coli_glm52_kv_a_norm_id(layer), norm_weight,
+                            config->kv_lora_rank);
+    if (status != COLI_OK) return status;
+    status = coli_ops_rmsnorm(comp, norm_weight, comp,
+                              config->kv_lora_rank,
+                              config->rms_norm_epsilon);
+    if (status != COLI_OK) return status;
+    status = coli_glm52_rope(comp + config->kv_lora_rank,
+                             config->qk_rope_head_dim, position,
+                             config->rope_theta, rope_scratch,
+                             config->qk_rope_head_dim);
+    if (status != COLI_OK) return status;
+    status = coli_kv_cache_write_token(state, layer, position, comp,
+                                       comp + config->kv_lora_rank);
+    if (status != COLI_OK) return status;
+
+    const bmoq_tensor_t *q_b_weights;
+    const bmoq_tensor_t *q_b_scales;
+    const bmoq_tensor_t *kv_b_weights;
+    const bmoq_tensor_t *kv_b_scales;
+    status = find_q4_pair(model, coli_glm52_q_b_id(layer), &q_b_weights,
+                          &q_b_scales);
+    if (status != COLI_OK) return status;
+    status = find_q4_pair(model, coli_glm52_kv_b_id(layer), &kv_b_weights,
+                          &kv_b_scales);
+    if (status != COLI_OK) return status;
+    if (q_b_weights->dimensions[0] != q_b_rows ||
+        q_b_weights->dimensions[1] != config->q_lora_rank ||
+        kv_b_weights->dimensions[0] != kv_b_rows ||
+        kv_b_weights->dimensions[1] != config->kv_lora_rank)
+        return COLI_ERR_FORMAT;
+    for (uint32_t head = 0; head < config->num_heads; ++head) {
+        size_t q_b_base;
+        size_t kv_b_base;
+        size_t context_base;
+        if (!mul_size(head, config->qk_head_dim, &q_b_base) ||
+            !mul_size(head, kv_b_stride, &kv_b_base) ||
+            !mul_size(head, config->v_head_dim, &context_base) ||
+            q_b_base > UINT32_MAX || kv_b_base > UINT32_MAX)
+            return COLI_ERR_RANGE;
+        status = coli_q4_matvec_rows(
+            model, q_b_weights, q_b_scales, (uint32_t)q_b_base,
+            config->qk_head_dim, q_latent, config->q_lora_rank, q_head,
+            config->qk_head_dim, q4_workspace, q4_workspace_bytes, &q4);
+        if (status != COLI_OK) return status;
+        accumulate_q4(&stats->projections, &q4);
+        status = coli_glm52_rope(
+            q_head + config->qk_nope_head_dim,
+            config->qk_rope_head_dim, position, config->rope_theta,
+            rope_scratch, config->qk_rope_head_dim);
+        if (status != COLI_OK) return status;
+        status = coli_q4_transposed_rows(
+            model, kv_b_weights, kv_b_scales, (uint32_t)kv_b_base,
+            config->qk_nope_head_dim, q_head,
+            config->qk_nope_head_dim, query_absorbed,
+            config->kv_lora_rank, q4_workspace, q4_workspace_bytes, &q4);
+        if (status != COLI_OK) return status;
+        accumulate_q4(&stats->projections, &q4);
+        status = coli_glm52_attention_absorb_head(
+            state, layer, query_absorbed, config->kv_lora_rank,
+            q_head + config->qk_nope_head_dim,
+            config->qk_rope_head_dim, position + 1u,
+            config->attention_scale, context_latent,
+            config->kv_lora_rank, scores, position + 1u, latent_scratch,
+            config->kv_lora_rank, rope_scratch,
+            config->qk_rope_head_dim);
+        if (status != COLI_OK) return status;
+        status = coli_q4_matvec_rows(
+            model, kv_b_weights, kv_b_scales,
+            (uint32_t)kv_b_base + config->qk_nope_head_dim,
+            config->v_head_dim,
+            context_latent, config->kv_lora_rank,
+            context + context_base,
+            config->v_head_dim, q4_workspace, q4_workspace_bytes, &q4);
+        if (status != COLI_OK) return status;
+        accumulate_q4(&stats->projections, &q4);
+    }
+
+    status = find_q4_pair(model, coli_glm52_o_id(layer), &weights, &scales);
+    if (status != COLI_OK) return status;
+    status = coli_q4_matvec(model, weights, scales, context, context_count,
+                            output, output_count, q4_workspace,
+                            q4_workspace_bytes, &q4);
+    if (status != COLI_OK) return status;
+    accumulate_q4(&stats->projections, &q4);
+    stats->peak_workspace_bytes =
+        workspace_bytes - q4_workspace_bytes +
+        stats->projections.peak_workspace_bytes;
     return COLI_OK;
 }

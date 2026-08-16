@@ -190,6 +190,61 @@ coli_status_t coli_q4_matvec_rows(
     return COLI_OK;
 }
 
+coli_status_t coli_q4_transposed_rows(
+    const coli_model_t *model, const bmoq_tensor_t *weights,
+    const bmoq_tensor_t *scales, uint32_t first_row, uint32_t row_count,
+    const float *input, size_t input_count, float *output,
+    size_t output_count, void *workspace, size_t workspace_bytes,
+    coli_q4_stats_t *stats)
+{
+    if (!model || !weights || !input || !output) return COLI_ERR_ARGUMENT;
+    uint32_t groups_per_row;
+    size_t group_weight_bytes;
+    size_t tile_groups;
+    uint8_t *bytes;
+    coli_status_t status = setup_tiling(
+        weights, scales, output_count, workspace, workspace_bytes, stats,
+        &groups_per_row, &group_weight_bytes, &tile_groups, &bytes);
+    if (status != COLI_OK) return status;
+    const uint32_t rows = weights->dimensions[0];
+    const uint32_t group_size = weights->quant_group;
+    if (row_count == 0 || first_row > rows || row_count > rows - first_row ||
+        input_count != row_count || output_count > SIZE_MAX / sizeof(*output))
+        return COLI_ERR_RANGE;
+
+    memset(output, 0, output_count * sizeof(*output));
+    for (uint32_t input_row = 0; input_row < row_count; ++input_row) {
+        const uint32_t row = first_row + input_row;
+        const float coefficient = input[input_row];
+        for (uint32_t first_group = 0; first_group < groups_per_row;) {
+            uint32_t remaining = groups_per_row - first_group;
+            uint32_t group_count =
+                remaining < tile_groups ? remaining : tile_groups;
+            uint8_t *scale_data = NULL;
+            status = read_group_tile(model, weights, scales, row, first_group,
+                                     group_count, groups_per_row,
+                                     group_weight_bytes, bytes, &scale_data,
+                                     stats);
+            if (status != COLI_OK) return status;
+            for (uint32_t group = 0; group < group_count; ++group) {
+                const float scale =
+                    read_f32_le(scale_data + group * sizeof(float));
+                const uint8_t *packed = bytes + group * group_weight_bytes;
+                const uint32_t column =
+                    (first_group + group) * group_size;
+                for (uint32_t within = 0; within < group_size; ++within) {
+                    const int8_t q = unpack_q4(
+                        packed[within / 2], (within & 1u) != 0);
+                    output[column + within] +=
+                        coefficient * (float)q * scale;
+                }
+            }
+            first_group += group_count;
+        }
+    }
+    return COLI_OK;
+}
+
 coli_status_t coli_q4_dequantize_row(const coli_model_t *model,
                                      const bmoq_tensor_t *weights,
                                      const bmoq_tensor_t *scales,
