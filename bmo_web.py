@@ -544,7 +544,9 @@ def _streamed_reply(text, *, prompt=None, assistant_prefix="",
             return
         if soundboard_mode and cues.has_voice_sound(plan.steps):
             return
-        if budget is not None:
+        exact_catalog_line = (soundboard_mode and
+                              soundboard_voice.resolve(speech_text) is not None)
+        if budget is not None and not exact_catalog_line:
             speech_text = budget.feed(speech_text)
             if speech_text is None:
                 return
@@ -634,6 +636,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({
                 "mode": CFG.speech_mode,
                 "count": soundboard_voice.count,
+                "trusted_count": soundboard_voice.trusted_count,
+                "quarantined_count": soundboard_voice.quarantined_count,
                 "query": query,
                 "exact": ({"key": exact.get("key"),
                            "label": exact.get("label"),

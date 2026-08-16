@@ -354,17 +354,17 @@ class ChatTurnTests(unittest.TestCase):
 
     def test_catalog_hint_is_added_before_brain_generation(self):
         prompt = self.web._compound_prompt(
-            "tell me that you love me", "tell me that you love me", "")
+            "play video games", "play video games", "")
         self.assertIn("Authentic recorded BMO lines available", prompt)
-        self.assertIn("i love you", prompt)
+        self.assertIn("who wants to play video games", prompt)
 
     def test_chat_to_catalog_to_esp32_uses_no_synth_or_flash(self):
         from neatobmo.speech import SpeechService
 
         class CatalogBrain:
             def stream(self, text, on_sentence, **kwargs):
-                on_sentence("I love you")
-                return "I love you"
+                on_sentence("Who wants to play video games")
+                return "Who wants to play video games"
 
         class Esp32:
             def __init__(self):
@@ -392,7 +392,7 @@ class ChatTurnTests(unittest.TestCase):
         self.web.body = body
         self.web.speech = service
 
-        events = list(self.web.chat_events("tell me that you love me", True))
+        events = list(self.web.chat_events("play video games", True))
         deadline = time.time() + 2
         while not esp32.wavs and time.time() < deadline:
             time.sleep(0.01)

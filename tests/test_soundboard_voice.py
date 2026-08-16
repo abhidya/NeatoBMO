@@ -21,7 +21,23 @@ class SoundboardVoiceTests(unittest.TestCase):
         board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
         self.assertIsNotNone(board.synth("It is BMO time"))
         suggestions = board.suggestions("Tell me that you love me")
-        self.assertIn("i love you", suggestions)
+        self.assertNotIn("i love you", suggestions)
+
+    def test_unreviewed_soundboard_imports_are_quarantined(self):
+        board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
+        self.assertEqual(board.count, 230)
+        self.assertEqual(board.trusted_count, 207)
+        self.assertEqual(board.quarantined_count, 23)
+        self.assertIsNone(board.resolve("I love you"))
+        self.assertTrue(board.render_for_review("101-28062487-i-love-you")
+                        .startswith(b"RIFF"))
+
+    def test_official_clip_wins_over_unreviewed_transcript_collision(self):
+        board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
+        sound = board.resolve("Who wants to play video games")
+        self.assertEqual(sound["verification"],
+                         "official-cartoon-network-beemo-app")
+        self.assertTrue(sound["key"].startswith("official-"))
 
     def test_normalization_handles_bmo_catalog_spelling(self):
         self.assertEqual(normalize_phrase("Hello, BEEMO!"), "hello bmo")

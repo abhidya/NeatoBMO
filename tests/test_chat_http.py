@@ -135,6 +135,8 @@ class ChatHttpTests(unittest.TestCase):
         finally:
             conn.close()
         self.assertGreaterEqual(catalog["count"], 200)
+        self.assertEqual(catalog["trusted_count"], 207)
+        self.assertEqual(catalog["quarantined_count"], 23)
         self.assertEqual(catalog["mode"], "soundboard")
         self.assertIsNotNone(catalog["exact"])
 
