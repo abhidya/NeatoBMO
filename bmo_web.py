@@ -204,10 +204,12 @@ def chat_events(text, speak_on_robot):
                 text, prompt=prompt, assistant_prefix=assistant_prefix)
             if err:
                 raise RuntimeError(err)
-        else:
+        elif hasattr(brain, "stream"):
             brain_reply = brain.stream(
                 text, lambda _sentence: None, prompt=prompt,
                 assistant_prefix=assistant_prefix)
+        else:
+            brain_reply = _brain_chat(text, prompt, assistant_prefix)
         brain_plan = cues.parse(brain_reply)
         if not routine_names and CFG.speech_mode == "soundbyte":
             brain_plan = cues.condense(brain_plan,

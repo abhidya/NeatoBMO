@@ -142,10 +142,12 @@ class ChatTurnTests(unittest.TestCase):
     def setUp(self):
         import bmo_web
         self.web = bmo_web
-        self._saved = (bmo_web.brain, bmo_web.body, bmo_web.speech)
+        self._saved = (bmo_web.brain, bmo_web.body, bmo_web.speech,
+                       bmo_web.convo_state)
 
     def tearDown(self):
-        self.web.brain, self.web.body, self.web.speech = self._saved
+        (self.web.brain, self.web.body, self.web.speech,
+         self.web.convo_state) = self._saved
 
     def test_routine_hit_enters_brain_history(self):
         class FakeBrain:
@@ -160,6 +162,76 @@ class ChatTurnTests(unittest.TestCase):
         self.assertTrue(out["reply"])
         self.assertEqual(out.get("routine"), "greet")
         self.assertEqual(len(self.web.brain.remembered), 1)
+
+    def test_two_local_routines_skip_brain_and_keep_order(self):
+        class FakeBrain:
+            def __init__(self):
+                self.chats = []
+                self.remembered = []
+
+            def chat(self, text):
+                self.chats.append(text)
+                return "brain"
+
+            def remember(self, user, reply):
+                self.remembered.append((user, reply))
+
+        self.web.brain = FakeBrain()
+        self.web.body = BodyController()
+        self.web.convo_state = self.web.routines.ConvoState()
+
+        out = self.web.chat_turn("check your battery and what time is it",
+                                 speak_on_robot=False)
+
+        self.assertEqual(out["routines"], ["battery", "time"])
+        self.assertEqual(self.web.brain.chats, [])
+        self.assertEqual(len(self.web.brain.remembered), 1)
+
+    def test_local_plus_residual_prompts_brain_for_rest(self):
+        class FakeBrain:
+            def __init__(self):
+                self.calls = []
+
+            def chat(self, text, *, prompt=None, assistant_prefix=""):
+                self.calls.append((text, prompt, assistant_prefix))
+                return "Blue light scatters! [happy]"
+
+        self.web.brain = FakeBrain()
+        self.web.body = BodyController()
+        self.web.convo_state = self.web.routines.ConvoState()
+
+        out = self.web.chat_turn(
+            "what time is it and why is the sky blue",
+            speak_on_robot=False)
+
+        self.assertEqual(out["routines"], ["time"])
+        self.assertIn("It is", out["reply"])
+        self.assertIn("Blue light scatters!", out["reply"])
+        self.assertEqual(len(self.web.brain.calls), 1)
+        text, prompt, assistant_prefix = self.web.brain.calls[0]
+        self.assertEqual(text, "what time is it and why is the sky blue")
+        self.assertIn("Answer only the unresolved request: why is the sky blue",
+                      prompt)
+        self.assertIn("It is", assistant_prefix)
+
+    def test_chat_events_emit_routine_before_brain_started(self):
+        class FakeBrain:
+            def chat(self, text, *, prompt=None, assistant_prefix=""):
+                return "Blue light scatters! [happy]"
+
+        self.web.brain = FakeBrain()
+        self.web.body = BodyController()
+        self.web.convo_state = self.web.routines.ConvoState()
+
+        events = list(self.web.chat_events(
+            "what time is it and why is the sky blue",
+            speak_on_robot=False))
+
+        self.assertEqual([e["type"] for e in events],
+                         ["turn_started", "routine_result", "brain_started",
+                          "brain_result", "turn_completed"])
+        self.assertEqual(events[1]["routine"], "time")
+        self.assertTrue(events[-1]["brain_used"])
 
     def test_brain_error_reports_cleanly(self):
         class DeadBrain:
