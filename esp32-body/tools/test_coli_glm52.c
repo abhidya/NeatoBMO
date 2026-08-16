@@ -7,11 +7,14 @@
 #include <unistd.h>
 
 #include "coli_glm52.h"
+#include "coli_runtime.h"
 #include "coli_store.h"
 
 #define CONFIG_OFFSET 8192u
-#define FIXTURE_TENSOR_COUNT 21u
+#define FIXTURE_TENSOR_COUNT 26u
 #define QUANT_GROUP 2u
+#define CTOK_HEADER 128u
+#define CTOK_ENTRY 24u
 
 static void put_u16(uint8_t *p, uint16_t value)
 {
@@ -128,7 +131,7 @@ static void write_fixture(const char *path)
     put_u32(fixed, BMOQ_MODEL_ARCH_GLM52);
     put_u32(fixed + 8, 64);
     put_u32(fixed + 12, 16);
-    put_u32(fixed + 16, 2);
+    put_u32(fixed + 16, 1);
     put_u32(fixed + 20, 4);
     put_u32(fixed + 28, 8);
     put_u32(fixed + 32, 2);
@@ -141,6 +144,8 @@ static void write_fixture(const char *path)
                        sizeof(config), 1, CONFIG_OFFSET, sizeof(config),
                        BMOQ_LAYOUT_OPAQUE, "config.v2");
     const q4_fixture_t matrices[] = {
+        {COLI_GLM52_TENSOR_EMBED_TOKENS, 1024, 64, "tok_emb"},
+        {COLI_GLM52_TENSOR_LM_HEAD, 1024, 64, "lm_head"},
         {coli_glm52_q_a_id(0), 32, 64, "q_a"},
         {coli_glm52_kv_a_id(0), 14, 64, "kv_a"},
         {coli_glm52_q_b_id(0), 32, 32, "q_b"},
@@ -171,13 +176,14 @@ static void write_fixture(const char *path)
                            scale_bytes, BMOQ_LAYOUT_GROUP_SCALES_F32, "scale");
         data_offset = align_up(data_offset + scale_bytes);
     }
-    const uint32_t norm_ids[] = {coli_glm52_input_norm_id(0),
+    const uint32_t norm_ids[] = {COLI_GLM52_TENSOR_FINAL_NORM,
+                                 coli_glm52_input_norm_id(0),
                                  coli_glm52_post_attention_norm_id(0),
                                  coli_glm52_q_a_norm_id(0),
                                  coli_glm52_kv_a_norm_id(0)};
-    const uint32_t norm_counts[] = {64, 64, 32, 12};
-    uint64_t norm_offsets[4];
-    for (size_t i = 0; i < 4; ++i) {
+    const uint32_t norm_counts[] = {64, 64, 64, 32, 12};
+    uint64_t norm_offsets[5];
+    for (size_t i = 0; i < 5; ++i) {
         norm_offsets[i] = data_offset;
         write_tensor_entry(file, norm_ids[i], BMOQ_DTYPE_F32, 0,
                            norm_counts[i], 1, data_offset,
@@ -193,6 +199,21 @@ static void write_fixture(const char *path)
             (size_t)matrices[i].rows * matrices[i].columns / 2u;
         uint8_t *zeros = calloc(weight_bytes, 1);
         assert(zeros);
+        if (matrices[i].id == COLI_GLM52_TENSOR_EMBED_TOKENS ||
+            matrices[i].id == COLI_GLM52_TENSOR_LM_HEAD) {
+            const uint32_t diagonal = matrices[i].rows < matrices[i].columns
+                                          ? matrices[i].rows
+                                          : matrices[i].columns;
+            for (uint32_t element = 0; element < diagonal; ++element) {
+                size_t packed_index =
+                    (size_t)element * (matrices[i].columns / 2u) +
+                    element / 2u;
+                if ((element & 1u) == 0)
+                    zeros[packed_index] |= 7u;
+                else
+                    zeros[packed_index] |= 7u << 4;
+            }
+        }
         assert(fseeko(file, (off_t)offsets[i][0], SEEK_SET) == 0);
         assert(fwrite(zeros, 1, weight_bytes, file) == weight_bytes);
         free(zeros);
@@ -204,7 +225,7 @@ static void write_fixture(const char *path)
             assert(fwrite(&one, 1, sizeof(one), file) == sizeof(one));
         }
     }
-    for (size_t i = 0; i < 4; ++i) {
+    for (size_t i = 0; i < 5; ++i) {
         assert(fseeko(file, (off_t)norm_offsets[i], SEEK_SET) == 0);
         for (uint32_t element = 0; element < norm_counts[i]; ++element) {
             const float one = 1.0f;
@@ -214,13 +235,82 @@ static void write_fixture(const char *path)
     assert(fclose(file) == 0);
 }
 
+static void write_ctok(const char *path)
+{
+    FILE *file = fopen(path, "wb");
+    assert(file);
+    uint8_t header[CTOK_HEADER] = {0};
+    memcpy(header, "CTOK", 4);
+    put_u16(header + 4, COLI_TOKENIZER_VERSION);
+    put_u16(header + 6, CTOK_HEADER);
+    put_u32(header + 8, 256);
+    put_u32(header + 16, CTOK_ENTRY);
+    put_u32(header + 20, COLI_TOKENIZER_MERGE_BYTES);
+    put_u64(header + 24, CTOK_HEADER);
+    put_u64(header + 32, CTOK_HEADER + 256u * CTOK_ENTRY);
+    put_u64(header + 40, CTOK_HEADER + 256u * CTOK_ENTRY + 256u);
+    put_u32(header + 48, 256);
+    put_u32(header + 52, 1);
+    put_u32(header + 56, 255);
+    put_u16(header + 60, COLI_TOKENIZER_MAX_TOKEN_BYTES);
+    assert(fwrite(header, 1, sizeof(header), file) == sizeof(header));
+    for (uint32_t token = 0; token < 256; ++token) {
+        uint8_t entry[CTOK_ENTRY] = {0};
+        put_u64(entry, CTOK_HEADER + 256u * CTOK_ENTRY + token);
+        put_u16(entry + 8, 1);
+        put_u16(entry + 10, 0x0002u);
+        put_u32(entry + 12, token);
+        assert(fwrite(entry, 1, sizeof(entry), file) == sizeof(entry));
+    }
+    for (uint32_t token = 0; token < 256; ++token) {
+        uint8_t byte = (uint8_t)token;
+        assert(fwrite(&byte, 1, 1, file) == 1);
+    }
+    assert(fclose(file) == 0);
+}
+
+typedef struct {
+    uint32_t tokens[4];
+    size_t count;
+    bool cancel_after_first;
+} token_capture_t;
+
+static void capture_bytes(void *context, const uint8_t *bytes, size_t count)
+{
+    token_capture_t *capture = context;
+    assert(capture->count + count <= 4);
+    for (size_t i = 0; i < count; ++i)
+        capture->tokens[capture->count++] = bytes[i];
+}
+
+static bool capture_cancel(void *context)
+{
+    token_capture_t *capture = context;
+    return capture->cancel_after_first && capture->count > 0;
+}
+
+static coli_status_t capture_token(void *context, uint32_t token_id,
+                                   size_t generated_index)
+{
+    token_capture_t *capture = context;
+    assert(generated_index == capture->count);
+    assert(capture->count < 4);
+    capture->tokens[capture->count++] = token_id;
+    return COLI_OK;
+}
+
 int main(void)
 {
     char path[] = "/tmp/coli-glm52-XXXXXX";
+    char tokenizer_path[] = "/tmp/coli-glm52-ctok-XXXXXX";
     int fd = mkstemp(path);
     assert(fd >= 0);
     close(fd);
+    fd = mkstemp(tokenizer_path);
+    assert(fd >= 0);
+    close(fd);
     write_fixture(path);
+    write_ctok(tokenizer_path);
 
     coli_store_t *store = NULL;
     assert(coli_store_open_file(path, &store) == COLI_OK);
@@ -238,12 +328,12 @@ int main(void)
 
     coli_kv_cache_layout_t layout;
     assert(coli_glm52_state_layout(&config, &layout) == COLI_OK);
-    assert(layout.layers == 2);
+    assert(layout.layers == 1);
     assert(layout.max_tokens == 4096);
     assert(layout.key_token_bytes == 12u * sizeof(float));
     assert(layout.value_token_bytes == 2u * sizeof(float));
     assert(layout.total_bytes ==
-           2u * 4096u * (12u + 2u) * sizeof(float));
+           4096u * (12u + 2u) * sizeof(float));
 
     float rope[] = {1.0f, 2.0f, 3.0f, 4.0f};
     float rope_scratch[4];
@@ -326,9 +416,125 @@ int main(void)
     for (size_t i = 0; i < 64; ++i) assert(output[i] == input[i]);
     assert(layer_stats.peak_workspace_bytes <= layer_workspace_bytes);
     free(layer_workspace);
+
     free(attention_workspace);
     coli_kv_cache_close(state);
     free(full_state_bytes);
+
+    coli_glm52_config_t generation_config = config;
+    generation_config.num_layers = 1;
+    generation_config.max_context_tokens = 4;
+    coli_kv_cache_layout_t generation_layout;
+    assert(coli_glm52_state_layout(&generation_config, &generation_layout) ==
+           COLI_OK);
+    uint8_t *generation_state = calloc(1, (size_t)generation_layout.total_bytes);
+    assert(generation_state);
+    assert(coli_kv_cache_open_ram(&generation_layout, generation_state,
+                                  (size_t)generation_layout.total_bytes,
+                                  &state) == COLI_OK);
+    const size_t decode_workspace_bytes =
+        coli_glm52_decode_required_workspace(&generation_config, 4, 64);
+    assert(decode_workspace_bytes > 0);
+    void *decode_workspace = malloc(decode_workspace_bytes);
+    assert(decode_workspace);
+    const uint32_t prompt[] = {7, 9};
+    uint32_t generated[4] = {0};
+    size_t generated_count = 0;
+    token_capture_t capture = {0};
+    coli_glm52_generate_stats_t generate_stats;
+    assert(coli_glm52_generate_greedy_stream(
+               &model, &generation_config, prompt, 2, generated, 4, 2,
+               &generated_count, state, decode_workspace,
+               decode_workspace_bytes, capture_token, &capture,
+               &generate_stats) == COLI_OK);
+    assert(generated_count == 4 && generated[0] == 7 && generated[1] == 9);
+    assert(generated[2] == 9 && generated[3] == 9);
+    assert(capture.count == 2 && capture.tokens[0] == 9 &&
+           capture.tokens[1] == 9);
+    assert(generate_stats.prompt_tokens_consumed == 2);
+    assert(generate_stats.generated_tokens == 2);
+    assert(!generate_stats.stopped_on_eos);
+    assert(generate_stats.last_decode.layers_executed == 1);
+    coli_glm52_config_t stopping_config = generation_config;
+    stopping_config.stop_token_ids[0] = 9;
+    stopping_config.stop_token_count = 1;
+    memset(&capture, 0, sizeof(capture));
+    generated_count = 0;
+    assert(coli_glm52_generate_greedy_stream(
+               &model, &stopping_config, prompt, 2, generated, 4, 2,
+               &generated_count, state, decode_workspace,
+               decode_workspace_bytes, capture_token, &capture,
+               &generate_stats) == COLI_OK);
+    assert(generated_count == 2 && capture.count == 0);
+    assert(generate_stats.stopped_on_eos);
+    coli_kv_cache_close(state);
+    free(generation_state);
+
+    char generation_state_path[] = "/tmp/coli-glm52-state-XXXXXX";
+    fd = mkstemp(generation_state_path);
+    assert(fd >= 0);
+    close(fd);
+    assert(coli_kv_cache_open_file(&generation_layout, generation_state_path,
+                                   17, &state) == COLI_OK);
+    memset(generated, 0xff, sizeof(generated));
+    generated_count = 0;
+    assert(coli_glm52_generate_greedy(
+               &model, &generation_config, prompt, 2, generated, 4, 2,
+               &generated_count, state, decode_workspace,
+               decode_workspace_bytes, &generate_stats) == COLI_OK);
+    assert(generated_count == 4 && generated[2] == 9 && generated[3] == 9);
+    coli_kv_cache_stats_t state_stats;
+    coli_kv_cache_stats(state, &state_stats);
+    assert(state_stats.resident_bytes == 17);
+    assert(state_stats.resident_bytes < generation_layout.total_bytes);
+    coli_kv_cache_close(state);
+    unlink(generation_state_path);
+
+    char runtime_state_path[] = "/tmp/coli-glm52-runtime-state-XXXXXX";
+    fd = mkstemp(runtime_state_path);
+    assert(fd >= 0);
+    close(fd);
+    const uint8_t prompt_bytes[] = {7, 9};
+    memset(&capture, 0, sizeof(capture));
+    coli_runtime_request_t request = {
+        .model_path = path,
+        .tokenizer_path = tokenizer_path,
+        .generation =
+            {
+                .prompt = prompt_bytes,
+                .prompt_bytes = sizeof(prompt_bytes),
+                .context_tokens = 4,
+                .max_prompt_tokens = 2,
+                .max_new_tokens = 2,
+                .workspace_bytes = decode_workspace_bytes,
+                .decoded_chunk_bytes = 4,
+                .kv_cache_path = runtime_state_path,
+                .kv_page_bytes = 17,
+                .log_chunk = capture_bytes,
+                .callback_context = &capture,
+            },
+    };
+    coli_runtime_result_t runtime_result;
+    assert(coli_runtime_generate(&request, &runtime_result) == COLI_OK);
+    assert(runtime_result.architecture == BMOQ_MODEL_ARCH_GLM52);
+    assert(runtime_result.generation.stage == COLI_GENERATE_STAGE_DONE);
+    assert(runtime_result.generation.prompt_tokens == 2);
+    assert(runtime_result.generation.generated_tokens == 2);
+    assert(runtime_result.generation.decoded_bytes == 2);
+    assert(runtime_result.generation.kv_cache_resident_bytes == 17);
+    assert(capture.count == 2 && capture.tokens[0] == 9 &&
+           capture.tokens[1] == 9);
+    memset(&capture, 0, sizeof(capture));
+    capture.cancel_after_first = true;
+    request.generation.should_cancel = capture_cancel;
+    assert(coli_runtime_generate(&request, &runtime_result) ==
+           COLI_ERR_REMOVED);
+    assert(runtime_result.generation.stage == COLI_GENERATE_STAGE_CANCELLED);
+    assert(runtime_result.generation.generated_tokens == 1);
+    assert(runtime_result.generation.decoded_bytes == 1);
+    assert(capture.count == 1 && capture.tokens[0] == 9);
+    unlink(runtime_state_path);
+    free(decode_workspace);
 
     coli_glm52_config_t production_shape = config;
     production_shape.hidden_size = 6144;
@@ -354,6 +560,7 @@ int main(void)
 
     coli_model_close(&model);
     coli_store_close(store);
+    unlink(tokenizer_path);
     unlink(path);
     puts("GLM-5.2 BMOQ config and compressed state layout: PASS");
     return 0;

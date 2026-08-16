@@ -661,6 +661,14 @@ class Handler(BaseHTTPRequestHandler):
             if wav is None:
                 return self._json({"error": "no exact authentic clip"})
             return self._reply(wav, "audio/wav")
+        if self.path.startswith("/voice/module"):
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            artifact = soundboard_voice.module_artifact(
+                query.get("key", [""])[0])
+            if artifact is None:
+                return self._json(
+                    {"error": "unknown, rejected, or invalid soundboard key"})
+            return self._reply(artifact["payload"], "application/octet-stream")
         if self.path.startswith("/thinking-sound?"):
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             names = {
@@ -762,6 +770,10 @@ class Handler(BaseHTTPRequestHandler):
                               else {"ok": True, "state": "restoring"})
         if self.path == "/sound-bank-install":
             request = json.loads(raw)
+            if request.get("sound_key"):
+                return self._json(speech.install_soundboard_module(
+                    soundboard_voice, request["sound_key"],
+                    request.get("confirmation")))
             return self._json(speech.install_profile(
                 request.get("profile", ""), request.get("confirmation")))
         if self.path == "/lidar":

@@ -1,5 +1,7 @@
 import time
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from neatobmo import speech
 
@@ -88,6 +90,45 @@ class AuthenticClipPlaybackTests(unittest.TestCase):
         self.assertEqual(job["state"], "complete")
         self.assertEqual(service.body.esp32.wavs, [b"RIFFauthentic"])
         self.assertEqual(service.flash_writes, 0)
+
+
+class PreGeneratedSoundboardInstallTests(unittest.TestCase):
+    def test_install_uses_saved_verified_module_without_rebuilding(self):
+        class Body:
+            attached = True
+
+            def call(self, fn):
+                return fn(object())
+
+        class Board:
+            def module_artifact(self, key):
+                return {"key": key, "label": "hello there",
+                        "sha256": "a" * 64, "path": Path("prepared.bin"),
+                        "payload": b"prepared", "slots": [0]}
+
+        service = speech.SpeechService(Body(), object())
+        proof = {"sha256": "a" * 64, "accepted_ids": list(range(21)),
+                 "receiver_hex": "06"}
+        with mock.patch.object(speech.tts_bank.BankBurner, "restore_bank",
+                               return_value=proof) as restore:
+            result = service.install_soundboard_module(
+                Board(), "approved-key",
+                speech.SOUNDBOARD_INSTALL_CONFIRMATION)
+
+        self.assertTrue(result["pre_generated"])
+        self.assertEqual(service.flash_writes, 1)
+        restore.assert_called_once_with(
+            Path("prepared.bin"), "a" * 64,
+            "pre-generated BMO page for hello there")
+
+    def test_install_requires_explicit_confirmation(self):
+        class Body:
+            attached = True
+
+        service = speech.SpeechService(Body(), object())
+        result = service.install_soundboard_module(object(), "key", "yes")
+        self.assertIn(speech.SOUNDBOARD_INSTALL_CONFIRMATION,
+                      result["error"])
 
 
 if __name__ == "__main__":

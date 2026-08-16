@@ -11,7 +11,7 @@ not imply interactive speed on an ESP32-S3.
 | Family | Upstream engine | Upstream storage/attention shape | ESP32 status |
 |---|---|---|---|
 | OLMoE | `c/olmoe.c` | Streamed quantized experts, conventional multi-head KV, 4096-token context | In progress: BMOQ/CTOK conversion, Q4 layers, prompt-to-text generation, 4096-token file-backed paged KV, generic architecture dispatch, and SSE API streaming are implemented; physical SSD parity remains |
-| GLM-5.2 | `c/colibri.c` | Group-quantized streamed experts, compressed MLA KV, optional MTP | Not ported |
+| GLM-5.2 | `c/colibri.c` | Group-quantized streamed experts, compressed MLA KV, optional MTP | In progress: BMOQ/CTOK conversion, bundled streamed experts, compressed file-backed state, prompt-to-text generation, stop-token handling, generic dispatch, and host parity fixtures are implemented; upstream-checkpoint parity, physical SSD evidence, MTP, and latency remain |
 | Inkling | `c/inkling.c` | Streamed routed experts, alternating local/global GQA, 8192-token default | Not ported |
 | Kimi K3 | `c/kimi_k3.c` | Native MXFP4 experts, recurrent KDA plus MLA state | Not ported |
 | DeepSeek V4 Flash | `c/deepseek_v4.c` | FP8/BF16 dense path, window and compressed sparse-attention state | Not ported |

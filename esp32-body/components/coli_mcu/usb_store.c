@@ -336,7 +336,9 @@ static void offline_generate_task(void *arg)
             ESP_LOGW(TAG, "offline Gemma unavailable stage=%d status=%d",
                      result.stage, status);
         }
-    } else if (status == COLI_OK && architecture == BMOQ_MODEL_ARCH_OLMOE) {
+    } else if (status == COLI_OK &&
+               (architecture == BMOQ_MODEL_ARCH_OLMOE ||
+                architecture == BMOQ_MODEL_ARCH_GLM52)) {
         status = coli_store_open_file(COLI_TOKENIZER_FILE, &tokenizer_store);
         coli_generate_result_t result = {0};
         if (status == COLI_OK) {
@@ -356,23 +358,30 @@ static void offline_generate_task(void *arg)
                 .log_chunk = generate_log_chunk,
                 .callback_context = NULL,
             };
-            status = coli_generate_olmoe_greedy(model_store, tokenizer_store,
-                                                &config, &result);
+            if (architecture == BMOQ_MODEL_ARCH_GLM52)
+                status = coli_generate_glm52_greedy(
+                    model_store, tokenizer_store, &config, &result);
+            else
+                status = coli_generate_olmoe_greedy(
+                    model_store, tokenizer_store, &config, &result);
         }
         if (status == COLI_OK) {
             ESP_LOGI(TAG,
-                     "offline OLMoE done prompt_tokens=%u generated=%u "
+                     "offline Colibri arch=%" PRIu32
+                     " done prompt_tokens=%u generated=%u "
                      "decoded=%u kv=%u resident_kv=%u workspace=%u "
                      "last_token=%" PRIu32,
-                     (unsigned)result.prompt_tokens,
+                     architecture, (unsigned)result.prompt_tokens,
                      (unsigned)result.generated_tokens,
                      (unsigned)result.decoded_bytes,
                      (unsigned)result.kv_cache_bytes,
                      (unsigned)result.kv_cache_resident_bytes,
                      (unsigned)result.workspace_bytes, result.last_token_id);
         } else if (status != COLI_ERR_REMOVED) {
-            ESP_LOGW(TAG, "offline OLMoE unavailable stage=%d status=%d",
-                     result.stage, status);
+            ESP_LOGW(TAG,
+                     "offline Colibri arch=%" PRIu32
+                     " unavailable stage=%d status=%d",
+                     architecture, result.stage, status);
         }
     } else if (status == COLI_OK) {
         status = COLI_ERR_FORMAT;

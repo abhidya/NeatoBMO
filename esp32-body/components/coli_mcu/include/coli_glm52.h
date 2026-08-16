@@ -174,6 +174,26 @@ typedef struct {
     size_t peak_workspace_bytes;
 } coli_glm52_layer_stats_t;
 
+typedef struct {
+    coli_q4_stats_t embedding_q4;
+    coli_q4_stats_t lm_head_q4;
+    coli_glm52_layer_stats_t last_layer;
+    uint32_t layers_executed;
+    float selected_logit;
+    size_t peak_workspace_bytes;
+} coli_glm52_decode_stats_t;
+
+typedef struct {
+    coli_glm52_decode_stats_t last_decode;
+    size_t prompt_tokens_consumed;
+    size_t generated_tokens;
+    bool stopped_on_eos;
+} coli_glm52_generate_stats_t;
+
+typedef coli_status_t (*coli_glm52_token_fn)(void *context,
+                                             uint32_t token_id,
+                                             size_t generated_index);
+
 /** Decode and validate the bounded GLM-5.2 metadata stored in BMOQ v2. */
 coli_status_t coli_glm52_config_load(const coli_model_t *model,
                                      coli_glm52_config_t *out_config);
@@ -256,6 +276,33 @@ coli_status_t coli_glm52_sparse_layer_decode(
     size_t input_count, float *output, size_t output_count,
     coli_kv_cache_t *state, void *workspace, size_t workspace_bytes,
     coli_glm52_layer_stats_t *stats);
+
+size_t coli_glm52_decode_required_workspace(
+    const coli_glm52_config_t *config, uint32_t token_count,
+    size_t q4_workspace_bytes);
+
+coli_status_t coli_glm52_decode_next_token(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t input_token_id, uint32_t position, coli_kv_cache_t *state,
+    void *workspace, size_t workspace_bytes, uint32_t *out_token_id,
+    coli_glm52_decode_stats_t *stats);
+
+coli_status_t coli_glm52_generate_greedy_stream(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    const uint32_t *prompt_token_ids, size_t prompt_token_count,
+    uint32_t *output_token_ids, size_t output_token_capacity,
+    size_t max_new_tokens, size_t *out_output_token_count,
+    coli_kv_cache_t *state, void *workspace, size_t workspace_bytes,
+    coli_glm52_token_fn on_token, void *token_context,
+    coli_glm52_generate_stats_t *stats);
+
+coli_status_t coli_glm52_generate_greedy(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    const uint32_t *prompt_token_ids, size_t prompt_token_count,
+    uint32_t *output_token_ids, size_t output_token_capacity,
+    size_t max_new_tokens, size_t *out_output_token_count,
+    coli_kv_cache_t *state, void *workspace, size_t workspace_bytes,
+    coli_glm52_generate_stats_t *stats);
 
 #ifdef __cplusplus
 }

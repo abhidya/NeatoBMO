@@ -135,9 +135,9 @@ class ChatHttpTests(unittest.TestCase):
         finally:
             conn.close()
         self.assertGreaterEqual(catalog["count"], 200)
-        self.assertEqual(catalog["trusted_count"], 214)
-        self.assertEqual(catalog["quarantined_count"], 16)
-        self.assertEqual(catalog["pending_review_count"], 14)
+        self.assertEqual(catalog["trusted_count"], 228)
+        self.assertEqual(catalog["quarantined_count"], 2)
+        self.assertEqual(catalog["pending_review_count"], 0)
         self.assertEqual(catalog["rejected_count"], 2)
         self.assertEqual(catalog["mode"], "soundboard")
         self.assertIsNotNone(catalog["exact"])
@@ -150,6 +150,24 @@ class ChatHttpTests(unittest.TestCase):
             conn.close()
         self.assertEqual(response.getheader("Content-Type"), "audio/wav")
         self.assertTrue(wav.startswith(b"RIFF"))
+
+        key = catalog["exact"]["key"]
+        conn, response = self.request("GET", f"/voice/module?key={key}")
+        try:
+            module = response.read()
+        finally:
+            conn.close()
+        self.assertEqual(response.getheader("Content-Type"),
+                         "application/octet-stream")
+        self.assertGreater(len(module), len(wav))
+
+        conn, response = self.request(
+            "GET", "/voice/module?key=101-24002778-bmo")
+        try:
+            rejected = json.loads(response.read())
+        finally:
+            conn.close()
+        self.assertIn("rejected", rejected["error"])
 
 
 if __name__ == "__main__":

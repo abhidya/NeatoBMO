@@ -1,8 +1,8 @@
 # ESP32 Colibri (`coli_mcu`)
 
 This directory is a Git-importable ESP-IDF component and the staging source for
-the standalone ESP32 Colibri repository. It currently has an OLMoE BMOQ+CTOK prompt-to-text path, a
-separate experimental Gemma path, and a bounded GLM-5.2 attention path. See
+the standalone ESP32 Colibri repository. It currently has OLMoE and GLM-5.2
+BMOQ+CTOK prompt-to-text paths plus a separate experimental Gemma path. See
 [COMPATIBILITY.md](COMPATIBILITY.md) for
 the upstream-family matrix and the evidence required before claiming support.
 
@@ -26,10 +26,11 @@ than `main` in production firmware.
 
 `coli_runtime_generate()` is the transport-neutral application boundary. A
 request supplies model/tokenizer paths, prompt and generation limits, optional
-SSD KV-cache settings, cooperative cancellation/yield hooks, and a decoded-byte
+SSD KV/state settings, cooperative cancellation/yield hooks, and a decoded-byte
 callback. The dispatcher reads the BMOQ architecture before selecting an
-engine. It currently dispatches OLMoE and returns `COLI_ERR_UNSUPPORTED` for
-every other architecture instead of guessing compatible semantics.
+engine. It currently dispatches OLMoE and GLM-5.2 and returns
+`COLI_ERR_UNSUPPORTED` for every other architecture instead of guessing
+compatible semantics.
 
 NeatoBMO exposes this boundary as `POST /v1/completions`. The request may be a
 plain-text prompt or JSON:
@@ -55,8 +56,8 @@ owner. When enabled and the
 configured model and tokenizer exist, the component starts a low-priority
 `coli_generate` task. The task reads `/usb/prompt.txt` when present
 or falls back to a short fixed prompt, opens the BMOQ model and CTOK tokenizer,
-encodes the prompt, runs the OLMoE greedy token loop with its 4096-token logical
-context backed by `/usb/olmoe.kv`, and
+encodes the prompt, runs the selected OLMoE or GLM-5.2 greedy token loop with
+its configured logical context backed by the configured SSD state file, and
 logs decoded chunks. It yields through callback hooks and cancels on MSC
 removal; CDC/safety work must remain higher priority than this demo.
 
@@ -69,7 +70,7 @@ The tensor layer uses a 64-bit `read_at` interface and never assumes that a
 tensor fits in PSRAM. BMOQ stores a 4 KiB little-endian header, a fixed 64-byte
 tensor directory, and aligned tensor payloads. Offsets are byte offsets within
 the BMOQ file, allowing the public MSC VFS interface to be used today. The
-directory starts after the fixed header and may contain up to 4096 entries;
+directory starts after the fixed header and may contain up to 8192 entries;
 tensor extents follow it at converter-chosen alignment boundaries.
 
 No `esp_private` MSC headers are included. Espressif exposes raw sector helpers

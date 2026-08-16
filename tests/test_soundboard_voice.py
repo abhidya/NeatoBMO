@@ -26,9 +26,9 @@ class SoundboardVoiceTests(unittest.TestCase):
     def test_only_individually_reviewed_soundboard_imports_are_enabled(self):
         board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
         self.assertEqual(board.count, 230)
-        self.assertEqual(board.trusted_count, 214)
-        self.assertEqual(board.quarantined_count, 16)
-        self.assertEqual(board.pending_review_count, 14)
+        self.assertEqual(board.trusted_count, 228)
+        self.assertEqual(board.quarantined_count, 2)
+        self.assertEqual(board.pending_review_count, 0)
         self.assertEqual(board.rejected_count, 2)
         self.assertIsNotNone(board.resolve("I love you"))
         self.assertTrue(board.render_for_review("101-28062487-i-love-you")
@@ -83,6 +83,21 @@ class SoundboardVoiceTests(unittest.TestCase):
             self.assertEqual(synth.synth("A brand new sentence"),
                              b"RIFFneural")
             neural.assert_called_once()
+
+    def test_approved_module_is_prebuilt_verified_and_cached(self):
+        board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
+        sound = board.resolve("Hello there")
+        artifact = board.module_artifact(sound["key"])
+        self.assertEqual(artifact["sha256"], sound["module_sha256"])
+        self.assertEqual(artifact["payload"], artifact["path"].read_bytes())
+        with mock.patch.object(Path, "read_bytes",
+                               side_effect=AssertionError("cache miss")):
+            self.assertIs(board.module_artifact(sound["key"])["payload"],
+                          artifact["payload"])
+
+    def test_rejected_module_cannot_be_downloaded_or_installed(self):
+        board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
+        self.assertIsNone(board.module_artifact("101-24002778-bmo"))
 
 
 if __name__ == "__main__":

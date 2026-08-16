@@ -68,6 +68,17 @@ end-to-end when the robot hangs off the ESP32 instead of the Mac.
   audible 0–20 sweep (the explicit BMO restore still runs the full sweep).
 - One speech job at a time; robot access serialized through `rlock`;
   `/sound-bank-install` is blocked while speech runs.
+- Approved soundboard pages are already complete Neato bank images. Send
+  `{"sound_key":"<catalog key>","confirmation":"INSTALL PREGENERATED BMO SOUND BANK"}`
+  to `/sound-bank-install` to install the catalog item's saved, SHA-verified
+  module without synthesis, transcoding, or bank construction. This is an
+  explicit offline/fallback operation; normal exact-clip speech uses runtime
+  WAV playback and performs zero flash writes.
+- `GET /voice/module?key=<catalog key>` returns the same approved pre-generated
+  module for ESP32/offline caching. Rejected and unknown keys are never served.
+- Runtime extraction keeps the four most recently used verified modules in
+  memory, avoiding repeated disk reads and SHA work without retaining the full
+  roughly 27 MB library in RAM.
 - Speech is never silently truncated: unfittable text raises with a clear
   message (`max_chunks` default 24 ≈ 7 minutes of speech).
 

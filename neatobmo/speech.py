@@ -23,6 +23,7 @@ ACTIVE_STATES = {"synthesizing", "building", "burning", "speaking", "restoring"}
 THINKING_SLOT_FILES = {3: "thinking-blip-a.wav", 19: "thinking-blip-b.wav",
                        9: "thinking-hum.wav"}
 THINKING_CUES = ((2.2, 3), (4.5, 19))
+SOUNDBOARD_INSTALL_CONFIRMATION = "INSTALL PREGENERATED BMO SOUND BANK"
 
 
 def load_thinking_sounds(directory):
@@ -340,5 +341,39 @@ class SpeechService:
                     "label": profile["label"], "sha256": result["sha256"],
                     "accepted_ids": result["accepted_ids"],
                     "receiver_hex": result["receiver_hex"]}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def install_soundboard_module(self, soundboard, key, confirmation):
+        """Install an approved catalog page exactly as prepared on disk.
+
+        This is an explicit offline/fallback operation. Normal clip playback
+        uses ESP32 runtime WAV audio and never flashes a bank per utterance.
+        """
+        if self.active():
+            return {"error": "a TTS bank operation is running"}
+        if confirmation != SOUNDBOARD_INSTALL_CONFIRMATION:
+            return {"error": f"type {SOUNDBOARD_INSTALL_CONFIRMATION} exactly"}
+        if not self.body.attached:
+            return {"error": "body not attached"}
+        artifact = soundboard.module_artifact(key)
+        if artifact is None:
+            return {"error": "unknown, rejected, or invalid soundboard key"}
+        try:
+            def install(robot):
+                burner = tts_bank.BankBurner(robot)
+                return burner.restore_bank(
+                    artifact["path"], artifact["sha256"],
+                    f"pre-generated BMO page for {artifact['label']}")
+            result = self.body.call(install)
+            with self.lock:
+                self.installed_profile = f"soundboard:{key}"
+                self.installed_sha = artifact["sha256"]
+                self.flash_writes += 1
+            return {"ok": True, "key": key, "label": artifact["label"],
+                    "sha256": result["sha256"],
+                    "accepted_ids": result["accepted_ids"],
+                    "receiver_hex": result["receiver_hex"],
+                    "pre_generated": True}
         except Exception as exc:
             return {"error": str(exc)}

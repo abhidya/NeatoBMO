@@ -64,6 +64,11 @@ coli_status_t coli_generate_olmoe_greedy(coli_store_t *model_store,
                                          const coli_generate_config_t *config,
                                          coli_generate_result_t *result);
 
+coli_status_t coli_generate_glm52_greedy(coli_store_t *model_store,
+                                         coli_store_t *tokenizer_store,
+                                         const coli_generate_config_t *config,
+                                         coli_generate_result_t *result);
+
 #ifdef __cplusplus
 }
 #endif

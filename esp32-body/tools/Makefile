@@ -48,7 +48,8 @@ $(BUILD)/test_coli_olmoe_layer: test_coli_olmoe_layer.c $(MCU)/model_format.c \
 $(BUILD)/test_coli_generate: test_coli_generate.c $(MCU)/model_format.c \
 		$(MCU)/store_file.c $(MCU)/q4_matvec.c $(MCU)/ops.c $(MCU)/moe.c \
 		$(MCU)/kv_cache.c $(MCU)/olmoe.c $(MCU)/tokenizer.c \
-		$(MCU)/generate.c $(MCU)/runtime.c | $(BUILD)
+		$(MCU)/glm52.c $(MCU)/glm52_generate.c $(MCU)/generate.c \
+		$(MCU)/runtime.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(BUILD)/test_coli_tokenizer: test_coli_tokenizer.c $(MCU)/store_file.c \
@@ -80,7 +81,9 @@ $(BUILD)/test_coli_kv_attention: test_coli_kv_attention.c \
 
 $(BUILD)/test_coli_glm52: test_coli_glm52.c $(MCU)/model_format.c \
 		$(MCU)/store_file.c $(MCU)/kv_cache.c $(MCU)/ops.c $(MCU)/q4_matvec.c \
-		$(MCU)/moe.c $(MCU)/glm52.c | $(BUILD)
+		$(MCU)/moe.c $(MCU)/olmoe.c $(MCU)/glm52.c \
+		$(MCU)/glm52_generate.c $(MCU)/tokenizer.c $(MCU)/generate.c \
+		$(MCU)/runtime.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 test: $(BINS)

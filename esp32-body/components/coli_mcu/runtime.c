@@ -25,16 +25,22 @@ coli_status_t coli_runtime_generate(const coli_runtime_request_t *request,
     result->architecture = model.config.arch;
     coli_model_close(&model);
 
-    if (result->architecture != BMOQ_MODEL_ARCH_OLMOE) {
+    if (result->architecture != BMOQ_MODEL_ARCH_OLMOE &&
+        result->architecture != BMOQ_MODEL_ARCH_GLM52) {
         status = COLI_ERR_UNSUPPORTED;
         goto cleanup;
     }
 
     status = coli_store_open_file(request->tokenizer_path, &tokenizer_store);
     if (status != COLI_OK) goto cleanup;
-    status = coli_generate_olmoe_greedy(
-        model_store, tokenizer_store, &request->generation,
-        &result->generation);
+    if (result->architecture == BMOQ_MODEL_ARCH_GLM52)
+        status = coli_generate_glm52_greedy(
+            model_store, tokenizer_store, &request->generation,
+            &result->generation);
+    else
+        status = coli_generate_olmoe_greedy(
+            model_store, tokenizer_store, &request->generation,
+            &result->generation);
 
 cleanup:
     coli_store_close(tokenizer_store);

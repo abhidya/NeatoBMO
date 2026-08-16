@@ -8,6 +8,7 @@ the ESP32 `/speak` runtime-audio path. Synthesis remains the fallback.
 import hashlib
 import json
 import re
+from collections import OrderedDict
 from pathlib import Path
 
 from . import tts_bank
@@ -81,7 +82,7 @@ def _keywords(text):
 
 
 class SoundboardVoice:
-    def __init__(self, catalog_path, approvals_path=None):
+    def __init__(self, catalog_path, approvals_path=None, module_cache_size=4):
         self.catalog_path = Path(catalog_path)
         self.root = self.catalog_path.parent
         self.approvals_path = (Path(approvals_path) if approvals_path else
@@ -91,6 +92,8 @@ class SoundboardVoice:
         self.rejected_keys = set()
         self._phrases = {}
         self._verified_modules = set()
+        self._module_cache = OrderedDict()
+        self.module_cache_size = max(0, int(module_cache_size))
         self._load()
 
     @property
@@ -217,6 +220,46 @@ class SoundboardVoice:
             raise ValueError("sound module escapes catalog directory")
         return path
 
+    def resolve_key(self, key):
+        """Resolve an approved catalog key; rejected clips stay inaccessible."""
+        return next((sound for sound in self.sounds
+                     if sound.get("key") == key and self._eligible(sound)), None)
+
+    def _load_module(self, sound):
+        expected = sound["module_sha256"]
+        cached = self._module_cache.get(expected)
+        if cached is not None:
+            self._module_cache.move_to_end(expected)
+            return cached
+        module = self._module_path(sound).read_bytes()
+        if hashlib.sha256(module).hexdigest() != expected:
+            raise ValueError("sound module hash mismatch")
+        self._verified_modules.add(expected)
+        if self.module_cache_size:
+            self._module_cache[expected] = module
+            self._module_cache.move_to_end(expected)
+            while len(self._module_cache) > self.module_cache_size:
+                self._module_cache.popitem(last=False)
+        return module
+
+    def module_artifact(self, key):
+        """Return one approved, pre-generated upload image and its metadata."""
+        sound = self.resolve_key(key)
+        if sound is None:
+            return None
+        try:
+            module = self._load_module(sound)
+        except (KeyError, OSError, TypeError, ValueError):
+            return None
+        return {
+            "key": sound["key"],
+            "label": _spoken_label(sound.get("label", "")),
+            "sha256": sound["module_sha256"],
+            "path": self._module_path(sound),
+            "payload": module,
+            "slots": sound.get("slots", []),
+        }
+
     def synth(self, text):
         sound = self.resolve(text)
         if sound is None:
@@ -231,13 +274,7 @@ class SoundboardVoice:
 
     def _render(self, sound):
         try:
-            path = self._module_path(sound)
-            module = path.read_bytes()
-            expected = sound["module_sha256"]
-            if expected not in self._verified_modules:
-                if hashlib.sha256(module).hexdigest() != expected:
-                    return None
-                self._verified_modules.add(expected)
+            module = self._load_module(sound)
             pcm = bytearray()
             for segment in sound["segments"]:
                 start = int(segment["pcm_offset"])
