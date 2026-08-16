@@ -85,3 +85,33 @@ readback flags are inert.
 The strongest supported conclusion remains narrow: stock 2.5 and 2.7 expose a
 working host-to-robot sized upload receiver, but the tested advertised flags do
 not return the volatile upload area or any firmware/NAND/filesystem bytes.
+
+## Exact stock 3.1 transition and parser fork
+
+- Exact Cruz-P stock 3.1 build 17844, image SHA-256
+  `03396329a1a47a7358d09bd414d01eddaa5806a50a18f4d9ce2f96edc2d5fab7`,
+  was sent once by the guarded updater. The robot ACKed the 847,872-byte image
+  with zero retries. The updater's bounded rediscovery window did not verify
+  the new application, but a later fresh `GetVersion` and both 3.1 matrix
+  preflights independently reported 3.1.17844 on the expected mainboard.
+- The first 3.1 pass reproduced inert echo/terminator responses for every plain
+  dump/readflash form. `Upload code dump Size 260` instead echoed the command
+  and emitted ENQ, selecting the host-to-robot receiver. CAN/CAN did not yield
+  a terminator, so the harness stopped without sending payload bytes. A normal
+  Neato power cycle cleared the partial receive state; `GetVersion` afterward
+  still reported 3.1.17844.
+- A reordered completion pass ran all plain and XMODEM rows before the
+  size-qualified forms. No XMODEM SOH/STX or robot-to-host data appeared.
+  `Upload sound dump Size 260` likewise emitted ENQ and did not confirm CAN/CAN
+  cancellation. The harness again stopped without sending a payload.
+- The private echo-plus-ENQ transcripts are 28 bytes/SHA-256
+  `8a1d15b71a4cbea8b50fc55c84d2983981c153948e340fce3f003f23d41c8179`
+  and 29 bytes/SHA-256
+  `cb97c49452cbcb79254aea036a75871eb254e43e5ab7884ba92bf0f13bd977e5`.
+  P6 remained silent in both runs.
+
+This is a version-specific parser/state-machine difference, not readback. On
+3.1, a region token plus `Size` can win over the extra `dump` token and enter
+the binary upload receiver even though `dump` is absent from 3.1 help. ENQ
+means the robot expects host payload bytes; it does not establish dump
+semantics, storage acceptance, firmware extraction, or filesystem access.

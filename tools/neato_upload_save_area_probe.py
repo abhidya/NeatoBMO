@@ -59,15 +59,15 @@ XMODEM_COMMANDS = (
 
 SIZE_QUERY_COMMANDS = (
     "Upload dump Size 260",
-    "Upload code dump Size 260",
-    "Upload code Size 260 dump",
     "Upload sound dump Size 260",
     "Upload LDS dump Size 260",
     "Upload readflash Size 260",
-    "Upload code readflash Size 260",
-    "Upload code Size 260 readflash",
     "Upload sound readflash Size 260",
     "Upload LDS readflash Size 260",
+    "Upload code readflash Size 260",
+    "Upload code Size 260 readflash",
+    "Upload code dump Size 260",
+    "Upload code Size 260 dump",
 )
 
 FORBIDDEN_TOKENS = (" erase", " reboot", " size", " burn", "write")
@@ -313,6 +313,25 @@ def run(
                     break
 
             if stopped_reason is None:
+                for command in XMODEM_COMMANDS:
+                    if abort.is_set():
+                        stopped_reason = "P6 abort marker observed"
+                        break
+                    data, payload_start = probe_xmodem_start(connection, command)
+                    if preserve_or_publish(
+                        records,
+                        private_blobs,
+                        command,
+                        data,
+                        payload_start=payload_start,
+                    ):
+                        stopped_reason = f"XMODEM/private review required after {command}"
+                        break
+                    if abort.is_set():
+                        stopped_reason = "P6 abort marker observed"
+                        break
+
+            if stopped_reason is None:
                 for command in SIZE_QUERY_COMMANDS:
                     if abort.is_set():
                         stopped_reason = "P6 abort marker observed"
@@ -349,25 +368,6 @@ def run(
                         stopped_reason = "P6 abort marker observed"
                         break
 
-            if stopped_reason is None:
-                for command in XMODEM_COMMANDS:
-                    if abort.is_set():
-                        stopped_reason = "P6 abort marker observed"
-                        break
-                    data, payload_start = probe_xmodem_start(connection, command)
-                    if preserve_or_publish(
-                        records,
-                        private_blobs,
-                        command,
-                        data,
-                        payload_start=payload_start,
-                    ):
-                        stopped_reason = f"XMODEM/private review required after {command}"
-                        break
-                    if abort.is_set():
-                        stopped_reason = "P6 abort marker observed"
-                        break
-
             if stopped_reason is None and abort.is_set():
                 stopped_reason = "P6 abort marker observed"
             if stopped_reason is None:
@@ -386,8 +386,13 @@ def run(
                 with serial.Serial(neato_port, 115200, timeout=0.1) as connection:
                     data, extended = read_large_log(connection, command)
                     record = digest_record(command, data)
-                    record["capture_extended_after_initial_limit"] = extended
+                    record["capture_extended_to_drain_stream"] = extended
                     records.append(record)
+                    if TERM not in data:
+                        stopped_reason = (
+                            f"{command} stream did not terminate within capture budget"
+                        )
+                        break
             except (serial.SerialException, OSError) as exc:
                 records.append({
                     "command": command,
@@ -440,7 +445,7 @@ def main() -> int:
         (args.private_dir / name).write_bytes(data)
     args.result.parent.mkdir(parents=True, exist_ok=True)
     args.result.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
-    return 0
+    return 2 if result["stopped_reason"] else 0
 
 
 if __name__ == "__main__":

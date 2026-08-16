@@ -1,0 +1,262 @@
+{
+  "auto_retries": 0,
+  "neato_port": "/dev/cu.usbmodem143301",
+  "p6_bytes": 0,
+  "p6_classification": "no-response",
+  "p6_port": "/dev/cu.usbmodem14202",
+  "p6_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "persistent_write_requested": false,
+  "records": [
+    {
+      "bytes": 643,
+      "classification": "text-or-protocol-control",
+      "command": "GetVersion before",
+      "escaped_text": "GetVersion\r\nComponent,Major,Minor,Build\r\nModelID,-1,XV12,\r\nConfigID,1,,\r\nSerial Number,WTD41611DD,0037829,P\r\nSoftware,3,1,17844\r\nBatteryType,1,NIMH_12CELL,\r\nBlowerType,1,BLOWER_ORIG,\r\nBrushSpeed,1200,,\r\nBrushMotorType,1,BRUSH_MOTOR_ORIG,\r\nSideBrushType,1,SIDE_BRUSH_NONE,\r\nWheelPodType,1,WHEEL_POD_ORIG,\r\nDropSensorType,1,DROP_SENSOR_ORIG,\r\nMagSensorType,1,MAG_SENSOR_ORIG,\r\nWallSensorType,1,WALL_SENSOR_ORIG,\r\nLocale,1,LOCALE_USA,\r\nLDS Software,V2.6.15295,0000000000,\r\nLDS Serial,WTD41411AA-0061795,,\r\nLDS CPU,F2802x/c001,,\r\nMainBoard Vendor ID,543,,\r\nMainBoard Serial Number,25810,,\r\nMainBoard Version,7,1,\r\nChassisRev,1,,\r\nUIPanelRev,1,,\r\n\u001a",
+      "sha256": "92fd7e4eef16ce3e3d96c556a666a90ab8e16b0b3aa073706e80f6c5f8c4cfd3",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 565,
+      "classification": "text-or-protocol-control",
+      "command": "Help Upload",
+      "escaped_text": "Help Upload\r\nHelp Strlen = 530\r\nUpload - Uploads new program to the robot.\r\n    code - Upload file is the main application. (Mutually exclusive with sound, LDS)\r\n    sound - Upload file is a sound module. (Mutually exclusive with code, LDS)\r\n    LDS - Upload file is an LDS module. (Mutually exclusive with sound, code)\r\n    size - data size to upload to device.\r\n    noburn - test option -- do NOT burn the flash after the upload.\r\n    readflash - test option -- read the flash at the current region.\r\n    reboot - Reset the robot after performing the upload.\r\n\r\n\u001a",
+      "sha256": "6de8a98f6627ad5e3a0d9809b91e468ab2f2e269cc4b1a28f39aab54978add23",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 68,
+      "classification": "text-or-protocol-control",
+      "command": "GetErr before",
+      "escaped_text": "GetErr\r\n249 - Please press OKAY to restart. Battery Issue (0008) \r\n\u001a",
+      "sha256": "0025003e977cdd66c334e9d2b446dd79f33cbef1811397137d05ff8122447aef",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 30,
+      "classification": "text-or-protocol-control",
+      "command": "sentinel opening",
+      "escaped_text": "Upload code noburn Size 260\r\n\u0005",
+      "sha256": "66257563611618dd32efd432840ad56225478c0812b765ad2b5adf6aa86f42e7",
+      "terminator_seen": false,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 1,
+      "classification": "text-or-protocol-control",
+      "command": "sentinel closing",
+      "escaped_text": "\u001a",
+      "sha256": "58f7b0780592032e4d8602a3e8690fb2c701b2e1dd546e703445aabd6469734d",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 14,
+      "classification": "text-or-protocol-control",
+      "command": "Upload dump",
+      "escaped_text": "Upload dump\r\n\u001a",
+      "sha256": "555cdbf5fa1037b758d2e862d7e93724e6e7d7cd858c9ece846806a6946f33d5",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 19,
+      "classification": "text-or-protocol-control",
+      "command": "Upload code dump",
+      "escaped_text": "Upload code dump\r\n\u001a",
+      "sha256": "ba33ceb86d1a6d11ebcb3e78f2da88bddd0299792067629118ac37ce0309f0b5",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 19,
+      "classification": "text-or-protocol-control",
+      "command": "Upload dump code",
+      "escaped_text": "Upload dump code\r\n\u001a",
+      "sha256": "2978f45b0341a8dde91cb76e9e9c85ce7dd4c026490445c2c25eae0e2c7ea772",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 20,
+      "classification": "text-or-protocol-control",
+      "command": "Upload sound dump",
+      "escaped_text": "Upload sound dump\r\n\u001a",
+      "sha256": "af81069804f646ae48a158514e9244604c7cb5dbf446a94a463c03127a1f3f5c",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 20,
+      "classification": "text-or-protocol-control",
+      "command": "Upload dump sound",
+      "escaped_text": "Upload dump sound\r\n\u001a",
+      "sha256": "7760afe60237a6e9bdbc1aaa27e8ee14cf0023cc3877bbebec19ddfc5d356fd4",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 18,
+      "classification": "text-or-protocol-control",
+      "command": "Upload LDS dump",
+      "escaped_text": "Upload LDS dump\r\n\u001a",
+      "sha256": "4df96c93676054803d284de0012e1741667399440ad6eb44f9267072a55125fb",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 18,
+      "classification": "text-or-protocol-control",
+      "command": "Upload dump LDS",
+      "escaped_text": "Upload dump LDS\r\n\u001a",
+      "sha256": "478191bb0edd1c8ed5c89629fcad015ae60cc7eccaafb869de81064be3d11ed8",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 19,
+      "classification": "text-or-protocol-control",
+      "command": "Upload readflash",
+      "escaped_text": "Upload readflash\r\n\u001a",
+      "sha256": "9a69ce6554035ab4ff2dcc7750b0bba240de7bb35cabd970d0b35f0c21832828",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 24,
+      "classification": "text-or-protocol-control",
+      "command": "Upload code readflash",
+      "escaped_text": "Upload code readflash\r\n\u001a",
+      "sha256": "7f7e0cb602ec288c927e0669d22ad1d6cb4344b122ce286b72da047fc67d694d",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 24,
+      "classification": "text-or-protocol-control",
+      "command": "Upload readflash code",
+      "escaped_text": "Upload readflash code\r\n\u001a",
+      "sha256": "d5bea16f627730e5edbb253196a3ce95cda6dfb180c88a1f59da07a039f0443f",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 25,
+      "classification": "text-or-protocol-control",
+      "command": "Upload sound readflash",
+      "escaped_text": "Upload sound readflash\r\n\u001a",
+      "sha256": "0ddd018931818e92aabad76b8878294a8fa6a03c6729d7df1caba94f2babb08f",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 25,
+      "classification": "text-or-protocol-control",
+      "command": "Upload readflash sound",
+      "escaped_text": "Upload readflash sound\r\n\u001a",
+      "sha256": "8f42a2ea336634da4ec3cdd76f7bae1354ef4fb0ae519111f011b25c21b58ffa",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 23,
+      "classification": "text-or-protocol-control",
+      "command": "Upload LDS readflash",
+      "escaped_text": "Upload LDS readflash\r\n\u001a",
+      "sha256": "a5a69d6dce9610b3f3adbf22009603b27dd463f589204293d1bf3ad9fb9c4063",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 23,
+      "classification": "text-or-protocol-control",
+      "command": "Upload readflash LDS",
+      "escaped_text": "Upload readflash LDS\r\n\u001a",
+      "sha256": "bbfef05d4e6ced014a7893a4ffa90100100418aa651f8b1343f110dc282898da",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 58,
+      "classification": "text-or-protocol-control",
+      "command": "Upload readflash xmodem",
+      "escaped_text": "Upload readflash xmodem\r\n\u001aCCCC\u0018\u0018\r\nUnknown Cmd: 'CCCC\u0018\u0018'\r\n\u001a",
+      "sha256": "ad8eb9e2fc6ffe070572892b8e4901e3865728c70d2399f69ecc4baa658524f0",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 58,
+      "classification": "text-or-protocol-control",
+      "command": "Upload xmodem readflash",
+      "escaped_text": "Upload xmodem readflash\r\n\u001aCCCC\u0018\u0018\r\nUnknown Cmd: 'CCCC\u0018\u0018'\r\n\u001a",
+      "sha256": "de80416f455aef5b3b7b72b5bb3f0cb12a4219955d0fac130545940a7142eeb7",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 63,
+      "classification": "text-or-protocol-control",
+      "command": "Upload code readflash xmodem",
+      "escaped_text": "Upload code readflash xmodem\r\n\u001aCCCC\u0018\u0018\r\nUnknown Cmd: 'CCCC\u0018\u0018'\r\n\u001a",
+      "sha256": "bbfb4eeee1ca8915bb0982d9dc5ee8d3d396db34d45b8d3cd328c94fa58cbfa9",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 63,
+      "classification": "text-or-protocol-control",
+      "command": "Upload code xmodem readflash",
+      "escaped_text": "Upload code xmodem readflash\r\n\u001aCCCC\u0018\u0018\r\nUnknown Cmd: 'CCCC\u0018\u0018'\r\n\u001a",
+      "sha256": "821099e5f0e1359749bde299ccf54a5a5fb22b54d592b67ad78c7b4548cf76d2",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 64,
+      "classification": "text-or-protocol-control",
+      "command": "Upload sound readflash xmodem",
+      "escaped_text": "Upload sound readflash xmodem\r\n\u001aCCCC\u0018\u0018\r\nUnknown Cmd: 'CCCC\u0018\u0018'\r\n\u001a",
+      "sha256": "8a02da2d9a127ca9566841b9349d615ec33cb02ee06f3fc485e2646323c7e6c2",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 62,
+      "classification": "text-or-protocol-control",
+      "command": "Upload LDS readflash xmodem",
+      "escaped_text": "Upload LDS readflash xmodem\r\n\u001aCCCC\u0018\u0018\r\nUnknown Cmd: 'CCCC\u0018\u0018'\r\n\u001a",
+      "sha256": "1b29c9e0e890f35af5d4c174b86a71ed42b7a591f900df429ebcfb318f550d58",
+      "terminator_seen": true,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 23,
+      "classification": "text-or-protocol-control",
+      "command": "Upload dump Size 260",
+      "escaped_text": "Upload dump Size 260\r\n\u001a",
+      "sha256": "4f910ed99e59170e4e5c4451df22d433d2cbd0585a61d9d03aa21d914d3a9b43",
+      "target_requested_upload_bytes": false,
+      "terminator_seen": true,
+      "upload_cancel_confirmed": false,
+      "xmodem_payload_start": false
+    },
+    {
+      "bytes": 29,
+      "classification": "upload-receiver-cancel-unconfirmed-private",
+      "command": "Upload sound dump Size 260",
+      "private_artifact": "breakthrough-01.bin",
+      "sha256": "cb97c49452cbcb79254aea036a75871eb254e43e5ab7884ba92bf0f13bd977e5",
+      "target_requested_upload_bytes": true,
+      "terminator_seen": false,
+      "upload_cancel_confirmed": false,
+      "xmodem_payload_start": false
+    }
+  ],
+  "schema": "neatobmo-upload-save-area-probe/v1",
+  "sentinel_bytes": 256,
+  "sentinel_sha256": "c7df70ec3089d5fdc3ca14710f63c4f8cfd41e04d2e1bd05a89f79db36fa4b99",
+  "stopped_reason": "size query selected upload receiver; cancel not confirmed"
+}

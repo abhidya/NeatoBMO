@@ -485,3 +485,12 @@ any reflash or baud change.** Details: `analysis/{at91-baud-research,hypothesis-
   `firmware-27-write-result.json`, and `stock-27-result.json`. The remaining
   planned transitions are exact stock 3.1, exact 2.5 restore, and an exact
   vendor default sound-bank write.
+- Exact stock 3.1 build 17844 was subsequently written once and ACKed. Fresh
+  matrix preflights verified 3.1.17844 after the updater's automatic USB
+  rediscovery window expired. Unlike 2.5/2.7, 3.1 treated both
+  `Upload code dump Size 260` and `Upload sound dump Size 260` as host upload
+  starts: each returned ENQ, no payload was sent, CAN/CAN did not confirm
+  cancellation, and the harness failed closed pending a normal power cycle.
+  This is receiver selection, not dump/readback evidence. See
+  `firmware-31-write-result.json`, `stock-31-result.json`, and
+  `stock-31-completion-result.json`.

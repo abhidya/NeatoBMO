@@ -181,3 +181,10 @@ def test_large_log_capture_extends_when_initial_window_has_no_terminator(
 
     assert data == initial + tail
     assert extended is True
+
+
+def test_incomplete_large_log_is_a_fail_closed_stop():
+    source = Path(probe.__file__).read_text()
+    assert "stream did not terminate within capture budget" in source
+    assert 'return 2 if result["stopped_reason"] else 0' in source
+    assert 'record["capture_extended_to_drain_stream"]' in source

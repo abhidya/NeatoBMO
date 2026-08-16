@@ -2,7 +2,7 @@
   "schema": "neatobmo-serial-upload-session/v1",
   "session_id": "serial-upload-20260816T045102Z",
   "started_at_utc": "2026-08-16T04:51:02Z",
-  "updated_at_utc": "2026-08-16T05:08:55Z",
+  "updated_at_utc": "2026-08-16T05:20:06Z",
   "repository_base_commit": "98aebc7",
   "target": {
     "robot": "Neato XV-12",
@@ -26,6 +26,41 @@
       "xmodem_payload_start_observed": false,
       "life_stat_log_bytes": 498744,
       "life_stat_log_complete": false,
+      "p6_bytes": 0
+    },
+    {
+      "name": "exact-stock-31-write",
+      "result": "firmware-31-write-result.json",
+      "result_sha256": "d090646b5f0d10656455a408672960767a1278f1a9ede8c2ffee187c723949aa",
+      "image_bytes": 847872,
+      "image_sha256": "03396329a1a47a7358d09bd414d01eddaa5806a50a18f4d9ce2f96edc2d5fab7",
+      "ack_observed": true,
+      "auto_retries": 0,
+      "software_before": "2.7.16621",
+      "automatic_post_reboot_identity_verified": false,
+      "later_matrix_identity_verified": "3.1.17844"
+    },
+    {
+      "name": "stock-31-first-receiver-fork",
+      "result": "stock-31-result.json",
+      "result_sha256": "cf5b926b7611464babd1fa6c0ae716e1ae952744a65f21000570d7ba3a4b9823",
+      "software": "3.1.17844",
+      "sentinel_accepted": true,
+      "receiver_selected_by": "Upload code dump Size 260",
+      "receiver_cancel_confirmed": false,
+      "payload_bytes_sent_after_enq": 0,
+      "p6_bytes": 0
+    },
+    {
+      "name": "stock-31-reordered-completion",
+      "result": "stock-31-completion-result.json",
+      "result_sha256": "47958d3b7daffefb95859ff1665629ea66fe6ece74372dca9f2c6b477e6f71f8",
+      "software": "3.1.17844",
+      "sentinel_accepted": true,
+      "xmodem_payload_start_observed": false,
+      "receiver_selected_by": "Upload sound dump Size 260",
+      "receiver_cancel_confirmed": false,
+      "payload_bytes_sent_after_enq": 0,
       "p6_bytes": 0
     },
     {
@@ -79,6 +114,24 @@
       "bytes": 65242,
       "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/stock-27/lifestat-drain.raw",
       "sha256": "2a313112c564798011d5c5d8d9fd9eb0771c5054fbe8460457c34e3920279865"
+    },
+    {
+      "description": "3.1 write parallel P6 capture; session header only",
+      "bytes": 74,
+      "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/firmware-31-write-p6.raw",
+      "sha256": "f48cc9212807432417db9f1aa92ffac94033a8e44fca616b7402f2f565325baf"
+    },
+    {
+      "description": "3.1 code+dump+size echo and ENQ",
+      "bytes": 28,
+      "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/stock-31/breakthrough-01.bin",
+      "sha256": "8a1d15b71a4cbea8b50fc55c84d2983981c153948e340fce3f003f23d41c8179"
+    },
+    {
+      "description": "3.1 sound+dump+size echo and ENQ",
+      "bytes": 29,
+      "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/stock-31-completion/breakthrough-01.bin",
+      "sha256": "cb97c49452cbcb79254aea036a75871eb254e43e5ab7884ba92bf0f13bd977e5"
     }
   ],
   "actions_not_performed_so_far": [
