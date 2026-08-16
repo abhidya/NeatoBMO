@@ -179,6 +179,19 @@ int main(void)
     assert(stats.page_boundary_crossings > 0);
     assert(stats.storage_reads == ROWS * 4u);
 
+    float row_range[3];
+    assert(coli_q4_matvec_rows(&model, weights, scales, 123, 3, input,
+                               COLUMNS, row_range, 3, workspace,
+                               sizeof(workspace), &stats) == COLI_OK);
+    for (uint32_t row = 0; row < 3; ++row)
+        assert(fabsf(row_range[row] - reference_row(123 + row, input)) <
+               0.0005f);
+    assert(stats.weight_bytes_read == (uint64_t)3 * COLUMNS / 2);
+    assert(stats.scale_bytes_read == (uint64_t)3 * GROUPS * sizeof(float));
+    assert(coli_q4_matvec_rows(&model, weights, scales, ROWS - 1, 2, input,
+                               COLUMNS, row_range, 2, workspace,
+                               sizeof(workspace), &stats) == COLI_ERR_RANGE);
+
     float dequantized[COLUMNS];
     assert(coli_q4_dequantize_row(&model, weights, scales, 123, dequantized,
                                   COLUMNS, workspace, sizeof(workspace),

@@ -131,6 +131,20 @@ coli_status_t coli_q4_matvec(const coli_model_t *model,
                              void *workspace, size_t workspace_bytes,
                              coli_q4_stats_t *stats)
 {
+    if (!weights) return COLI_ERR_ARGUMENT;
+    return coli_q4_matvec_rows(model, weights, scales, 0,
+                               weights->dimensions[0], input, input_count,
+                               output, output_count, workspace,
+                               workspace_bytes, stats);
+}
+
+coli_status_t coli_q4_matvec_rows(
+    const coli_model_t *model, const bmoq_tensor_t *weights,
+    const bmoq_tensor_t *scales, uint32_t first_row, uint32_t row_count,
+    const float *input, size_t input_count, float *output,
+    size_t output_count, void *workspace, size_t workspace_bytes,
+    coli_q4_stats_t *stats)
+{
     if (!model || !input || !output) return COLI_ERR_ARGUMENT;
     uint32_t groups_per_row;
     size_t group_weight_bytes;
@@ -143,10 +157,12 @@ coli_status_t coli_q4_matvec(const coli_model_t *model,
     if (status != COLI_OK) return status;
     const uint32_t rows = weights->dimensions[0];
     const uint32_t group_size = weights->quant_group;
-    if (output_count != rows)
+    if (row_count == 0 || first_row > rows || row_count > rows - first_row ||
+        output_count != row_count)
         return COLI_ERR_RANGE;
 
-    for (uint32_t row = 0; row < rows; ++row) {
+    for (uint32_t output_row = 0; output_row < row_count; ++output_row) {
+        const uint32_t row = first_row + output_row;
         float sum = 0.0f;
         for (uint32_t first_group = 0; first_group < groups_per_row;) {
             uint32_t remaining = groups_per_row - first_group;
@@ -169,7 +185,7 @@ coli_status_t coli_q4_matvec(const coli_model_t *model,
             }
             first_group += group_count;
         }
-        output[row] = sum;
+        output[output_row] = sum;
     }
     return COLI_OK;
 }

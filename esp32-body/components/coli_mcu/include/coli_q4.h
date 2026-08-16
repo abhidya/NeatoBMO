@@ -32,6 +32,14 @@ coli_status_t coli_q4_matvec(const coli_model_t *model,
                              void *workspace, size_t workspace_bytes,
                              coli_q4_stats_t *stats);
 
+/** Compute a contiguous output-row range without materializing the full matrix output. */
+coli_status_t coli_q4_matvec_rows(
+    const coli_model_t *model, const bmoq_tensor_t *weights,
+    const bmoq_tensor_t *scales, uint32_t first_row, uint32_t row_count,
+    const float *input, size_t input_count, float *output,
+    size_t output_count, void *workspace, size_t workspace_bytes,
+    coli_q4_stats_t *stats);
+
 coli_status_t coli_q4_dequantize_row(const coli_model_t *model,
                                      const bmoq_tensor_t *weights,
                                      const bmoq_tensor_t *scales,
