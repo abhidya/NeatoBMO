@@ -127,11 +127,40 @@ magnitude it is not a usable model. Freezing it to satisfy the milestone would
 be recording a number, not shipping a capability.
 
 Mixed precision cannot fix this. Experts are ~6.4B of 6.9B parameters; keeping
-them above 4 bits forfeits essentially all compression. The remedy has to be a
-better 4-bit quantizer for expert weights — MSE-optimal scale search, finer
-groups, or error-compensating methods in the GPTQ/AWQ family — not a precision
-carve-out. Since the runtime is proven exact, that work is entirely in the
-exporter.
+them above 4 bits forfeits essentially all compression.
+
+Neither can a better scale search. Four alternative 4-bit schemes were simulated
+on expert weights, 8 independent forwards each, through the NumPy forward
+validated against Hugging Face:
+
+| expert quantizer | top-1 preserved | mean NLL | mean ΔNLL |
+|---|---|---|---|
+| BF16 control | 8/8 | 7.8685 | — |
+| `absmax/7`, group 32 (current BMOQ) | 0/8 | 10.5921 | +2.7236 |
+| `absmax/8`, group 32 | 0/8 | 10.4814 | +2.6129 |
+| **MSE-optimal scale, group 32** | 0/8 | 10.3275 | +2.4590 |
+| `absmax/7`, group 16 | 0/8 | 10.6613 | +2.7928 |
+| **MSE-optimal scale, group 16** | 0/8 | 10.2982 | +2.4297 |
+
+MSE-optimal scale search buys roughly 10% of the NLL gap. Halving the group size
+to 16 — which doubles scale storage — buys nothing beyond that, and on this
+sample is indistinguishable from noise. **Every variant preserves 0 of 8 top-1
+predictions.** This is the direct evidence that `q4-mse-g32` and `q4-mse-g64`,
+named in the original plan, would not have rescued the model; implementing them
+in the exporter and runtime would have produced five more broken variants.
+
+That finer groups do not help is itself informative: the failure is not scale
+granularity or per-group outliers. Four bits is simply not enough precision for
+this model's expert weights under any round-to-nearest scheme. The remaining
+options are error-compensating quantization that accounts for activations
+(GPTQ/AWQ family), or more bits for experts and an honest reckoning with the
+resulting model size. Since the runtime is proven exact, that work is entirely
+in the exporter.
+
+These rows are simulated quantization over 8 single-token forwards, not exported
+models measured end to end. They are strong enough to rule variants *out*; any
+variant that looks promising must still be exported and run through the C
+runtime before it is reported as a result.
 
 ## Host↔ESP32 parity
 
@@ -196,8 +225,10 @@ determinism (Phase 8 — the run was not repeated), group-size sweep (g64/g128).
 **Unsupported / not implemented:** `q4-mse-g32`, `q4-mse-g64`,
 `q4-experts-q8-router-lm-head`, `q4-experts-f16-router-lm-head`, and
 `q5q6-sensitive-tensors`. These require new dtypes in the exporter and model
-format *and* new kernels in `q4_matvec.c`. None exist. No result is reported for
-them.
+format *and* new kernels in `q4_matvec.c`. None exist, and none is now worth
+building: the mixed-precision variants cannot help because experts hold ~93% of
+the parameters, and the MSE variants were simulated and close only ~10% of the
+gap while still preserving 0 of 8 top-1 predictions.
 
 ## Defects found
 
@@ -248,8 +279,13 @@ the mmap store depends on.
 
 ## Recommended next step
 
-Not a 50k re-run. A 50k measurement of a model this broken buys a more precise
-number for something already known to be unusable. The next work is in the
-exporter: implement and evaluate a better 4-bit scheme for expert weights, and
-re-measure. The evaluation pipeline, the BF16 control, and the runtime are all
-in place and validated to receive it.
+Not a 50k re-run, and not the variant matrix. A 50k measurement of a model this
+broken buys a more precise number for something already known unusable, and the
+simulated sweep has already ruled out the scale-search variants the plan named.
+
+The next work is a genuinely different quantizer for expert weights —
+error-compensating (GPTQ/AWQ family) rather than round-to-nearest — evaluated
+first through the NumPy simulator, which is cheap and validated against Hugging
+Face, and only then exported and confirmed on the C runtime. The evaluation
+pipeline, the BF16 control, the corpus, and the runtime are all in place and
+validated to receive it.
