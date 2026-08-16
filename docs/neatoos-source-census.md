@@ -62,3 +62,13 @@ often for the older Rev64/Binky board and must not be assumed for Cruz Rev113.
 Future hardware work requires board-specific photos, continuity mapping, part
 identification, and a recoverable donor-board readout. J3/ERASE remains out of
 scope.
+
+## P10 JTAG field result
+
+The 2026-08-15 Cruz P10 experiment did not find a usable TAP. CherryDAP on an
+ESP32-S3 enumerated and OpenOCD reached JTAG scan-chain interrogation, but every
+full scan in installed 2.5, factory 2.4, and P6-triggered boot windows returned
+all-ones/no TAP. The result does not identify the cause: AT91 security, runtime
+debug disablement, missing reset behavior, wrong/incomplete signal reach,
+voltage-domain uncertainty, and signal-integrity limits remain alternatives.
+See [neato-p10-jtag-result.md](neato-p10-jtag-result.md).

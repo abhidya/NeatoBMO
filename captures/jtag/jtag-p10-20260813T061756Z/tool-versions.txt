@@ -1,0 +1,10 @@
+ProductName:		macOS
+ProductVersion:		26.5.2
+BuildVersion:		25F84
+Darwin abdulrehmans-MacBook-Pro.local 25.5.0 Darwin Kernel Version 25.5.0: Tue Jun  9 22:26:23 PDT 2026; root:xnu-12377.121.10~1/RELEASE_X86_64 x86_64
+x86_64
+git version 2.55.0
+Python 3.14.0
+Homebrew 6.0.17
+zsh:1: command not found: openocd
+zsh:1: command not found: idf.py

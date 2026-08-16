@@ -1,0 +1,155 @@
+{
+  "schema": "neatobmo-jtag-session/v1",
+  "session_id": "jtag-p10-20260813T061756Z",
+  "utc_start": "2026-08-13T06:17:56Z",
+  "utc_end": "2026-08-16T04:30:00Z",
+  "starting_repo_commit": "c2af62d3d4cb3601ba19c4a47a100473d6d33a47",
+  "target_identity": {
+    "robot": "Neato XV-12",
+    "board_family": "Cruz Rev113 / P",
+    "mainboard": "7.1",
+    "cpu": "Atmel AT91SAM9XE128-QU",
+    "cpu_core": "ARM926EJ-S",
+    "installed_app_at_jtag_start": "NEROS 2.5.15893",
+    "installed_app_after_software_collection": "NEROS 2.7.16621",
+    "factory_fallback": "NEROS 2.4.15667",
+    "esp_adapter": "ESP32-S3 N16R8",
+    "host": "macOS x86_64"
+  },
+  "adapter": {
+    "firmware": "CherryDAP",
+    "repository": "https://github.com/cherry-embedded/CherryDAP",
+    "commit": "c40bb5a3693f232efa9a76f38c4cfb9190bb5258",
+    "usb_identity": "CherryUSB CMSIS-DAP, VID:PID 0x0d28:0x0204",
+    "openocd_observed_version": "0.12.0"
+  },
+  "gpio_mapping": {
+    "esp_gpio17": "P10 pin 9 / TCK",
+    "esp_gpio16": "P10 pin 7 / TMS",
+    "esp_gpio15": "P10 pin 5 / TDI",
+    "esp_gpio7": "P10 pin 8 / TDO",
+    "esp_gnd": "P10 pin 2 / GND"
+  },
+  "p10_mapping_used": {
+    "orientation": "square pad bottom-left",
+    "top_row": {
+      "2": "GND",
+      "4": "GND",
+      "6": "SRST",
+      "8": "TDO",
+      "10": "RTCK"
+    },
+    "bottom_row": {
+      "1": "VDDIO square",
+      "3": "TRST",
+      "5": "TDI",
+      "7": "TMS",
+      "9": "TCK"
+    }
+  },
+  "physical_deviations": {
+    "measured_vddio_v": null,
+    "vddio_note": "not measured; operator waived meter step",
+    "series_resistors_ohms": null,
+    "series_resistor_note": "not installed; operator waived resistor step",
+    "photo_review": "not preserved in repository"
+  },
+  "software_inventory_policy": {
+    "repo_policy": "metadata-only for proprietary Neato firmware and sound images",
+    "compatible_cruz_p_application_images": [
+      {
+        "build": "2.5.15893",
+        "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware25/XV11App.15893.P.bin.enc",
+        "sha256": "e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697",
+        "status": "installed and verified before this JTAG session; later replaced by 2.7.16621 in the compatible-software collection"
+      },
+      {
+        "build": "2.7.16621",
+        "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware2.7/XV11App.16621.P.bin.enc",
+        "sha256": "2e6033b1ef5440bed949de20e89563d7cb3dda41e0eb5e371c9d86dceeb1633f",
+        "status": "installed and USB-verified during the later compatible-software collection"
+      },
+      {
+        "build": "3.1.17844",
+        "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware3.1.17844/XV11App.17844.P.bin.enc",
+        "sha256": "03396329a1a47a7358d09bd414d01eddaa5806a50a18f4d9ce2f96edc2d5fab7",
+        "status": "ceiling-version metadata only; not installed in this session"
+      },
+      {
+        "build": "3.2.18755",
+        "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware_3.2/XV11App.18755.P.bin.enc",
+        "sha256": "373775d3d59f1569e9886c4aef4449ee847e74455c806e75ef916693841e27c3",
+        "status": "blocked for this oldest side-jack Cruz Rev113 CPU target"
+      }
+    ],
+    "vendor_sound_bank": {
+      "path": "/Volumes/2TB/neato-firmware-archive/sources/Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/Firmware25/DfltSoundLib.Rev1.0.bin",
+      "sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+      "status": "restored during later operator-requested software collection; bytes not committed"
+    }
+  },
+  "private_artifacts": {
+    "esp32_full_flash_backup": "/Volumes/2TB/neato-jtag-private/jtag-p10-20260813T061756Z/esp32-before-jtag-full.bin",
+    "esp32_full_flash_backup_sha256": "922a5be10417a24a267506a964967d25d0bb72eb605fd28e3baa1cdace6053ef"
+  },
+  "capture_summary": {
+    "openocd_log_count": 111,
+    "raw_p6_file_count": 11,
+    "cmsis_dap_opened_count": 110,
+    "all_ones_count": 102,
+    "all_zeroes_count": 8,
+    "ir_capture_error_count": 9,
+    "stable_idcode_count": 0,
+    "stable_ir_length_count": 0
+  },
+  "outcome": {
+    "adapter_status": "functional CMSIS-DAP JTAG adapter from macOS",
+    "tap_status": "no valid TAP detected",
+    "idcode": null,
+    "ir_length": null,
+    "core_status": "not created",
+    "halt_status": "not attempted",
+    "register_status": "not attempted",
+    "sram_status": "not attempted",
+    "internal_flash_status": "not attempted",
+    "reset_assisted_status": "not tested"
+  },
+  "tracked_hashes": {
+    "sha256sums_file": "SHA256SUMS",
+    "sha256sums_file_sha256": "b66f329043f46d6cdf191d047da187a13e7893de48c5dd44cc7635820c46b51d",
+    "analysis_md_sha256": "8f89a6b254e576970fe0d1a6f344ee5271d599d85a163d9cd55e5c724e49d088",
+    "usb_enumeration_probe_sha256": "16bdab85d1487c47c6c906627e9f6ffe0c562a8e4f012b4ec8583fbecd261ed7"
+  },
+  "actions_not_performed": [
+    "J3/ERASE",
+    "P10 VDDIO connection to ESP power",
+    "TRST connection",
+    "SRST/reset-assisted attach",
+    "RTCK connection",
+    "OpenOCD erase/program/flash/nand/load/write_memory/mw*/gpnvm/reset-init",
+    "OpenOCD target create or halt after no TAP was found",
+    "memory dump",
+    "publication of proprietary firmware or sound bytes"
+  ],
+  "software_transition_observations": {
+    "stock_cruz_p_2_7_write": {
+      "result_file": "firmware-27-write-result.json",
+      "p6_file": "firmware-27-transition-p6.raw",
+      "openocd_pattern": "openocd-firmware-27-*.log",
+      "command": "Upload code reboot",
+      "image_sha256": "2e6033b1ef5440bed949de20e89563d7cb3dda41e0eb5e371c9d86dceeb1633f",
+      "before": "Software,2,5,15893",
+      "after": "Software,2,7,16621",
+      "proprietary_image_committed": false,
+      "jtag_result": "all-ones/no TAP during preserved transition scans"
+    },
+    "stock_cruz_p_3_1_attempted_window": {
+      "result_file": null,
+      "p6_file": "firmware-31-transition-p6.raw",
+      "openocd_pattern": "openocd-firmware-31-*.log",
+      "write_evidence": "none preserved; P6 raw contains only the capture session header",
+      "proprietary_image_committed": false,
+      "jtag_result": "all-ones/no TAP in preserved before/during scan logs"
+    }
+  }
+}

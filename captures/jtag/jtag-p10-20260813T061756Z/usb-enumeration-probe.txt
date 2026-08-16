@@ -1,0 +1,19 @@
+2026-08-16T04:01:40Z
+Source: filtered from usb-ioreg-current.txt after system_profiler returned no
+standalone text in this shell.
+
+Observed serial ports:
+/dev/cu.usbmodem14202
+/dev/cu.usbmodem143301
+/dev/tty.usbmodem14202
+/dev/tty.usbmodem143301
+
+CherryDAP USB node:
+CherryUSB CMSIS-DAP@14200000
+USB Product Name = CherryUSB CMSIS_DAP
+USB Vendor Name = CherryUSB
+kUSBProductString = CherryUSB CMSIS-DAP
+kUSBVendorString = CherryUSB
+USB Serial Number = 00000000000000000123456789ABCDEF
+
+OpenOCD logs independently observe VID:PID 0x0d28:0x0204 and the same serial.

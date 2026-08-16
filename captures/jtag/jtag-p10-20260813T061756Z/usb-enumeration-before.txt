@@ -1,0 +1,1 @@
+USB enumeration before CherryDAP flashing was not preserved as a standalone file in this session. See tool-versions.txt for initial software inventory and usb-enumeration-probe.txt for the preserved probe enumeration captured after CherryDAP was flashed.

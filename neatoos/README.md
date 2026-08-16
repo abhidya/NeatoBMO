@@ -148,3 +148,11 @@ It is limited to behavior exposed through the documented USB serial protocol:
 Cloud, schedules, autonomous navigation, filesystem behavior, and unexposed
 peripherals are outside v0. JTAG/P10, NAND readback, and bootloader work remain
 a separate donor-board track; J3/ERASE remains forbidden.
+
+## P10 JTAG status
+
+The first non-destructive Cruz P10 JTAG session did not expose a stable TAP.
+CherryDAP/OpenOCD worked at the Mac adapter layer, and P10 TDO was
+target-power-sensitive, but installed, factory, and P6-triggered scans all
+returned no TAP. This keeps NeatoOS on the clean-room serial/API track until a
+separate readout path is proven. See `docs/neato-p10-jtag-result.md`.

@@ -79,6 +79,15 @@ LCD/button panel. To reach it:
   invokes ERASE and destroys internal flash. Treat P10 as a donor-board research
   target only after a genuinely non-erasing bypass has been demonstrated.
 
+  > **Field result (2026-08-15):** an ESP32-S3 running CherryDAP opened
+  > successfully as a CMSIS-DAP/JTAG adapter from macOS, and P10 TDO showed a
+  > target-power-dependent electrical state, but repeated P10 scans found no
+  > stable TAP/IDCODE/IR length in installed 2.5, factory 2.4, or P6-triggered
+  > cold/factory boot windows. No ARM target, halt, register read, memory read,
+  > reset-assisted attach, flash write, GPNVM operation, or J3/ERASE action was
+  > performed. See [neato-p10-jtag-result.md](neato-p10-jtag-result.md) and
+  > `../captures/jtag/jtag-p10-20260813T061756Z/`.
+
 - **`J3` — ERASE jumper. DO NOT TOUCH.** Direct connection to the AT91 ERASE
   line. **Shorting it and rebooting wipes the CPU's programming with no known
   recovery — permanent brick.** Not a reset. Keep tools and probes clear of it.

@@ -1,0 +1,12 @@
+2026-08-16T04:01:40Z
+/usr/local/bin/openocd
+/dev/cu.BLTH
+/dev/cu.BlackOpal
+/dev/cu.Bluetooth-Incoming-Port
+/dev/cu.usbmodem14202
+/dev/cu.usbmodem143301
+/dev/tty.BLTH
+/dev/tty.BlackOpal
+/dev/tty.Bluetooth-Incoming-Port
+/dev/tty.usbmodem14202
+/dev/tty.usbmodem143301

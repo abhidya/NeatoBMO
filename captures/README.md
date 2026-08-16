@@ -283,6 +283,16 @@ our only robot sample (below).
   not a byte-restorable copy of the former installed 2.4 application.
 
 ## Files here
+- `jtag/jtag-p10-20260813T061756Z/` — ESP32-S3 CherryDAP Cruz P10 JTAG
+  availability experiment. OpenOCD consistently opened the CMSIS-DAP/JTAG
+  adapter, TDO controls changed with target power, but installed/factory and
+  P6-triggered scans produced no stable TAP/IDCODE/IR length. No ARM halt,
+  memory read, GPNVM action, reset-assisted attach, or J3/ERASE operation was
+  performed. The same folder also preserves the later operator-requested exact
+  vendor sound-bank restore window (`sound-vendor-write-result.json` plus
+  `openocd-sound-vendor-*` scans) and exact stock Cruz-P 2.7 application
+  transition window (`firmware-27-write-result.json` plus
+  `openocd-firmware-27-*` scans); proprietary image bytes are not committed.
 - `20260811_D01_factory_code_25_burn_p6.log` — factory boot, exact 2.5 NAND
   application write, software reboot, installed 2.5 cold boot, readback-probe
   diagnostics, and post-upgrade factory 2.4 boot.

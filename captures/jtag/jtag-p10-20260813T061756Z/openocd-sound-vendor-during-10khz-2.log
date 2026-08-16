@@ -1,0 +1,29 @@
+Open On-Chip Debugger 0.12.0
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+debug_level: 2
+
+jtag
+adapter speed: 10 kHz
+
+Info : Using CMSIS-DAPv2 interface with VID:PID=0x0d28:0x0204, serial=00000000000000000123456789ABCDEF
+Info : CMSIS-DAP: SWD supported
+Info : CMSIS-DAP: JTAG supported
+Info : CMSIS-DAP: Atomic commands supported
+Info : CMSIS-DAP: Test domain timer supported
+Info : CMSIS-DAP: UART via USB COM port supported
+Info : CMSIS-DAP: FW Version = 2.1.1
+Info : CMSIS-DAP: Interface Initialised (JTAG)
+Info : SWCLK/TCK = 0 SWDIO/TMS = 0 TDI = 0 TDO = 1 nTRST = 0 nRESET = 1
+Info : CMSIS-DAP: Interface ready
+Info : clock speed 10 kHz
+Warn : There are no enabled taps.  AUTO PROBING MIGHT NOT WORK!!
+Info : cmsis-dap JTAG TLR_RESET
+Info : cmsis-dap JTAG TLR_RESET
+Error: JTAG scan chain interrogation failed: all ones
+Error: Check JTAG interface, timings, target power, etc.
+Error: Trying to use configured scan chain anyway...
+Warn : Bypassing JTAG setup events due to errors
+Warn : gdb services need one or more targets defined
+shutdown command invoked

@@ -1,0 +1,131 @@
+{
+  "command": "Upload sound",
+  "image_bytes": 770048,
+  "image_sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+  "image_profile": "vendor-default",
+  "port_before": "/dev/cu.usbmodem143301",
+  "version_before_ok": true,
+  "opening_hex": "55706c6f616420736f756e642053697a65203737303035320d0a05",
+  "checksum_hex": "0x05d6caf9",
+  "transfer_seconds": 2.97,
+  "closing_hex": "061a",
+  "reenumeration_attempts": [
+    {
+      "port": "/dev/cu.usbmodem14202",
+      "reply_hex_prefix": ""
+    },
+    {
+      "port": "/dev/cu.usbmodem143301",
+      "reply_hex_prefix": "47657456657273696f6e0d0a436f6d706f6e656e742c4d616a6f722c4d696e6f722c4275696c640d0a4d6f64656c49442c2d312c585631322c0d0a436f6e66696749442c312c2c0d0a53657269616c20"
+    }
+  ],
+  "port_after": "/dev/cu.usbmodem143301",
+  "version_after_ok": true,
+  "sound_sweep": [
+    {
+      "sound_id": 0,
+      "accepted": true,
+      "reply": "PlaySound 0"
+    },
+    {
+      "sound_id": 1,
+      "accepted": true,
+      "reply": "PlaySound 1"
+    },
+    {
+      "sound_id": 2,
+      "accepted": true,
+      "reply": "PlaySound 2"
+    },
+    {
+      "sound_id": 3,
+      "accepted": true,
+      "reply": "PlaySound 3"
+    },
+    {
+      "sound_id": 4,
+      "accepted": false,
+      "reply": "PlaySound 4\r\nSoundID '4' is out of range."
+    },
+    {
+      "sound_id": 5,
+      "accepted": false,
+      "reply": "PlaySound 5\r\nSoundID '5' is out of range."
+    },
+    {
+      "sound_id": 6,
+      "accepted": true,
+      "reply": "PlaySound 6"
+    },
+    {
+      "sound_id": 7,
+      "accepted": true,
+      "reply": "PlaySound 7"
+    },
+    {
+      "sound_id": 8,
+      "accepted": true,
+      "reply": "PlaySound 8"
+    },
+    {
+      "sound_id": 9,
+      "accepted": true,
+      "reply": "PlaySound 9"
+    },
+    {
+      "sound_id": 10,
+      "accepted": true,
+      "reply": "PlaySound 10"
+    },
+    {
+      "sound_id": 11,
+      "accepted": false,
+      "reply": "PlaySound 11\r\nSoundID '11' is out of range."
+    },
+    {
+      "sound_id": 12,
+      "accepted": false,
+      "reply": "PlaySound 12\r\nSoundID '12' is out of range."
+    },
+    {
+      "sound_id": 13,
+      "accepted": false,
+      "reply": "PlaySound 13\r\nSoundID '13' is out of range."
+    },
+    {
+      "sound_id": 14,
+      "accepted": false,
+      "reply": "PlaySound 14\r\nSoundID '14' is out of range."
+    },
+    {
+      "sound_id": 15,
+      "accepted": false,
+      "reply": "PlaySound 15\r\nSoundID '15' is out of range."
+    },
+    {
+      "sound_id": 16,
+      "accepted": false,
+      "reply": "PlaySound 16\r\nSoundID '16' is out of range."
+    },
+    {
+      "sound_id": 17,
+      "accepted": false,
+      "reply": "PlaySound 17\r\nSoundID '17' is out of range."
+    },
+    {
+      "sound_id": 18,
+      "accepted": false,
+      "reply": "PlaySound 18\r\nSoundID '18' is out of range."
+    },
+    {
+      "sound_id": 19,
+      "accepted": true,
+      "reply": "PlaySound 19"
+    },
+    {
+      "sound_id": 20,
+      "accepted": false,
+      "reply": "PlaySound 20\r\nSoundID '20' is out of range."
+    }
+  ]
+}
