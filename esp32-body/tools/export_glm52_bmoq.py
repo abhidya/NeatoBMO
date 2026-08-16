@@ -40,6 +40,8 @@ LAYOUT_OPAQUE = 0
 LAYOUT_Q4_ROW_MAJOR = 1
 LAYOUT_GROUP_SCALES_F32 = 2
 LAYOUT_DENSE_F32 = 3
+LAYOUT_Q4_EXPERT_BUNDLE = 4
+LAYOUT_EXPERT_GROUP_SCALES_F32 = 5
 
 ARCH_GLM52 = 3
 CONFIG_TENSOR_ID = 0x32474643
@@ -417,12 +419,36 @@ def q4_writers(source: TensorSource, tensor: LogicalTensor, group_size: int) -> 
     return write_weights, write_scales
 
 
+def q4_bundle_writers(
+    source: TensorSource, tensors: list[LogicalTensor], group_size: int
+) -> tuple[Callable[[object], None], Callable[[object], None]]:
+    def write_weights(output: object) -> None:
+        for tensor in tensors:
+            for row_index in range(tensor.shape[0]):
+                packed, _ = quantize_row(
+                    source.row_floats(tensor.hf_name, row_index), group_size
+                )
+                output.write(packed)
+
+    def write_scales(output: object) -> None:
+        for tensor in tensors:
+            for row_index in range(tensor.shape[0]):
+                _, scales = quantize_row(
+                    source.row_floats(tensor.hf_name, row_index), group_size
+                )
+                output.write(scales)
+
+    return write_weights, write_scales
+
+
 def physical_tensors(source: TensorSource, config: Glm52Config) -> list[PhysicalTensor]:
     result: list[PhysicalTensor] = []
     for logical in expected_logical_tensors(config):
         actual_shape = source.shape(logical.hf_name)
         if actual_shape != logical.shape:
             raise ValueError(f"{logical.hf_name}: expected {logical.shape}, found {actual_shape}")
+        if ".mlp.experts." in logical.hf_name:
+            continue
         if len(logical.shape) == 1:
             result.append(
                 PhysicalTensor(
@@ -471,6 +497,65 @@ def physical_tensors(source: TensorSource, config: Glm52Config) -> list[Physical
             )
         else:
             raise ValueError(f"unsupported tensor rank for {logical.hf_name}")
+
+    for layer in range(config.first_dense_layers, config.num_hidden_layers):
+        prefix = f"model.layers.{layer}.mlp.experts"
+        tag = f"l{layer:02d}.eb"
+        projections = (
+            ("gate_proj", expert_gate_id(layer, 0), config.moe_intermediate_size, config.hidden_size, "g"),
+            ("up_proj", expert_up_id(layer, 0), config.moe_intermediate_size, config.hidden_size, "u"),
+            ("down_proj", expert_down_id(layer, 0), config.hidden_size, config.moe_intermediate_size, "d"),
+        )
+        for projection, tensor_id, rows, columns, suffix in projections:
+            logicals = [
+                LogicalTensor(
+                    tensor_id,
+                    f"{prefix}.{expert}.{projection}.weight",
+                    f"{tag}{suffix}",
+                    (rows, columns),
+                )
+                for expert in range(config.num_experts)
+            ]
+            for logical in logicals:
+                actual_shape = source.shape(logical.hf_name)
+                if actual_shape != logical.shape:
+                    raise ValueError(
+                        f"{logical.hf_name}: expected {logical.shape}, found {actual_shape}"
+                    )
+            if columns % config.quant_group:
+                raise ValueError(
+                    f"{logicals[0].hf_name}: group size {config.quant_group} does not divide {columns}"
+                )
+            groups = columns // config.quant_group
+            write_weights, write_scales = q4_bundle_writers(
+                source, logicals, config.quant_group
+            )
+            result.append(
+                PhysicalTensor(
+                    tensor_id,
+                    DTYPE_Q4_SYM,
+                    config.quant_group,
+                    (config.num_experts, rows, columns, 1),
+                    config.num_experts * rows * columns // 2,
+                    LAYOUT_Q4_EXPERT_BUNDLE,
+                    f"{tag}{suffix}",
+                    f"{prefix}.*.{projection}.weight",
+                    write_weights,
+                )
+            )
+            result.append(
+                PhysicalTensor(
+                    scale_id(tensor_id),
+                    DTYPE_F32,
+                    config.quant_group,
+                    (config.num_experts, rows, groups, 1),
+                    config.num_experts * rows * groups * 4,
+                    LAYOUT_EXPERT_GROUP_SCALES_F32,
+                    f"{tag}{suffix}.s",
+                    f"{prefix}.*.{projection}.weight#scales",
+                    write_scales,
+                )
+            )
     return result
 
 

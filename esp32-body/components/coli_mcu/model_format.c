@@ -78,6 +78,24 @@ static bool validate_known_tensor(const bmoq_tensor_t *tensor)
                elements <= UINT64_MAX / sizeof(float) &&
                tensor->byte_length == elements * sizeof(float);
     }
+    if (tensor->layout == BMOQ_LAYOUT_Q4_EXPERT_BUNDLE) {
+        if (tensor->dtype != BMOQ_DTYPE_Q4_SYM || tensor->dimensions[0] == 0 ||
+            tensor->dimensions[1] == 0 || tensor->dimensions[2] == 0 ||
+            tensor->dimensions[3] != 1 || tensor->quant_group < 2 ||
+            (tensor->quant_group & 1u) != 0 ||
+            tensor->dimensions[2] % tensor->quant_group != 0)
+            return false;
+        return (elements & 1u) == 0 && tensor->byte_length == elements / 2;
+    }
+    if (tensor->layout == BMOQ_LAYOUT_EXPERT_GROUP_SCALES_F32) {
+        if (tensor->dtype != BMOQ_DTYPE_F32 || tensor->dimensions[0] == 0 ||
+            tensor->dimensions[1] == 0 || tensor->dimensions[2] == 0 ||
+            tensor->dimensions[3] != 1 || tensor->quant_group < 2 ||
+            (tensor->quant_group & 1u) != 0)
+            return false;
+        return elements <= UINT64_MAX / sizeof(float) &&
+               tensor->byte_length == elements * sizeof(float);
+    }
     return true;
 }
 
@@ -258,6 +276,69 @@ coli_status_t coli_tensor_read(const coli_model_t *model,
         return COLI_ERR_RANGE;
     return coli_store_read_at(model->store, tensor->data_offset + tensor_offset,
                               destination, length);
+}
+
+coli_status_t coli_model_q4_expert_view(
+    const bmoq_tensor_t *weight_bundle, const bmoq_tensor_t *scale_bundle,
+    uint32_t expert, bmoq_tensor_t *out_weights, bmoq_tensor_t *out_scales)
+{
+    if (!weight_bundle || !scale_bundle || !out_weights || !out_scales)
+        return COLI_ERR_ARGUMENT;
+    const uint32_t experts = weight_bundle->dimensions[0];
+    const uint32_t rows = weight_bundle->dimensions[1];
+    const uint32_t columns = weight_bundle->dimensions[2];
+    if (weight_bundle->layout != BMOQ_LAYOUT_Q4_EXPERT_BUNDLE ||
+        scale_bundle->layout != BMOQ_LAYOUT_EXPERT_GROUP_SCALES_F32 ||
+        weight_bundle->dtype != BMOQ_DTYPE_Q4_SYM ||
+        scale_bundle->dtype != BMOQ_DTYPE_F32 || expert >= experts ||
+        scale_bundle->dimensions[0] != experts ||
+        scale_bundle->dimensions[1] != rows ||
+        weight_bundle->quant_group != scale_bundle->quant_group ||
+        weight_bundle->quant_group == 0 ||
+        columns % weight_bundle->quant_group != 0 ||
+        scale_bundle->dimensions[2] != columns / weight_bundle->quant_group ||
+        weight_bundle->dimensions[3] != 1 ||
+        scale_bundle->dimensions[3] != 1)
+        return COLI_ERR_FORMAT;
+
+    uint64_t weight_elements;
+    uint64_t scale_elements;
+    uint64_t weight_total;
+    uint64_t scale_total;
+    uint64_t weight_expert_offset;
+    uint64_t scale_expert_offset;
+    if (!multiply_u64(rows, columns, &weight_elements) ||
+        !multiply_u64(rows, scale_bundle->dimensions[2], &scale_elements) ||
+        !multiply_u64(weight_elements / 2u, experts, &weight_total) ||
+        !multiply_u64(scale_elements, sizeof(float), &scale_elements) ||
+        !multiply_u64(scale_elements, experts, &scale_total) ||
+        !multiply_u64(weight_elements / 2u, expert, &weight_expert_offset) ||
+        !multiply_u64(scale_elements, expert, &scale_expert_offset) ||
+        weight_elements == 0 || (weight_elements & 1u) != 0 ||
+        scale_elements == 0 || weight_bundle->byte_length != weight_total ||
+        scale_bundle->byte_length != scale_total ||
+        weight_bundle->data_offset > UINT64_MAX - weight_expert_offset ||
+        scale_bundle->data_offset > UINT64_MAX - scale_expert_offset)
+        return COLI_ERR_FORMAT;
+    const uint64_t weight_stride = weight_elements / 2u;
+    const uint64_t scale_stride = scale_elements;
+
+    *out_weights = *weight_bundle;
+    out_weights->dimensions[0] = rows;
+    out_weights->dimensions[1] = columns;
+    out_weights->dimensions[2] = 1;
+    out_weights->data_offset += weight_expert_offset;
+    out_weights->byte_length = weight_stride;
+    out_weights->layout = BMOQ_LAYOUT_Q4_ROW_MAJOR;
+
+    *out_scales = *scale_bundle;
+    out_scales->dimensions[0] = rows;
+    out_scales->dimensions[1] = scale_bundle->dimensions[2];
+    out_scales->dimensions[2] = 1;
+    out_scales->data_offset += scale_expert_offset;
+    out_scales->byte_length = scale_stride;
+    out_scales->layout = BMOQ_LAYOUT_GROUP_SCALES_F32;
+    return COLI_OK;
 }
 
 void coli_model_close(coli_model_t *model)

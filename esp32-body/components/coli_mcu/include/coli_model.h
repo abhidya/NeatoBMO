@@ -35,6 +35,10 @@ typedef enum {
     BMOQ_LAYOUT_GROUP_SCALES_F32 = 2,
     /** Dense little-endian float32 values in row-major order. */
     BMOQ_LAYOUT_DENSE_F32 = 3,
+    /** Q4 matrices concatenated by expert: [expert, row, column]. */
+    BMOQ_LAYOUT_Q4_EXPERT_BUNDLE = 4,
+    /** Float32 group scales concatenated by expert: [expert, row, group]. */
+    BMOQ_LAYOUT_EXPERT_GROUP_SCALES_F32 = 5,
 } bmoq_layout_t;
 
 typedef enum {
@@ -123,6 +127,14 @@ coli_status_t coli_tensor_read(const coli_model_t *model,
                                const bmoq_tensor_t *tensor,
                                uint64_t tensor_offset, void *destination,
                                size_t length);
+
+/**
+ * Create ordinary 2-D Q4 tensor views for one matrix in an expert bundle.
+ * The returned views borrow the model store and remain valid while it is open.
+ */
+coli_status_t coli_model_q4_expert_view(
+    const bmoq_tensor_t *weight_bundle, const bmoq_tensor_t *scale_bundle,
+    uint32_t expert, bmoq_tensor_t *out_weights, bmoq_tensor_t *out_scales);
 void coli_model_close(coli_model_t *model);
 
 /** Read one bounded BMOQ-v2 binary config value without loading the manifest. */

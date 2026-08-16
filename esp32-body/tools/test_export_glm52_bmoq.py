@@ -14,8 +14,10 @@ from export_glm52_bmoq import (
     CONFIG_TENSOR_ID,
     ENTRY_BYTES,
     LAYOUT_DENSE_F32,
+    LAYOUT_EXPERT_GROUP_SCALES_F32,
     LAYOUT_GROUP_SCALES_F32,
     LAYOUT_OPAQUE,
+    LAYOUT_Q4_EXPERT_BUNDLE,
     LAYOUT_Q4_ROW_MAJOR,
     MANIFEST_TENSOR_ID,
     VERSION,
@@ -139,7 +141,22 @@ class ExportGlm52BmoqTests(unittest.TestCase):
             self.assertEqual(by_id[scale_id(dense_gate_id(0))]["layout"], LAYOUT_GROUP_SCALES_F32)
             self.assertEqual(by_id[sparse_router_id(1)]["shape"], (config.num_experts, config.hidden_size, 1, 1))
             self.assertIn(expert_gate_id(1, 0), by_id)
-            self.assertIn(expert_gate_id(1, 1), by_id)
+            self.assertNotIn(expert_gate_id(1, 1), by_id)
+            gate_bundle = by_id[expert_gate_id(1, 0)]
+            self.assertEqual(gate_bundle["layout"], LAYOUT_Q4_EXPERT_BUNDLE)
+            self.assertEqual(
+                gate_bundle["shape"],
+                (
+                    config.num_experts,
+                    config.moe_intermediate_size,
+                    config.hidden_size,
+                    1,
+                ),
+            )
+            self.assertEqual(
+                by_id[scale_id(expert_gate_id(1, 0))]["layout"],
+                LAYOUT_EXPERT_GROUP_SCALES_F32,
+            )
             self.assertEqual(by_id[2]["layout"], LAYOUT_DENSE_F32)
             self.assertEqual(by_id[CONFIG_TENSOR_ID]["layout"], LAYOUT_OPAQUE)
             self.assertEqual(by_id[MANIFEST_TENSOR_ID]["layout"], LAYOUT_OPAQUE)
@@ -244,7 +261,7 @@ class ExportGlm52BmoqTests(unittest.TestCase):
             self.assertGreater(summary["tensor_count"], 0)
             self.assertIn(CONFIG_TENSOR_ID, {entry["id"] for entry in entries(output)})
 
-    def test_tensor_count_math_exposes_official_sparse_directory_pressure(self) -> None:
+    def test_expert_bundles_fit_official_sparse_directory_bound(self) -> None:
         config = Glm52Config(
             hidden_size=6144,
             dense_intermediate_size=18432,
@@ -274,8 +291,19 @@ class ExportGlm52BmoqTests(unittest.TestCase):
             quant_group=32,
         )
         logical = expected_logical_tensors(config)
-        physical_count = sum(1 if len(tensor.shape) == 1 else 2 for tensor in logical) + 2
-        self.assertGreater(physical_count, 8192)
+        unbundled_count = sum(1 if len(tensor.shape) == 1 else 2 for tensor in logical) + 2
+        self.assertGreater(unbundled_count, 8192)
+        dense_layers = config.first_dense_layers
+        sparse_layers = config.num_hidden_layers - dense_layers
+        bundled_count = (
+            5
+            + config.num_hidden_layers * 14
+            + dense_layers * 6
+            + sparse_layers * 15
+            + 2
+        )
+        self.assertLessEqual(bundled_count, 8192)
+        self.assertEqual(bundled_count, 2242)
 
     def write_safetensors_fixture(self, path: Path, config: Glm52Config) -> None:
         header = {}

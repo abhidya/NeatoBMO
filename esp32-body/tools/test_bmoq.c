@@ -158,6 +158,39 @@ static void write_v2_config_fixture(const char *path)
 
 int main(void)
 {
+    bmoq_tensor_t weight_bundle = {
+        .dtype = BMOQ_DTYPE_Q4_SYM,
+        .quant_group = 4,
+        .dimensions = {3, 5, 8, 1},
+        .data_offset = 4096,
+        .byte_length = 60,
+        .layout = BMOQ_LAYOUT_Q4_EXPERT_BUNDLE,
+    };
+    bmoq_tensor_t scale_bundle = {
+        .dtype = BMOQ_DTYPE_F32,
+        .quant_group = 4,
+        .dimensions = {3, 5, 2, 1},
+        .data_offset = 8192,
+        .byte_length = 120,
+        .layout = BMOQ_LAYOUT_EXPERT_GROUP_SCALES_F32,
+    };
+    bmoq_tensor_t expert_weights;
+    bmoq_tensor_t expert_scales;
+    assert(coli_model_q4_expert_view(&weight_bundle, &scale_bundle, 2,
+                                     &expert_weights, &expert_scales) ==
+           COLI_OK);
+    assert(expert_weights.layout == BMOQ_LAYOUT_Q4_ROW_MAJOR);
+    assert(expert_weights.dimensions[0] == 5 &&
+           expert_weights.dimensions[1] == 8);
+    assert(expert_weights.data_offset == 4136 &&
+           expert_weights.byte_length == 20);
+    assert(expert_scales.layout == BMOQ_LAYOUT_GROUP_SCALES_F32);
+    assert(expert_scales.data_offset == 8272 &&
+           expert_scales.byte_length == 40);
+    assert(coli_model_q4_expert_view(&weight_bundle, &scale_bundle, 3,
+                                     &expert_weights, &expert_scales) ==
+           COLI_ERR_FORMAT);
+
     char path[] = "/tmp/coli-bmoq-XXXXXX";
     int fd = mkstemp(path);
     assert(fd >= 0);
