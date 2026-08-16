@@ -21,12 +21,13 @@
 #include "coli_olmoe.h"
 #include "coli_spm.h"
 
-#define COLI_MOUNT_PATH "/usb"
-#define COLI_PROBE_FILE COLI_MOUNT_PATH "/model.bmoq"
-#define COLI_TOKENIZER_FILE COLI_MOUNT_PATH "/tokenizer.ctok"
+#define COLI_MOUNT_PATH CONFIG_COLI_MCU_MOUNT_PATH
+#define COLI_PROBE_FILE COLI_MOUNT_PATH "/" CONFIG_COLI_MCU_MODEL_FILE
+#define COLI_TOKENIZER_FILE \
+    COLI_MOUNT_PATH "/" CONFIG_COLI_MCU_TOKENIZER_FILE
 #define COLI_GEMMA_TOKENIZER_FILE COLI_MOUNT_PATH "/tokenizer.cspm"
 #define COLI_PROMPT_FILE COLI_MOUNT_PATH "/prompt.txt"
-#define COLI_OLMOE_KV_FILE COLI_MOUNT_PATH "/olmoe.kv"
+#define COLI_OLMOE_KV_FILE COLI_MOUNT_PATH "/" CONFIG_COLI_MCU_KV_FILE
 #define COLI_GEMMA_MODEL_DIR \
     COLI_MOUNT_PATH "/neatobmo-models/gemma-3-270m-q8_0"
 #define COLI_GEMMA_MODEL_FILE COLI_GEMMA_MODEL_DIR "/model.bmoq"
@@ -35,12 +36,12 @@
 #define COLI_READ_BUFFER_BYTES (16u * 1024u)
 #define COLI_BENCHMARK_BYTES (512u * 1024u)
 #define COLI_DEMO_PROMPT_BYTES 192u
-#define COLI_OLMOE_CONTEXT_TOKENS 4096u
+#define COLI_OLMOE_CONTEXT_TOKENS CONFIG_COLI_MCU_CONTEXT_TOKENS
 #define COLI_GEMMA_CONTEXT_TOKENS 16u
-#define COLI_DEMO_MAX_NEW_TOKENS 1u
-#define COLI_DEMO_WORKSPACE_BYTES (768u * 1024u)
+#define COLI_DEMO_MAX_NEW_TOKENS CONFIG_COLI_MCU_DEMO_MAX_NEW_TOKENS
+#define COLI_DEMO_WORKSPACE_BYTES CONFIG_COLI_MCU_WORKSPACE_BYTES
 #define COLI_DEMO_DECODED_CHUNK_BYTES 256u
-#define COLI_KV_PAGE_BYTES (64u * 1024u)
+#define COLI_KV_PAGE_BYTES CONFIG_COLI_MCU_KV_PAGE_BYTES
 
 static const char *TAG = "coli_msc";
 
@@ -375,6 +376,7 @@ static void offline_generate_task(void *arg)
 
 static void maybe_start_offline_generate(void)
 {
+    if (!CONFIG_COLI_MCU_AUTORUN_DEMO) return;
     if (s_generate_task || s_removed) return;
     if (!model_file_path()) {
         ESP_LOGI(TAG,

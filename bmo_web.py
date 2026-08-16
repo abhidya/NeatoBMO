@@ -198,37 +198,75 @@ def chat_events(text, speak_on_robot):
     yield event("brain_started", residual_summary=turn_plan.residual)
     body.run(lambda r: (r.led("amber"),
                         faces.scanline(r, range(20, 110, 30), 0.08)))
-    try:
-        if speak_on_robot:
-            brain_reply, _, err = _streamed_reply(
-                text, prompt=prompt, assistant_prefix=assistant_prefix)
-            if err:
-                raise RuntimeError(err)
-        elif hasattr(brain, "stream"):
-            brain_reply = brain.stream(
-                text, lambda _sentence: None, prompt=prompt,
-                assistant_prefix=assistant_prefix)
-        else:
-            brain_reply = _brain_chat(text, prompt, assistant_prefix)
-        brain_plan = cues.parse(brain_reply)
-        if not routine_names and CFG.speech_mode == "soundbyte":
-            brain_plan = cues.condense(brain_plan,
-                                       burst_seconds=CFG.speech_burst)
-        yield event("brain_result", index=0, display=brain_plan.display,
-                    cues=brain_plan.steps)
-        reply = " ".join(x for x in (local_displays and " ".join(local_displays),
-                                     brain_plan.display) if x)
-        yield event("turn_completed", reply=reply,
-                    cues=local_steps + brain_plan.steps,
-                    routines=routine_names, brain_used=True, partial=False,
-                    spoke=bool(speak_on_robot))
-    except Exception as e:
-        reply = " ".join(local_displays)
-        yield event("turn_error", scope="brain", message=str(e),
-                    recoverable=bool(local_displays))
-        yield event("turn_completed", reply=reply, cues=local_steps,
-                    routines=routine_names, brain_used=True, partial=True,
-                    spoke=False)
+    result_queue = queue.Queue()
+
+    def sentence_ready(sentence):
+        result_queue.put(("sentence", sentence))
+
+    def generate():
+        try:
+            if speak_on_robot:
+                reply, streamed, err = _streamed_reply(
+                    text, prompt=prompt, assistant_prefix=assistant_prefix,
+                    on_sentence_event=sentence_ready)
+                if err:
+                    raise RuntimeError(err)
+            elif hasattr(brain, "stream"):
+                reply = brain.stream(
+                    text, sentence_ready, prompt=prompt,
+                    assistant_prefix=assistant_prefix)
+                streamed = True
+            else:
+                reply = _brain_chat(text, prompt, assistant_prefix)
+                streamed = False
+            result_queue.put(("done", (reply, streamed)))
+        except Exception as exc:
+            result_queue.put(("error", exc))
+
+    threading.Thread(target=generate, daemon=True).start()
+    brain_displays = []
+    brain_steps = []
+    partial = False
+    spoke = False
+
+    while True:
+        kind, value = result_queue.get()
+        if kind == "sentence":
+            plan = cues.parse(value)
+            brain_displays.append(plan.display)
+            brain_steps.extend(plan.steps)
+            if not speak_on_robot:
+                body.emote(plan.display)
+                body.perform(plan.actions())
+            yield event("brain_result", index=len(brain_displays) - 1,
+                        display=plan.display, cues=plan.steps)
+            continue
+        if kind == "error":
+            partial = True
+            yield event("turn_error", scope="brain", message=str(value),
+                        recoverable=bool(local_displays or brain_displays))
+            if hasattr(brain, "remember"):
+                delivered = " ".join(local_replies + brain_displays)
+                brain.remember(text, delivered)
+            break
+
+        brain_reply, spoke = value
+        if not brain_displays and brain_reply:
+            plan = cues.parse(brain_reply)
+            brain_displays.append(plan.display)
+            brain_steps.extend(plan.steps)
+            if not speak_on_robot:
+                body.emote(plan.display)
+                body.perform(plan.actions())
+            yield event("brain_result", index=0, display=plan.display,
+                        cues=plan.steps)
+        break
+
+    reply = " ".join(local_displays + brain_displays)
+    yield event("turn_completed", reply=reply,
+                cues=local_steps + brain_steps,
+                routines=routine_names, brain_used=True, partial=partial,
+                spoke=bool(speak_on_robot and spoke))
 
 def chat_turn(text, speak_on_robot):
     """One conversation turn: routines -> brain -> cues -> body + voice.
@@ -326,7 +364,8 @@ def _brain_chat(text, prompt=None, assistant_prefix=""):
     return brain.chat(text, prompt=prompt, assistant_prefix=assistant_prefix)
 
 
-def _streamed_reply(text, *, prompt=None, assistant_prefix=""):
+def _streamed_reply(text, *, prompt=None, assistant_prefix="",
+                    on_sentence_event=None):
     """Streaming pipeline: each completed LLM sentence flows into the
     speech synthesizer while later sentences are still generating — BMO
     starts talking before the reply is done.  Returns (reply, streamed, err).
@@ -356,6 +395,8 @@ def _streamed_reply(text, *, prompt=None, assistant_prefix=""):
     state = {"faced": False, "steps": []}
 
     def on_sentence(sentence):
+        if on_sentence_event is not None:
+            on_sentence_event(sentence)
         plan = cues.parse(sentence)
         state["steps"].extend(plan.steps)
         body.perform(plan.actions())

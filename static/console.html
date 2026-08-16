@@ -427,21 +427,27 @@ async function send(text){
   txtEl.disabled=false;btn.disabled=false;txtEl.focus();
  }
 }
-// browser-side thinking sounds: the same blips/hum the robot's reserved
-// slots carry, played quietly while BMO thinks (muted when voice is off)
+// Thinking feedback should feel like BMO reacting, not loading-screen music.
+// Robot voice owns its physical cues; the browser only supplies quiet cues
+// for local voice, avoiding the doubled/echoing playback of the old loop.
 const thinkAudio={};let thinkTimer=null,thinkStep=0;
-const THINK_PATTERN=[['blip-a',1600],['hum',2800],['blip-b',1800],['hum',3000]];
+const THINK_CUES=[['blip-a',2200],['blip-b',4500]];
 function thinkSound(name){
  if(!thinkAudio[name]){thinkAudio[name]=new Audio('/thinking-sound?name='+name);
-  thinkAudio[name].volume=0.5;}
+  thinkAudio[name].volume=0.18;}
  thinkAudio[name].currentTime=0;
  thinkAudio[name].play().catch(()=>{});}
 function startThinkingSounds(){
- if(voiceSel.value==='off'||thinkTimer)return;
+ if(voiceSel.value!=='local'||thinkTimer)return;
  thinkStep=0;
- const beat=()=>{const[name,wait]=THINK_PATTERN[thinkStep%THINK_PATTERN.length];
-  thinkSound(name);thinkStep++;thinkTimer=setTimeout(beat,wait);};
- thinkTimer=setTimeout(beat,500);}
+ const beat=()=>{
+  const[name,wait]=THINK_CUES[thinkStep++];
+  thinkTimer=setTimeout(()=>{
+   thinkSound(name);
+   if(thinkStep<THINK_CUES.length)beat();else thinkTimer=null;
+  },wait);
+ };
+ beat();}
 function stopThinkingSounds(){
  if(thinkTimer){clearTimeout(thinkTimer);thinkTimer=null;}
  Object.values(thinkAudio).forEach(a=>{try{a.pause();}catch(e){}});}

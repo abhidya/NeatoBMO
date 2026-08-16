@@ -71,6 +71,71 @@ class TestFollowUpStateMachine(unittest.TestCase):
         self.assertIsNone(state.pending())
 
 
+class TestTurnPlanning(unittest.TestCase):
+    def test_single_local_request_has_no_residual(self):
+        plan = turns.plan_turn("what time is it")
+        self.assertEqual([step.routine for step in plan.routines], ["time"])
+        self.assertEqual(plan.residual, "")
+        self.assertFalse(plan.requires_brain)
+
+    def test_two_local_requests_keep_spoken_order(self):
+        plan = turns.plan_turn("check your battery and what time is it")
+        self.assertEqual([step.routine for step in plan.routines],
+                         ["battery", "time"])
+        self.assertFalse(plan.requires_brain)
+
+    def test_local_plus_open_question_preserves_residual(self):
+        plan = turns.plan_turn("what time is it and why is the sky blue")
+        self.assertEqual([step.routine for step in plan.routines], ["time"])
+        self.assertEqual(plan.residual, "why is the sky blue")
+        self.assertTrue(plan.requires_brain)
+
+    def test_open_question_before_local_preserves_residual(self):
+        plan = turns.plan_turn("why is the sky blue and what time is it")
+        self.assertEqual([step.routine for step in plan.routines], ["time"])
+        self.assertEqual(plan.residual, "why is the sky blue")
+
+    def test_wake_phrase_and_fillers_do_not_create_residual(self):
+        plan = turns.plan_turn("hey BMO, please tell me the time")
+        self.assertEqual([step.routine for step in plan.routines], ["time"])
+        self.assertEqual(plan.residual, "")
+
+    def test_ambiguous_and_phrase_escalates_losslessly(self):
+        plan = turns.plan_turn("sing rock and roll")
+        self.assertEqual(plan.routines, ())
+        self.assertEqual(plan.residual, "sing rock and roll")
+
+    def test_planning_does_not_execute_or_consume_followup_state(self):
+        rotation_before = dict(routines._rotation)
+        state = routines.ConvoState()
+        state.arm("game_choice")
+
+        plan = turns.plan_turn("what time is it", state)
+
+        self.assertEqual([step.routine for step in plan.routines], ["time"])
+        self.assertEqual(state.pending(), "game_choice")
+        self.assertEqual(routines._rotation, rotation_before)
+
+    def test_existing_game_phrase_remains_an_instant_routine(self):
+        plan = turns.plan_turn("let's play a game!")
+        self.assertEqual([step.routine for step in plan.routines], ["game"])
+        self.assertFalse(plan.requires_brain)
+
+    def test_pending_followup_is_planned_purely_then_executed_once(self):
+        state = routines.ConvoState()
+        state.arm("game_choice")
+
+        plan = turns.plan_turn("the racing one!", state)
+
+        self.assertEqual([step.routine for step in plan.routines],
+                         ["game_choice:0"])
+        self.assertEqual(state.pending(), "game_choice")
+        hit = routines.run(plan.routines[0].routine, state, {})
+        self.assertEqual(hit.routine, "game_choice")
+        self.assertIn("racing", hit.reply.lower())
+        self.assertIsNone(state.pending())
+
+
 class TestCannedCorpusIntegrity(unittest.TestCase):
     def test_every_canned_reply_parses_to_speech_and_cues(self):
         for text in routines.canned_texts():

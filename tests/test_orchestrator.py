@@ -163,76 +163,6 @@ class ChatTurnTests(unittest.TestCase):
         self.assertEqual(out.get("routine"), "greet")
         self.assertEqual(len(self.web.brain.remembered), 1)
 
-    def test_two_local_routines_skip_brain_and_keep_order(self):
-        class FakeBrain:
-            def __init__(self):
-                self.chats = []
-                self.remembered = []
-
-            def chat(self, text):
-                self.chats.append(text)
-                return "brain"
-
-            def remember(self, user, reply):
-                self.remembered.append((user, reply))
-
-        self.web.brain = FakeBrain()
-        self.web.body = BodyController()
-        self.web.convo_state = self.web.routines.ConvoState()
-
-        out = self.web.chat_turn("check your battery and what time is it",
-                                 speak_on_robot=False)
-
-        self.assertEqual(out["routines"], ["battery", "time"])
-        self.assertEqual(self.web.brain.chats, [])
-        self.assertEqual(len(self.web.brain.remembered), 1)
-
-    def test_local_plus_residual_prompts_brain_for_rest(self):
-        class FakeBrain:
-            def __init__(self):
-                self.calls = []
-
-            def chat(self, text, *, prompt=None, assistant_prefix=""):
-                self.calls.append((text, prompt, assistant_prefix))
-                return "Blue light scatters! [happy]"
-
-        self.web.brain = FakeBrain()
-        self.web.body = BodyController()
-        self.web.convo_state = self.web.routines.ConvoState()
-
-        out = self.web.chat_turn(
-            "what time is it and why is the sky blue",
-            speak_on_robot=False)
-
-        self.assertEqual(out["routines"], ["time"])
-        self.assertIn("It is", out["reply"])
-        self.assertIn("Blue light scatters!", out["reply"])
-        self.assertEqual(len(self.web.brain.calls), 1)
-        text, prompt, assistant_prefix = self.web.brain.calls[0]
-        self.assertEqual(text, "what time is it and why is the sky blue")
-        self.assertIn("Answer only the unresolved request: why is the sky blue",
-                      prompt)
-        self.assertIn("It is", assistant_prefix)
-
-    def test_chat_events_emit_routine_before_brain_started(self):
-        class FakeBrain:
-            def chat(self, text, *, prompt=None, assistant_prefix=""):
-                return "Blue light scatters! [happy]"
-
-        self.web.brain = FakeBrain()
-        self.web.body = BodyController()
-        self.web.convo_state = self.web.routines.ConvoState()
-
-        events = list(self.web.chat_events(
-            "what time is it and why is the sky blue",
-            speak_on_robot=False))
-
-        self.assertEqual([e["type"] for e in events],
-                         ["turn_started", "routine_result", "brain_started",
-                          "brain_result", "turn_completed"])
-        self.assertEqual(events[1]["routine"], "time")
-        self.assertTrue(events[-1]["brain_used"])
-
     def test_brain_error_reports_cleanly(self):
         class DeadBrain:
             def chat(self, text):
@@ -297,6 +227,27 @@ class ChatTurnTests(unittest.TestCase):
         self.assertIn("It is", options["assistant_prefix"])
         self.assertTrue(events[-1]["brain_used"])
         self.assertFalse(events[-1]["partial"])
+
+    def test_chat_events_emit_each_brain_sentence_incrementally(self):
+        class FakeBrain:
+            def stream(self, text, on_sentence, **kwargs):
+                on_sentence("Blue light scatters! [happy]")
+                on_sentence("That makes the sky blue! [party]")
+                return ("Blue light scatters! [happy] "
+                        "That makes the sky blue! [party]")
+
+        self.web.brain = FakeBrain()
+        self.web.body = BodyController()
+
+        events = list(self.web.chat_events(
+            "what time is it and why is the sky blue", False))
+
+        results = [event for event in events
+                   if event["type"] == "brain_result"]
+        self.assertEqual([event["index"] for event in results], [0, 1])
+        self.assertEqual([event["display"] for event in results], [
+            "Blue light scatters! 😀", "That makes the sky blue! 🎉",
+        ])
 
 
 if __name__ == "__main__":

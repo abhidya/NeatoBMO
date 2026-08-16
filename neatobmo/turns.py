@@ -44,7 +44,7 @@ _PUNCT_OR_SEQUENCE_RE = re.compile(
 )
 _AND_RE = re.compile(r"\s+\band\b\s+", re.I)
 _FILLER_EDGE_RE = re.compile(
-    r"^(?:please|can you|could you|would you|will you|tell me)\s+|"
+    r"^(?:please|can you|could you|would you|will you)\s+|"
     r"\s+(?:please)$",
     re.I,
 )

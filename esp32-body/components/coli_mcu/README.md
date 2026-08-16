@@ -1,16 +1,34 @@
-# coli_mcu foundation
+# ESP32 Colibri (`coli_mcu`)
 
-This component is the staging implementation for a standalone ESP32 Colibri
-ESP-IDF package. It currently has an OLMoE BMOQ+CTOK prompt-to-text path and a
+This directory is a Git-importable ESP-IDF component and the staging source for
+the standalone ESP32 Colibri repository. It currently has an OLMoE BMOQ+CTOK prompt-to-text path and a
 separate experimental Gemma path. See [COMPATIBILITY.md](COMPATIBILITY.md) for
 the upstream-family matrix and the evidence required before claiming support.
+
+Until the standalone repository exists, pin this component directly from the
+NeatoBMO repository using ESP-IDF Component Manager:
+
+```yaml
+dependencies:
+  coli_mcu:
+    git: https://github.com/abhidya/NeatoBMO.git
+    path: esp32-body/components/coli_mcu
+    version: e8687e6
+```
+
+The manifest intentionally restricts the target to ESP32-S3. When the package
+is split into its own repository, consumers can omit `path`; no source layout
+change inside the component is required.
 
 The application owns the one USB Host Library installation and its daemon.
 `coli_mcu_start()` installs only Espressif's MSC class client. The M0 task mounts
 the first FAT-formatted MSC device at `/usb`, prints descriptors and capacity,
 and benchmarks bounded reads of `/usb/model.bmoq` if that file exists.
-If both `/usb/model.bmoq` and `/usb/tokenizer.ctok` exist, it also starts a
-low-priority `coli_generate` task. The task reads `/usb/prompt.txt` when present
+The mount path and OLMoE model, tokenizer, and KV filenames are configurable in
+menuconfig. The autorun generation demo is disabled by default for package
+consumers; NeatoBMO enables it in `sdkconfig.defaults`. When enabled and the
+configured model and tokenizer exist, the component starts a low-priority
+`coli_generate` task. The task reads `/usb/prompt.txt` when present
 or falls back to a short fixed prompt, opens the BMOQ model and CTOK tokenizer,
 encodes the prompt, runs the OLMoE greedy token loop with its 4096-token logical
 context backed by `/usb/olmoe.kv`, and

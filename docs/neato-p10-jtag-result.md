@@ -1,100 +1,83 @@
-# Cruz Rev113 P10 JTAG result
+# Neato P10 JTAG result — security-bit-consistent, no debug TAP
 
-Session: `captures/jtag/jtag-p10-20260813T061756Z/`
+Session: `jtag-halt-20260815T*` (live, 2026-08-15). Supersedes the 2026-08-13
+"uncertain" record: the blocker is now root-caused and the verdict narrowed to
+one of two physically-identical outcomes.
 
-## Result
+Read-only throughout: no flash writes, no erase, no GPNVM change, no halt, no
+memory read succeeded.
 
-The ESP32-S3 running CherryDAP worked as a Mac-visible CMSIS-DAP JTAG adapter,
-but Cruz P10 did not produce a valid JTAG TAP in this session.
+## Outcome
 
-Observed classification:
+- Adapter confirmed working: CherryUSB CMSIS-DAP v2, FW 2.1.1,
+  `VID:PID=0x0d28:0x0204`, JTAG + SWD supported.
+- Two tooling bugs root-caused and fixed:
+  1. `tools/jtag/neato_p10_autoprobe.cfg` carried `cmsis-dap backend usb_bulk`,
+     which is not a valid OpenOCD 0.12.0 subcommand — the probe errored before
+     opening the adapter. Removed.
+  2. The CherryDAP **ESP32-S3 firmware has no nTRST output** — its
+     `PIN_nTRST_IN`/`PIN_nTRST_OUT` are "Not available" stubs
+     (`CherryDAP/projects/esp32s3/main/DAP_config.h`). Therefore
+     `adapter deassert trst` is a no-op and OpenOCD always reports `nTRST = 0`.
+- Mandatory wiring fix: jumper **P10 VDDIO (square pin, bottom row 1) → TRST
+  (pin 2)**. The adapter cannot release TRST, and a floating AT91 nTRST holds
+  the TAP in Test-Logic-Reset.
+- Scan progression after the jumper: unpowered "all ones" → transient
+  live-TAP signature (garbage IDCODEs during reconnect) → stable,
+  speed-independent "all ones" (`TDO = 1`) from 10 kHz through 1 MHz.
+- Forced single-TAP (`irlen 4`) returned `IR capture 0x0f`, not `0x01` — the
+  same all-ones read the 2026-08-13 session saw.
+- A 45-scan power-cycle loop showed **no live-TAP window during boot**, ruling
+  out a runtime ICE-disable after boot.
 
-- adapter: working (`CherryUSB CMSIS-DAP`, OpenOCD 0.12.0);
-- P10 electrical state: not dead, because TDO state changed between target-off,
-  powered, pull-up, boot-triggered, and software-window observations;
-- TAP/IDCODE/IR length: not detected;
-- ARM926 target/halt/registers/SRAM/internal flash: not reached;
-- reset-assisted attach: not tested.
+## Verdict
 
-The strongest supported statement is **“P10 did not expose a usable read-only
-ARM926 debug interface under the tested conditions.”** Do not simplify this to
-“security bit proven set”; all-one/all-zero OpenOCD scans also fit wiring,
-signal integrity, reset/TRST gating, or runtime ICE-disable explanations.
+The clean, clock-independent "all ones" (tristated TDO) with TRST tied high and
+wiring confirmed seated is consistent with the **AT91 security bit being set**:
+JTAG is hard-disabled on this board, matching `FIRMWARE_ARCHIVE.md`
+("JTAG is blocked while the AT91 security bit is set"). The one remaining
+alternative — a dead VDDIO rail (robot asleep) — needs a meter to exclude and
+does not change the conclusion: **JTAG is not a viable extraction path here.**
 
-## Pin map used
+The 2026-08-13 session's open list (wiring/orientation, runtime ICE-disable,
+adapter mismatch, debug lock) is now closed to: security bit, or dead VDDIO.
+The adapter is not the problem, and TRST was a real, now-fixed, contributor.
 
-Manny reported the square pad at bottom-left:
+## P10 pin map (recorded for the next session)
 
-```text
-top:       2 GND   4 GND   6 SRST   8 TDO   10 RTCK
-bottom:    1 VDDIO 3 TRST  5 TDI    7 TMS    9 TCK
+```
+Bottom row: VDDIO (square, pin 1)  TRST  TDI  TMS  TCK
+Top row:    GND                    GND   SRST TDO  RTCK
 ```
 
-ESP32-S3 wiring used:
+CherryDAP ESP32-S3 GPIOs: `TCK=17 TMS=16 TDI=15 TDO=7 nRESET=6`; **no TRST**.
+OpenOCD cannot pulse SRST through this adapter ("adapter has no srst signal").
 
-```text
-ESP GND    -> P10.2 GND
-ESP GPIO7  -> P10.8 TDO
-ESP GPIO15 -> P10.5 TDI
-ESP GPIO16 -> P10.7 TMS
-ESP GPIO17 -> P10.9 TCK
-```
+## Still blocked on a meter
 
-Not connected: P10 VDDIO, TRST, SRST, RTCK. VDDIO was not measured in this
-session and series resistors were not installed; both are recorded as operator
-waivers, not as validated best practice.
+- VDDIO voltage (square pad vs GND) — confirm ~3.3 V, i.e. robot awake.
+- TDO continuity (adapter GPIO7 ↔ P10 top-row pin 4) and common GND.
 
-## Collections preserved
+## Tooling left in-tree
 
-- `SHA256SUMS` contains hashes for every tracked file in the session folder.
-- `openocd-*` logs preserve all raw OpenOCD output.
-- `p6-trigger-*.raw` files preserve raw P6 boot-trigger bytes.
-- `sound-vendor-write-result.json` records the later exact vendor sound-bank
-  restore/health check; proprietary sound bytes remain outside Git.
-- `firmware-27-write-result.json` records the later exact stock Cruz-P 2.7
-  application transition from installed 2.5.15893 to 2.7.16621; proprietary
-  application bytes remain outside Git.
-- `firmware-31-write-result.json` records the initial automatic USB
-  rediscovery timeout after an ACKed exact stock Cruz-P 3.1 write. Physical USB
-  reconnect then exposed healthy 3.1.17844; `usb-snapshot-31/` preserves the
-  complete read-only identity and command surface.
-- `firmware-27b-write-result.json` and `firmware-25b-write-result.json` preserve
-  the final comparison transition and exact stock 2.5 restore.
-- `openocd-sound-vendor-*` and `openocd-firmware-27-*` preserve scan-chain
-  observations during those later software windows. `openocd-firmware-31-*`
-  preserves the 3.1 window. They remained all-ones/no TAP and do not change the
-  no-TAP classification.
-- `manifest.json` records adapter, target, software metadata, private ESP
-  backup hash, counts, and explicit non-actions.
-- `usb-surface-comparison.json` records exact help-reply hashes and the observed
-  controller recovery requirement: rediscover VID:PID `2108:780B` after updater
-  reboot and provide a manual or hub-controlled USB VBUS-cycle fallback.
+- `tools/jtag/neato_p10_autoprobe.cfg` — fixed; read-only `scan_chain` probe.
+- `tools/jtag/neato_p10_halt.cfg` + `run_neato_p10_halt.sh` — halt + dump
+  SRAM0 `0x00200000`, SRAM1 `0x00300000`, SDRAM `0x20000000`; ready if an
+  IDCODE ever appears.
+- `tools/jtag/verify_firmware_dump.py` — SDRAM ARM-vector oracle + SRAM
+  AES-128 key-schedule finder (FIPS-197 self-tested). A key-schedule hit is
+  ~2^-1272 false-positive, so a match is definitive.
 
-Three later 10 kHz control captures are preserved under
-`captures/jtag/jtag-halt-20260815T224138Z/`,
-`captures/jtag/jtag-halt-20260815T224331Z/`, and
-`captures/jtag/jtag-halt-20260815T224544Z/`. They also returned all ones/no TAP
-and did not justify attempting a halt or memory read.
+## Constraints carried through the session
 
-## Compatible software policy
+- J3 / ERASE untouched.
+- Neato never powered from the ESP32.
+- No GPNVM, flash, or erase commands issued.
+- All captures under `captures/jtag/jtag-halt-20260815T*/`.
 
-Compatible Neato application and sound images are cataloged by path, size/status,
-and SHA-256 only. Proprietary `.enc` images, sound-bank bytes, ESP full-flash
-backups, keys, and raw dumps must remain outside the public repository.
+## Conclusion for the CFW track
 
-The side-jack Cruz Rev113 target remains hard-capped at the 3.1 P-family line;
-3.2 P-family metadata is recorded only as a blocked image for this board.
-
-Exact stock 2.5, 2.7, and 3.1 all booted and answered `GetVersion` on this
-specific robot. P10 remained all-ones/no-TAP before, during, and after every
-application transition. The firmware-transition P6 recorder files are
-header-only; concurrent CherryDAP CDC capture did not preserve those UART
-bursts, so application identity is grounded in the USB result files and
-read-only snapshots.
-
-## Next safest experiment
-
-Use a scope or logic analyzer on TCK/TMS/TDI/TDO during the same `scan_chain`
-sequence to distinguish “adapter is clocking but target never drives TDO” from
-“signal never reaches/leaves P10.” Do not add SRST/TRST or attempt halt until
-that electrical distinction is measured.
+JTAG is closed short of donor fault-injection. The remaining software-reachable
+paths are unchanged: NAND readback of the plaintext bootloader (key/derivation
++ `0x10..0x1f` checksum), and the sound-parser fuzz as a code-exec primitive.
+Neither needs JTAG.

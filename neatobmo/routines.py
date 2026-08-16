@@ -36,9 +36,15 @@ class ConvoState:
         self.expect_deadline = time.time() + ttl
 
     def pending(self):
-        if self.expect and time.time() <= self.expect_deadline:
+        if self.peek_pending():
             return self.expect
         self.expect = None
+        return None
+
+    def peek_pending(self):
+        """Return the live expectation without consuming or clearing it."""
+        if self.expect and time.time() <= self.expect_deadline:
+            return self.expect
         return None
 
 
@@ -150,8 +156,16 @@ _COVERAGE = {
     "time": [r"(what time is it|what is the time|tell me the time|time please)"],
     "battery": [r"(check |how is |what is |what'?s )?(your )?(battery|charge|fuel)( level| status)?"],
     "sleep": [r"(good ?night|go to sleep|bed ?time)"],
-    "game": [r"(play a game|wanna play|let'?s play|video ?games?)"],
+    "game": [r"(play a game|wanna play|let'?s play(?: a game)?|video ?games?)"],
     "stop": [r"(stop|quiet|hush|calm down)"],
+}
+
+_FOLLOW_UP_COVERAGE = {
+    "game_choice": [
+        r"(the )?(rac\w*|adventure|first|both)( one)?",
+        r"(the )?(dance|battle|second)( one)?",
+        r"(no|nah|later|not now)",
+    ],
 }
 
 
@@ -180,8 +194,14 @@ def accepts(name, text):
     return any(re.fullmatch(p, t) for p in _COVERAGE.get(name, []))
 
 
-def accepted_routine(text):
+def accepted_routine(text, state=None):
     """Return the first routine name that fully covers text, else None."""
+    pending = state.peek_pending() if state is not None else None
+    if pending:
+        covered = _covered_text(text)
+        for index, pattern in enumerate(_FOLLOW_UP_COVERAGE.get(pending, [])):
+            if re.fullmatch(pattern, covered):
+                return f"{pending}:{index}"
     for routine in ROUTINES:
         name = routine["name"]
         if accepts(name, text):
@@ -192,9 +212,20 @@ def accepted_routine(text):
 def run(name, state=None, ctx=None):
     """Execute one already-planned routine by name."""
     ctx = ctx or {}
+    if ":" in name:
+        pending, raw_index = name.rsplit(":", 1)
+        try:
+            patterns, replies = FOLLOW_UPS[pending][int(raw_index)]
+        except (KeyError, IndexError, ValueError):
+            return None
+        if state is not None:
+            state.expect = None
+        return Hit(pending, _pick(name, replies, ctx))
     routine = _routine_by_name(name)
     if routine is None:
         return None
+    if state is not None and state.pending():
+        state.expect = None
     if state is not None and routine.get("expect"):
         state.arm(routine["expect"])
     return Hit(name, _pick(name, routine["replies"], ctx))

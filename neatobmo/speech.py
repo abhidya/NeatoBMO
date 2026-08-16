@@ -16,14 +16,13 @@ from . import tts_bank
 
 ACTIVE_STATES = {"synthesizing", "building", "burning", "speaking", "restoring"}
 
-# Thinking-sounds UX: three slots in every generated speech bank are reserved
-# for pre-rendered "thinking" audio (chiptune blips + a neural BMO hum), so a
-# background loop can vocalize while the brain/synth is busy — zero extra
-# flash writes, whatever bank is installed.  On the stock BMO bank the same
-# IDs hold chirps, which work fine as thinking noises too.
+# Thinking feedback is punctuation, not hold music.  BMO stays quiet through
+# ordinary latency, gives one curious "hm?" after a real pause, then one small
+# reassuring boop only if the wait becomes unusually long.  The assets remain
+# reserved in every generated bank, so these cues need no extra flash write.
 THINKING_SLOT_FILES = {3: "thinking-blip-a.wav", 19: "thinking-blip-b.wav",
                        9: "thinking-hum.wav"}
-THINKING_PATTERN = [(3, 1.6), (9, 2.8), (19, 1.8), (9, 3.0)]
+THINKING_CUES = ((2.2, 3), (4.5, 19))
 
 
 def load_thinking_sounds(directory):
@@ -94,18 +93,15 @@ class SpeechService:
 
     # ---- thinking sounds ------------------------------------------------
     def _thinking_loop(self, stop):
-        """Play thinking blips/hums between robot commands until stopped."""
+        """Play at most two delayed, non-repeating thinking cues."""
         if not self.thinking_sounds:
             return
-        index = 0
-        while not stop.is_set():
-            sound_id, wait = THINKING_PATTERN[index % len(THINKING_PATTERN)]
+        for wait, sound_id in THINKING_CUES:
+            if stop.wait(wait):
+                return
             self.body.try_call(
                 lambda r, s=sound_id: r.cmd(f"PlaySound {s}", timeout=3),
                 lock_timeout=0.2)
-            if stop.wait(wait):
-                break
-            index += 1
 
     # ---- speaking -------------------------------------------------------
     def _capacities(self, baseline):
@@ -215,7 +211,8 @@ class SpeechService:
 
             # Wait for the first chunk before taking the robot lock, so
             # other robot commands aren't blocked during the initial
-            # synthesis — and let BMO vocalize thinking sounds meanwhile.
+            # synthesis.  If that wait is genuinely noticeable, BMO may add
+            # one or two restrained character cues rather than looping noise.
             think_stop = threading.Event()
             threading.Thread(target=self._thinking_loop, args=(think_stop,),
                              daemon=True).start()
