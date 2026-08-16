@@ -26,13 +26,15 @@ class Config:
     brain: str = "http://127.0.0.1:8000/v1"           # NEATOBMO_BRAIN
     esp32: str = "http://10.0.0.106"                  # NEATOBMO_ESP32
     port: int = 8485                                  # PORT
-    speech_mode: str = "soundbyte"                    # NEATOBMO_SPEECH
+    speech_mode: str = "soundboard"                   # NEATOBMO_SPEECH
     speech_burst: float = cues.SPEECH_BURST_SECONDS   # NEATOBMO_SPEECH_BURST
     voice_server: str = "http://127.0.0.1:8486"       # NEATOBMO_VOICE
     brain_engine: str = "/Volumes/2TB/colibri-v1.5.0-macos-arm64/olmoe"  # NEATOBMO_BRAIN_ENGINE
     brain_snap: str = "/Volumes/2TB/models/olmoe-snap"  # NEATOBMO_BRAIN_SNAP
     api_key: str | None = field(default_factory=_read_api_key)
     default_voice: str = "bmo-rvc"
+    soundboard_catalog: Path = (REPO_ROOT / "docs" / "bmo-soundboard" /
+                                "catalog.json")
 
     @classmethod
     def from_env(cls):
@@ -47,4 +49,6 @@ class Config:
             voice_server=env("NEATOBMO_VOICE", cls.voice_server),
             brain_engine=env("NEATOBMO_BRAIN_ENGINE", cls.brain_engine),
             brain_snap=env("NEATOBMO_BRAIN_SNAP", cls.brain_snap),
+            soundboard_catalog=Path(env("NEATOBMO_SOUNDBOARD_CATALOG",
+                                        str(cls.soundboard_catalog))),
         )

@@ -278,7 +278,8 @@ class BurstBudget:
         return FACE_SOUND.get(face, "beep")
 
 
-def condense(plan, max_words=None, burst_seconds=SPEECH_BURST_SECONDS):
+def condense(plan, max_words=None, burst_seconds=SPEECH_BURST_SECONDS,
+             prefer_soundboard=False):
     """Soundbyte-first mode: cap the spoken burst, let cues do the talking.
 
     The spoken reply is trimmed to its first ``max_words`` words — by
@@ -289,7 +290,8 @@ def condense(plan, max_words=None, burst_seconds=SPEECH_BURST_SECONDS):
     face so the performance always has a voice.
     """
     budget = BurstBudget(burst_seconds=burst_seconds, max_words=max_words)
-    speech = budget.feed(plan.speech)
+    explicit_sound = any(kind == "sound" for kind, _ in plan.steps)
+    speech = "" if prefer_soundboard and explicit_sound else budget.feed(plan.speech)
     if speech is None:
         speech = plan.speech
     steps = list(plan.steps)

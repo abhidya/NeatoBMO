@@ -44,7 +44,7 @@ _PUNCT_OR_SEQUENCE_RE = re.compile(
 )
 _AND_RE = re.compile(r"\s+\band\b\s+", re.I)
 _FILLER_EDGE_RE = re.compile(
-    r"^(?:please|can you|could you|would you|will you)\s+|"
+    r"^(?:please|can you|could you|would you|will you|and|then|also)\s+|"
     r"\s+(?:please)$",
     re.I,
 )
@@ -91,7 +91,7 @@ def _split_with_offsets(text, base, pattern):
     return tuple(part for part in out if part.text)
 
 
-def _split_parts(text, base):
+def _split_parts(text, base, state=None):
     strong = _split_with_offsets(text, base, _PUNCT_OR_SEQUENCE_RE)
     if not strong:
         strong = (RequestPart(_clean_text(text), base, base + len(text)),)
@@ -99,7 +99,7 @@ def _split_parts(text, base):
     parts = []
     for part in strong:
         split = _split_with_offsets(part.text, part.start, _AND_RE)
-        if any(routines.accepted_routine(p.text) for p in split):
+        if any(routines.accepted_routine(p.text, state) for p in split):
             parts.extend(split)
         else:
             parts.append(part)
@@ -110,14 +110,14 @@ def plan_turn(text, state=None):
     """Plan local routine steps and residual request text without side effects."""
     original = text or ""
     body, base = _strip_wake(original)
-    parts = _split_parts(body, base)
+    parts = _split_parts(body, base, state)
     routines_out = []
     residual = []
 
     for part in parts:
         if not _meaningful(part.text):
             continue
-        routine = routines.accepted_routine(part.text)
+        routine = routines.accepted_routine(part.text, state)
         if routine:
             routines_out.append(RoutineStep(part, routine))
         else:

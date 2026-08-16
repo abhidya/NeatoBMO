@@ -75,6 +75,42 @@ class ChatHttpTests(unittest.TestCase):
         self.assertEqual([event["seq"] for event in events], list(range(4)))
         self.assertFalse(events[-1]["brain_used"])
 
+    def test_brain_sentence_flushes_before_generation_finishes(self):
+        release = threading.Event()
+
+        class StreamingBrain:
+            def stream(self, text, on_sentence, **kwargs):
+                on_sentence("First answer! [happy]")
+                if not release.wait(2):
+                    raise RuntimeError("test did not release generation")
+                on_sentence("Second answer! [party]")
+                return "First answer! [happy] Second answer! [party]"
+
+        bmo_web.brain = StreamingBrain()
+        payload = json.dumps({
+            "text": "what time is it and explain the sky",
+            "speak": False,
+        })
+        conn, response = self.request(
+            "POST", "/chat", payload,
+            {"Content-Type": "application/json",
+             "Accept": "application/x-ndjson"})
+        try:
+            first_events = [json.loads(response.readline()) for _ in range(4)]
+            self.assertEqual([event["type"] for event in first_events], [
+                "turn_started", "routine_result", "brain_started",
+                "brain_result",
+            ])
+            self.assertEqual(first_events[-1]["display"], "First answer! 😀")
+            release.set()
+            remaining = [json.loads(line) for line in response]
+        finally:
+            release.set()
+            conn.close()
+
+        self.assertEqual([event["type"] for event in remaining],
+                         ["brain_result", "turn_completed"])
+
     def test_thinking_sound_route_is_allowlisted(self):
         conn, response = self.request("GET", "/thinking-sound?name=blip-a")
         try:

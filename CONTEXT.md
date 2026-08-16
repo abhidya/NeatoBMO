@@ -29,18 +29,19 @@ here in the same change.
 - **Plan** — `cues.parse()`'s three views of one reply: `speech` (clean
   words for TTS), `display` (face cues as emoji, feeds the cascade),
   `steps` (ordered sound/move actions).
-- **Soundbyte mode** — the default speech policy: spoken words are capped
-  at a ~1.5 s burst and the soundboard/moves/faces carry the reply.
+- **Soundboard mode** — the default speech policy: an explicit reviewed BMO
+  clip suppresses generated speech; neural voice is used only when no clip
+  fits. Moves, faces, and subtitles carry the rest of the reply.
 - **BurstBudget** (`cues.BurstBudget`) — the one owner of that cap, used
   by both the blocking (`condense()`) and streaming reply paths, including
   the always-leave-with-a-soundbyte guarantee.
 
 ## Voice
 
-- **Voice ladder** (`neatobmo/voice.py`, `VoiceSynth`) — neural BMO clone
-  (Piper prosody → RVC timbre, `tools/bmo_voice_server.py` on :8486) →
-  Colibri espeak endpoint → local espeak-ng. Cache keys on the *requested*
-  voice so fallbacks still hit.
+- **Voice ladder** (`neatobmo/voice.py`, `VoiceSynth`) — exact reviewed BMO
+  soundboard clip → neural BMO clone (Piper prosody → RVC timbre,
+  `tools/bmo_voice_server.py` on :8486) → Colibri espeak endpoint → local
+  espeak-ng. Cache keys on the *requested* voice so fallbacks still hit.
 - **Sound bank** — the robot's 770048-byte sound-flash image. Speech ships
   by packing TTS PCM into ~17 s **banks** and burning them
   (`neatobmo/tts_bank.py`); every burn is validated and verified.

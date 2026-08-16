@@ -81,6 +81,22 @@ class CompoundTurnHistoryTests(unittest.TestCase):
              "content": "It is 10:35! Blue light scatters!"},
         ])
 
+    @mock.patch("neatobmo.brain.urllib.request.urlopen")
+    def test_failed_stream_does_not_commit_an_incomplete_history_turn(self,
+                                                                      urlopen):
+        urlopen.return_value = _StreamResponse([
+            b'data: {"choices":[{"delta":{"content":"Partial answer. "}}]}\n',
+            b'data: {"error":"model stopped"}\n',
+        ])
+        brain = BrainClient("http://brain.test/v1")
+        sentences = []
+
+        with self.assertRaisesRegex(RuntimeError, "model stopped"):
+            brain.stream("explain entropy", sentences.append)
+
+        self.assertEqual(sentences, ["Partial answer."])
+        self.assertEqual(brain.history, [])
+
 
 if __name__ == "__main__":
     unittest.main()

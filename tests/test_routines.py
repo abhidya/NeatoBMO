@@ -90,6 +90,11 @@ class TestTurnPlanning(unittest.TestCase):
         self.assertEqual(plan.residual, "why is the sky blue")
         self.assertTrue(plan.requires_brain)
 
+    def test_punctuation_connector_does_not_pollute_residual(self):
+        plan = turns.plan_turn("what time is it, and why is the sky blue?")
+        self.assertEqual([step.routine for step in plan.routines], ["time"])
+        self.assertEqual(plan.residual, "why is the sky blue")
+
     def test_open_question_before_local_preserves_residual(self):
         plan = turns.plan_turn("why is the sky blue and what time is it")
         self.assertEqual([step.routine for step in plan.routines], ["time"])
@@ -120,6 +125,18 @@ class TestTurnPlanning(unittest.TestCase):
         plan = turns.plan_turn("let's play a game!")
         self.assertEqual([step.routine for step in plan.routines], ["game"])
         self.assertFalse(plan.requires_brain)
+
+    def test_existing_routine_variants_remain_local(self):
+        cases = {
+            "miss you": "love",
+            "tell me a joke instead": "joke",
+        }
+        for utterance, expected in cases.items():
+            with self.subTest(utterance=utterance):
+                plan = turns.plan_turn(utterance)
+                self.assertEqual([step.routine for step in plan.routines],
+                                 [expected])
+                self.assertFalse(plan.requires_brain)
 
     def test_pending_followup_is_planned_purely_then_executed_once(self):
         state = routines.ConvoState()

@@ -1,3 +1,4 @@
+import time
 import unittest
 
 from neatobmo import speech
@@ -54,6 +55,39 @@ class ThinkingFeedbackTests(unittest.TestCase):
 
         self.assertEqual(stop.waits, [2.2])
         self.assertEqual(service.body.robot.commands, [])
+
+
+class AuthenticClipPlaybackTests(unittest.TestCase):
+    def test_catalog_hit_uses_esp32_runtime_audio_without_flash_bank(self):
+        class Board:
+            def synth(self, text):
+                return b"RIFFauthentic" if text == "Hello there" else None
+
+        class Voice:
+            default_voice = "bmo-rvc"
+            soundboard = Board()
+
+        class Esp32:
+            def __init__(self):
+                self.wavs = []
+
+            def speak(self, wav):
+                self.wavs.append(wav)
+
+        class Body:
+            attached = True
+            esp32 = Esp32()
+
+        service = speech.SpeechService(Body(), Voice())
+        job, error = service.speak("Hello there")
+        self.assertIsNone(error)
+        deadline = time.time() + 1
+        while job["state"] not in ("complete", "error") and time.time() < deadline:
+            time.sleep(0.01)
+
+        self.assertEqual(job["state"], "complete")
+        self.assertEqual(service.body.esp32.wavs, [b"RIFFauthentic"])
+        self.assertEqual(service.flash_writes, 0)
 
 
 if __name__ == "__main__":

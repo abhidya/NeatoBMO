@@ -158,6 +158,23 @@ class SpeechService:
         the flash write.
         """
         try:
+            # Authentic catalog hits take the native runtime-audio path: no
+            # synthesis, bank construction, or flash wear. If the Neato
+            # firmware lacks PlaySound File, retain the established bank path.
+            soundboard = getattr(self.voice, "soundboard", None)
+            esp32 = getattr(self.body, "esp32", None)
+            if job.get("units") is None and soundboard is not None and esp32:
+                clip = soundboard.synth(job["text"])
+                if clip is not None:
+                    try:
+                        job["state"] = "speaking"
+                        esp32.speak(clip)
+                        job["state"] = "complete"
+                        self._log(job, "authentic soundboard clip played via ESP32")
+                        return
+                    except Exception as exc:
+                        self._log(job, f"native soundboard playback unavailable: {exc}")
+
             profile = tts_bank.BANK_PROFILES["bmo"]
             baseline = profile["path"].read_bytes()
             if hashlib.sha256(baseline).hexdigest() != tts_bank.BMO_BANK_SHA256:

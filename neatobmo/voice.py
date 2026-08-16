@@ -1,8 +1,9 @@
 """VoiceSynth: the one owner of "how BMO's voice gets made".
 
-Engine ladder: neural BMO clone (Piper prosody -> RVC timbre, served by
-tools/bmo_voice_server.py) first, Colibri's espeak endpoint next, local
-espeak-ng last.  The cache is keyed by the *requested* voice, so a synth
+Engine ladder: reviewed authentic BMO soundboard clip first, neural BMO clone
+(Piper prosody -> RVC timbre, served by tools/bmo_voice_server.py) next,
+Colibri's espeak endpoint next, local espeak-ng last.  The cache is keyed by
+the *requested* voice, so a synth
 that fell back still satisfies the next identical request — this is what
 makes the routine-layer precache actually hit (the old module-level cache
 keyed on the fallback voice and never matched the runtime default).
@@ -30,11 +31,12 @@ ESPEAK_PITCH = 70
 
 class VoiceSynth:
     def __init__(self, voice_server, brain_url=None, api_key=None,
-                 default_voice="bmo-rvc"):
+                 default_voice="bmo-rvc", soundboard=None):
         self.voice_server = voice_server.rstrip("/")
         self.brain_url = brain_url.rstrip("/") if brain_url else None
         self.api_key = api_key
         self.default_voice = default_voice
+        self.soundboard = soundboard
         self._cache = {}          # (sanitized text, requested voice) -> wav
 
     # ---- engines --------------------------------------------------------
@@ -87,6 +89,11 @@ class VoiceSynth:
         text = tts_bank.sanitize_speech_text(text) or text
         if (cached := self._cache.get((text, requested))) is not None:
             return cached
+        if self.soundboard is not None:
+            wav = self.soundboard.synth(text)
+            if wav is not None:
+                self._cache[(text, requested)] = wav
+                return wav
         engine_voice = requested
         wav = None
         if requested == "bmo-rvc":

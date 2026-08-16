@@ -151,8 +151,8 @@ _COVERAGE = {
     "dance": [r"(can you |please |would you )?(dance|bust a move|boogie)( for me)?"],
     "spin": [r"(can you |please |would you )?(spin|turn around|twirl)"],
     "sing": [r"(can you |please |would you )?(sing|sing a song|play music)"],
-    "love": [r"(i love you|you are my best friend|best friend|i miss(ed)? you)"],
-    "joke": [r"(tell me |make me |say )?(a )?(joke|something funny|laugh)"],
+    "love": [r"(i love you|you are my best friend|best friend|(?:i )?miss(ed)? you)"],
+    "joke": [r"(tell me |make me |say )?(a )?(joke|something funny|laugh)( instead)?"],
     "time": [r"(what time is it|what is the time|tell me the time|time please)"],
     "battery": [r"(check |how is |what is |what'?s )?(your )?(battery|charge|fuel)( level| status)?"],
     "sleep": [r"(good ?night|go to sleep|bed ?time)"],
@@ -215,7 +215,7 @@ def run(name, state=None, ctx=None):
     if ":" in name:
         pending, raw_index = name.rsplit(":", 1)
         try:
-            patterns, replies = FOLLOW_UPS[pending][int(raw_index)]
+            _patterns, replies = FOLLOW_UPS[pending][int(raw_index)]
         except (KeyError, IndexError, ValueError):
             return None
         if state is not None:

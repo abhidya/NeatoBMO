@@ -249,6 +249,166 @@ class ChatTurnTests(unittest.TestCase):
             "Blue light scatters! 😀", "That makes the sky blue! 🎉",
         ])
 
+    def test_compound_robot_speaks_local_answer_before_brain_generation(self):
+        class OrderedSpeech:
+            def __init__(self):
+                self.calls = []
+
+            def speak(self, text, units=None):
+                self.calls.append((text, units))
+                return {"stop": threading.Event()}, None
+
+            def active(self):
+                return False
+
+        speech = OrderedSpeech()
+
+        class InspectingBrain:
+            def stream(self, text, on_sentence, **kwargs):
+                self.assert_local_started()
+                on_sentence("The sky looks blue. [happy]")
+                return "The sky looks blue. [happy]"
+
+            @staticmethod
+            def assert_local_started():
+                assert speech.calls
+                assert "It is" in speech.calls[0][0]
+                assert speech.calls[0][1] is None
+
+        self.web.brain = InspectingBrain()
+        self.web.body = BodyController()
+        self.web.speech = speech
+
+        events = list(self.web.chat_events(
+            "what time is it and why is the sky blue", True))
+
+        self.assertEqual(events[1]["type"], "routine_result")
+        self.assertEqual(events[2]["type"], "brain_started")
+        self.assertTrue(events[-1]["spoke"])
+
+    def test_sound_cue_does_not_replace_streamed_semantic_speech(self):
+        class CapturingSpeech:
+            def speak(self, text, units=None):
+                self.units = units
+                return {"stop": threading.Event()}, None
+
+        class CueBrain:
+            def stream(self, text, on_sentence, **kwargs):
+                on_sentence("Entropy increases. [sound:beep]")
+                return "Entropy increases. [sound:beep]"
+
+        old_mode = self.web.CFG.speech_mode
+        self.web.CFG.speech_mode = "soundboard"
+        try:
+            speech = CapturingSpeech()
+            self.web.brain = CueBrain()
+            self.web.body = BodyController()
+            self.web.speech = speech
+
+            reply, streamed, err = self.web._streamed_reply("entropy")
+
+            self.assertTrue(streamed)
+            self.assertIsNone(err)
+            self.assertEqual(reply, "Entropy increases. [sound:beep]")
+            self.assertEqual(list(speech.units), ["Entropy increases."])
+        finally:
+            self.web.CFG.speech_mode = old_mode
+
+    def test_residual_subject_change_clears_pending_followup(self):
+        class FakeBrain:
+            def chat(self, text, **kwargs):
+                return "Entropy grows! [surprised]"
+
+        self.web.brain = FakeBrain()
+        self.web.body = BodyController()
+        self.web.convo_state = self.web.routines.ConvoState()
+        self.web.convo_state.arm("game_choice")
+
+        out = self.web.chat_turn("explain entropy", False)
+
+        self.assertIn("Entropy grows!", out["reply"])
+        self.assertIsNone(self.web.convo_state.pending())
+
+    def test_brain_failure_keeps_delivered_local_result(self):
+        class DeadBrain:
+            def __init__(self):
+                self.remembered = []
+
+            def stream(self, text, on_sentence, **kwargs):
+                raise RuntimeError("brain asleep")
+
+            def remember(self, user, reply):
+                self.remembered.append((user, reply))
+
+        self.web.brain = DeadBrain()
+        self.web.body = BodyController()
+
+        events = list(self.web.chat_events(
+            "what time is it and explain entropy", False))
+
+        self.assertEqual([event["type"] for event in events], [
+            "turn_started", "routine_result", "brain_started", "turn_error",
+            "turn_completed",
+        ])
+        self.assertTrue(events[-1]["partial"])
+        self.assertIn("It is", events[-1]["reply"])
+        self.assertEqual(len(self.web.brain.remembered), 1)
+
+    def test_brain_only_failure_does_not_record_empty_assistant_turn(self):
+        class DeadBrain:
+            def __init__(self):
+                self.remembered = []
+
+            def stream(self, text, on_sentence, **kwargs):
+                raise RuntimeError("brain asleep")
+
+            def remember(self, user, reply):
+                self.remembered.append((user, reply))
+
+        self.web.brain = DeadBrain()
+        self.web.body = BodyController()
+
+        events = list(self.web.chat_events("explain entropy", False))
+
+        self.assertTrue(events[-1]["partial"])
+        self.assertEqual(events[-1]["reply"], "")
+        self.assertEqual(self.web.brain.remembered, [])
+
+    def test_robot_stream_failure_after_output_is_not_retried_invisibly(self):
+        class PartialBrain:
+            def __init__(self):
+                self.chat_calls = 0
+                self.remembered = []
+
+            def stream(self, text, on_sentence, **kwargs):
+                on_sentence("Partial answer! [happy]")
+                raise RuntimeError("stream stopped")
+
+            def chat(self, text, **kwargs):
+                self.chat_calls += 1
+                return "Hidden retry answer"
+
+            def remember(self, user, reply):
+                self.remembered.append((user, reply))
+
+        class FakeSpeech:
+            def speak(self, text, units=None):
+                return {"stop": threading.Event()}, None
+
+        self.web.brain = PartialBrain()
+        self.web.body = BodyController()
+        self.web.speech = FakeSpeech()
+
+        events = list(self.web.chat_events("explain entropy", True))
+
+        self.assertEqual([event["type"] for event in events], [
+            "turn_started", "brain_started", "brain_result", "turn_error",
+            "turn_completed",
+        ])
+        self.assertEqual(self.web.brain.chat_calls, 0)
+        self.assertIn("Partial answer!", events[-1]["reply"])
+        self.assertTrue(events[-1]["partial"])
+
 
 if __name__ == "__main__":
     unittest.main()

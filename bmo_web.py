@@ -42,6 +42,7 @@ from neatobmo.brain import BrainClient
 from neatobmo.config import Config, REPO_ROOT
 from neatobmo.esp32 import Esp32Client
 from neatobmo.speech import SpeechService
+from neatobmo.soundboard_voice import SoundboardVoice
 from neatobmo.sounds import BMO_BANK, BMO_SEQUENCES, BMO_SOUND_SLOTS
 from neatobmo.voice import VOICES as TTS_VOICES, VoiceSynth
 
@@ -67,8 +68,10 @@ PAGE_PATH = REPO_ROOT / "static" / "console.html"
 CFG = Config.from_env()
 esp32 = Esp32Client(CFG.esp32)
 brain = BrainClient(CFG.brain, api_key=CFG.api_key, persona=PERSONA)
+soundboard_voice = SoundboardVoice(CFG.soundboard_catalog)
 voice = VoiceSynth(CFG.voice_server, brain_url=CFG.brain,
-                   api_key=CFG.api_key, default_voice=CFG.default_voice)
+                   api_key=CFG.api_key, default_voice=CFG.default_voice,
+                   soundboard=soundboard_voice)
 body = BodyController(robot=None, esp32=esp32)
 speech = SpeechService(body, voice,
                        log_path=REPO_ROOT / "logs" / "tts-bank-operations.jsonl",
@@ -158,6 +161,8 @@ def chat_events(text, speak_on_robot):
 
     yield event("turn_started", original=text)
     turn_plan = turns.plan_turn(text, convo_state)
+    if turn_plan.requires_brain and convo_state.pending():
+        convo_state.expect = None
     local_replies = []
     local_displays = []
     local_speech = []
@@ -185,16 +190,24 @@ def chat_events(text, speak_on_robot):
 
     if not turn_plan.requires_brain:
         reply = " ".join(local_displays)
-        if speak_on_robot and local_speech:
+        local_has_sound = any(kind == "sound" for kind, _ in local_steps)
+        if (speak_on_robot and local_speech and
+                not (CFG.speech_mode == "soundboard" and local_has_sound)):
             speech.speak(" ".join(local_speech))
         brain.remember(text, " ".join(local_replies))
         yield event("turn_completed", reply=reply, cues=local_steps,
                     routines=routine_names, brain_used=False, partial=False,
-                    spoke=bool(speak_on_robot and local_speech))
+                    spoke=bool(speak_on_robot and (local_speech or local_has_sound)))
         return
 
     assistant_prefix = " ".join(local_replies)
     prompt = _compound_prompt(text, turn_plan.residual, assistant_prefix)
+    local_voice_job = None
+    if speak_on_robot and local_speech:
+        # The deterministic answer is useful now, not after model latency.
+        # Residual speech is deferred behind this job below so the two voice
+        # jobs never compete for the ESP32/body transport.
+        local_voice_job, _ = speech.speak(" ".join(local_speech))
     yield event("brain_started", residual_summary=turn_plan.residual)
     body.run(lambda r: (r.led("amber"),
                         faces.scanline(r, range(20, 110, 30), 0.08)))
@@ -208,7 +221,8 @@ def chat_events(text, speak_on_robot):
             if speak_on_robot:
                 reply, streamed, err = _streamed_reply(
                     text, prompt=prompt, assistant_prefix=assistant_prefix,
-                    on_sentence_event=sentence_ready)
+                    on_sentence_event=sentence_ready,
+                    defer_speech=local_voice_job is not None)
                 if err:
                     raise RuntimeError(err)
             elif hasattr(brain, "stream"):
@@ -247,7 +261,8 @@ def chat_events(text, speak_on_robot):
                         recoverable=bool(local_displays or brain_displays))
             if hasattr(brain, "remember"):
                 delivered = " ".join(local_replies + brain_displays)
-                brain.remember(text, delivered)
+                if delivered:
+                    brain.remember(text, delivered)
             break
 
         brain_reply, spoke = value
@@ -266,7 +281,7 @@ def chat_events(text, speak_on_robot):
     yield event("turn_completed", reply=reply,
                 cues=local_steps + brain_steps,
                 routines=routine_names, brain_used=True, partial=partial,
-                spoke=bool(speak_on_robot and spoke))
+                spoke=bool(speak_on_robot and (local_voice_job or spoke)))
 
 def chat_turn(text, speak_on_robot):
     """One conversation turn: routines -> brain -> cues -> body + voice.
@@ -281,6 +296,8 @@ def chat_turn(text, speak_on_robot):
     partial = False
     brain_used = False
     turn_plan = turns.plan_turn(text, convo_state)
+    if turn_plan.requires_brain and convo_state.pending():
+        convo_state.expect = None
     local_replies = []
     for step in turn_plan.routines:
         hit = routines.run(step.routine, convo_state, {"robot": body.robot})
@@ -298,11 +315,19 @@ def chat_turn(text, speak_on_robot):
                             faces.scanline(r, range(20, 110, 30), 0.08)))
         prompt = _compound_prompt(text, turn_plan.residual, assistant_prefix)
         if speak_on_robot:
+            local_voice_job = None
+            if assistant_prefix:
+                local_plan = cues.parse(assistant_prefix)
+                if local_plan.speech:
+                    local_voice_job, _ = speech.speak(local_plan.speech)
             brain_reply, streamed, err = _streamed_reply(
-                text, prompt=prompt, assistant_prefix=assistant_prefix)
+                text, prompt=prompt, assistant_prefix=assistant_prefix,
+                defer_speech=local_voice_job is not None)
             if brain_reply:
                 reply = " ".join(x for x in (assistant_prefix, brain_reply)
                                  if x)
+            elif err and assistant_prefix:
+                reply, partial = assistant_prefix, True
         else:
             try:
                 brain_reply = _brain_chat(text, prompt, assistant_prefix)
@@ -319,15 +344,17 @@ def chat_turn(text, speak_on_robot):
     # the reply is a little performance: cues out of the text, faces to the
     # cascade (as emojis), sounds/moves to the body, clean words to the voice
     plan = cues.parse(reply)
-    if brain_used and not routine_names and CFG.speech_mode == "soundbyte":
-        plan = cues.condense(plan, burst_seconds=CFG.speech_burst)
+    if brain_used and not routine_names and CFG.speech_mode in ("soundbyte", "soundboard"):
+        plan = cues.condense(
+            plan, burst_seconds=CFG.speech_burst,
+            prefer_soundboard=CFG.speech_mode == "soundboard")
     voice_error = None
     body.emote(plan.display)
     if not streamed:
         if plan.actions():
             body.run(lambda r: (r.led("green"),
                                 cues.perform(r, plan.actions())))
-        if speak_on_robot:
+        if speak_on_robot and plan.speech:
             # BMO's actual voice: the reply is flashed into the sound bank
             # and spoken (no chirp; speech starts clean).
             _, voice_error = speech.speak(plan.speech)
@@ -335,8 +362,10 @@ def chat_turn(text, speak_on_robot):
             # no cue sounds: keep the tone-guessed chirp fallback
             body.run(lambda r: (r.led("green"), mood_chirp(r, reply),
                                 faces.blink(r, 2, 0.1)))
+    soundboard_spoke = any(kind == "sound" for kind, _ in plan.steps)
     out = {"reply": plan.display, "cues": plan.steps,
-           "spoke": speak_on_robot and voice_error is None}
+           "spoke": speak_on_robot and voice_error is None and
+                    bool(plan.speech or soundboard_spoke)}
     if routine_names:
         out["routine"] = routine_names[0]
         out["routines"] = routine_names
@@ -365,7 +394,7 @@ def _brain_chat(text, prompt=None, assistant_prefix=""):
 
 
 def _streamed_reply(text, *, prompt=None, assistant_prefix="",
-                    on_sentence_event=None):
+                    on_sentence_event=None, defer_speech=False):
     """Streaming pipeline: each completed LLM sentence flows into the
     speech synthesizer while later sentences are still generating — BMO
     starts talking before the reply is done.  Returns (reply, streamed, err).
@@ -379,7 +408,26 @@ def _streamed_reply(text, *, prompt=None, assistant_prefix="",
                 return
             yield unit
 
-    stream_job, stream_err = speech.speak(text, units=unit_iter())
+    if defer_speech:
+        # A compound turn may already be speaking its immediate local
+        # answer. Buffer residual sentences while the model generates, then
+        # hand them to SpeechService as soon as that first job is idle.
+        deferred_stop = threading.Event()
+        stream_job = {"stop": deferred_stop}
+
+        def start_when_idle():
+            active = getattr(speech, "active", lambda: False)
+            while active():
+                if deferred_stop.wait(0.05):
+                    return
+            actual_job, _ = speech.speak(text, units=unit_iter())
+            if deferred_stop.is_set() and actual_job is not None:
+                actual_job["stop"].set()
+
+        threading.Thread(target=start_when_idle, daemon=True).start()
+        stream_err = None
+    else:
+        stream_job, stream_err = speech.speak(text, units=unit_iter())
     if stream_err is not None:
         try:
             return _brain_chat(text, prompt, assistant_prefix), False, None
@@ -391,10 +439,11 @@ def _streamed_reply(text, *, prompt=None, assistant_prefix="",
     # wiggles and soundbytes land beside the words instead of after the
     # whole generation.
     budget = (cues.BurstBudget(burst_seconds=CFG.speech_burst)
-              if CFG.speech_mode == "soundbyte" else None)
-    state = {"faced": False, "steps": []}
+              if CFG.speech_mode in ("soundbyte", "soundboard") else None)
+    state = {"faced": False, "steps": [], "delivered": False}
 
     def on_sentence(sentence):
+        state["delivered"] = True
         if on_sentence_event is not None:
             on_sentence_event(sentence)
         plan = cues.parse(sentence)
@@ -424,6 +473,11 @@ def _streamed_reply(text, *, prompt=None, assistant_prefix="",
         return reply, True, None
     except Exception as e:
         stream_job["stop"].set()
+        # Once a sentence reached the user, a hidden blocking retry would
+        # duplicate or contradict it. Preserve the partial turn and surface
+        # the failure so the event stream can mark it recoverable.
+        if state["delivered"]:
+            return None, True, f"stream: {e}"
         try:
             return _brain_chat(text, prompt, assistant_prefix), False, None
         except Exception as e2:
