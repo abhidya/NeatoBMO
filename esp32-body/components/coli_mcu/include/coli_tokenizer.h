@@ -24,6 +24,7 @@ extern "C" {
 typedef enum {
     COLI_TOKENIZER_PRETOKENIZER_BYTE_BPE = 0u,
     COLI_TOKENIZER_PRETOKENIZER_O200K = 1u,
+    COLI_TOKENIZER_PRETOKENIZER_KIMI_K3 = 2u,
 } coli_tokenizer_pretokenizer_family_t;
 
 typedef enum {

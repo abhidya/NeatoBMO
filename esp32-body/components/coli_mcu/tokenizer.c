@@ -415,6 +415,46 @@ static bool o200k_s2(uint32_t cp)
     return is_X(cp) || (is_L(cp) && !is_U(cp));
 }
 
+static bool is_han(uint32_t cp)
+{
+    static const uint32_t ranges[][2] = {
+        {0x2E80, 0x2E99},   {0x2E9B, 0x2EF3},   {0x2F00, 0x2FD5},
+        {0x3005, 0x3005},   {0x3007, 0x3007},   {0x3021, 0x3029},
+        {0x3038, 0x303B},   {0x3400, 0x4DBF},   {0x4E00, 0x9FFF},
+        {0xF900, 0xFA6D},   {0xFA70, 0xFAD9},   {0x16FE2, 0x16FE3},
+        {0x16FF0, 0x16FF1}, {0x20000, 0x2A6DF}, {0x2A700, 0x2B739},
+        {0x2B740, 0x2B81D}, {0x2B820, 0x2CEA1}, {0x2CEB0, 0x2EBE0},
+        {0x2EBF0, 0x2EE5D}, {0x2F800, 0x2FA1D}, {0x30000, 0x3134A},
+        {0x31350, 0x323AF},
+    };
+    if (cp < ranges[0][0]) {
+        return false;
+    }
+    int low = 0;
+    int high = (int)(sizeof(ranges) / sizeof(ranges[0])) - 1;
+    while (low <= high) {
+        int mid = low + (high - low) / 2;
+        if (cp < ranges[mid][0]) {
+            high = mid - 1;
+        } else if (cp > ranges[mid][1]) {
+            low = mid + 1;
+        } else {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool kimi_s1(uint32_t cp)
+{
+    return (is_U(cp) || is_X(cp)) && !is_han(cp);
+}
+
+static bool kimi_s2(uint32_t cp)
+{
+    return (is_X(cp) || (is_L(cp) && !is_U(cp))) && !is_han(cp);
+}
+
 static size_t o200k_contraction_end(const uint8_t *text, size_t text_bytes,
                                     size_t position)
 {
@@ -530,13 +570,115 @@ static size_t o200k_letters_end(const uint8_t *text, size_t text_bytes,
     return position;
 }
 
-static size_t o200k_next_piece_end(const uint8_t *text, size_t text_bytes,
-                                   size_t position)
+static size_t kimi_letters_end(const uint8_t *text, size_t text_bytes,
+                               size_t position)
+{
+    for (int pfx = 1; pfx >= 0; --pfx) {
+        uint32_t first;
+        size_t j0 = position;
+        if (pfx) {
+            size_t first_next = u8_advance(text, text_bytes, position, &first);
+            if (is_newline(first) || is_L(first) || is_N(first) ||
+                first_next >= text_bytes) {
+                continue;
+            }
+            j0 = first_next;
+        }
+
+        size_t scan = j0;
+        size_t last_s2 = SIZE_MAX;
+        while (scan < text_bytes) {
+            uint32_t cp;
+            size_t next = u8_advance(text, text_bytes, scan, &cp);
+            if (!kimi_s1(cp)) {
+                break;
+            }
+            if (kimi_s2(cp)) {
+                last_s2 = scan;
+            }
+            scan = next;
+        }
+        size_t s = scan;
+        if (s < text_bytes) {
+            uint32_t cp;
+            (void)u8_advance(text, text_bytes, s, &cp);
+            if (!kimi_s2(cp)) {
+                s = last_s2;
+            }
+        } else {
+            s = last_s2;
+        }
+        if (s != SIZE_MAX) {
+            scan = s;
+            while (scan < text_bytes) {
+                uint32_t cp;
+                size_t next = u8_advance(text, text_bytes, scan, &cp);
+                if (!kimi_s2(cp)) {
+                    break;
+                }
+                scan = next;
+            }
+            return o200k_contraction_end(text, text_bytes, scan);
+        }
+    }
+
+    for (int pfx = 1; pfx >= 0; --pfx) {
+        uint32_t first;
+        size_t j0 = position;
+        if (pfx) {
+            size_t first_next = u8_advance(text, text_bytes, position, &first);
+            if (is_newline(first) || is_L(first) || is_N(first) ||
+                first_next >= text_bytes) {
+                continue;
+            }
+            j0 = first_next;
+        }
+
+        size_t scan = j0;
+        while (scan < text_bytes) {
+            uint32_t cp;
+            size_t next = u8_advance(text, text_bytes, scan, &cp);
+            if (!kimi_s1(cp)) {
+                break;
+            }
+            scan = next;
+        }
+        if (scan > j0) {
+            while (scan < text_bytes) {
+                uint32_t cp;
+                size_t next = u8_advance(text, text_bytes, scan, &cp);
+                if (!kimi_s2(cp)) {
+                    break;
+                }
+                scan = next;
+            }
+            return o200k_contraction_end(text, text_bytes, scan);
+        }
+    }
+    return position;
+}
+
+static size_t regex_next_piece_end(const uint8_t *text, size_t text_bytes,
+                                   size_t position, bool kimi)
 {
     uint32_t cp;
     size_t next = u8_advance(text, text_bytes, position, &cp);
 
-    size_t end = o200k_letters_end(text, text_bytes, position);
+    if (kimi && is_han(cp)) {
+        size_t scan = position;
+        while (scan < text_bytes) {
+            uint32_t han_cp;
+            size_t han_next = u8_advance(text, text_bytes, scan, &han_cp);
+            if (!is_han(han_cp)) {
+                break;
+            }
+            scan = han_next;
+        }
+        return scan;
+    }
+
+    size_t end = kimi ? kimi_letters_end(text, text_bytes, position)
+                      : o200k_letters_end(text, text_bytes, position);
     if (end > position) {
         return end;
     }
@@ -577,7 +719,7 @@ static size_t o200k_next_piece_end(const uint8_t *text, size_t text_bytes,
         while (scan < text_bytes) {
             uint32_t tail;
             size_t tail_next = u8_advance(text, text_bytes, scan, &tail);
-            if (!is_newline(tail) && tail != '/') {
+            if (!is_newline(tail) && (kimi || tail != '/')) {
                 break;
             }
             scan = tail_next;
@@ -622,6 +764,18 @@ static size_t o200k_next_piece_end(const uint8_t *text, size_t text_bytes,
     }
 
     return next;
+}
+
+static size_t o200k_next_piece_end(const uint8_t *text, size_t text_bytes,
+                                   size_t position)
+{
+    return regex_next_piece_end(text, text_bytes, position, false);
+}
+
+static size_t kimi_next_piece_end(const uint8_t *text, size_t text_bytes,
+                                  size_t position)
+{
+    return regex_next_piece_end(text, text_bytes, position, true);
 }
 
 static coli_status_t validate_token_entry(const coli_tokenizer_t *tokenizer,
@@ -682,7 +836,7 @@ coli_status_t coli_tokenizer_open(coli_store_t *store,
     if (tokenizer->vocab_size == 0 ||
         tokenizer->max_token_bytes == 0 ||
         tokenizer->max_token_bytes > COLI_TOKENIZER_MAX_TOKEN_BYTES ||
-        tokenizer->pretokenizer_family > COLI_TOKENIZER_PRETOKENIZER_O200K ||
+        tokenizer->pretokenizer_family > COLI_TOKENIZER_PRETOKENIZER_KIMI_K3 ||
         tokenizer->special_token_count > COLI_TOKENIZER_MAX_SPECIAL_TOKENS ||
         (tokenizer->special_token_count > 0 &&
          tokenizer->special_token_offset == 0) ||
@@ -847,6 +1001,9 @@ coli_status_t coli_tokenizer_encode(const coli_tokenizer_t *tokenizer,
         if (tokenizer->pretokenizer_family ==
             COLI_TOKENIZER_PRETOKENIZER_O200K) {
             plain_end = o200k_next_piece_end(text, text_bytes, position);
+        } else if (tokenizer->pretokenizer_family ==
+                   COLI_TOKENIZER_PRETOKENIZER_KIMI_K3) {
+            plain_end = kimi_next_piece_end(text, text_bytes, position);
         }
         coli_status_t status =
             encode_byte_piece(tokenizer, text, position, plain_end, token_ids,

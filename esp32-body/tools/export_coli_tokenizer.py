@@ -27,6 +27,7 @@ TOKEN_FLAG_BYTE = 0x0002
 
 PRETOKENIZER_BYTE_BPE = 0
 PRETOKENIZER_O200K = 1
+PRETOKENIZER_KIMI_K3 = 2
 
 
 def bytes_to_unicode() -> dict[int, str]:
@@ -65,8 +66,10 @@ def model_payload(tokenizer_json: dict) -> dict:
         raise ValueError(f"unsupported tokenizer model type: {model.get('type')}")
     vocab = model.get("vocab")
     merges = model.get("merges")
-    if not isinstance(vocab, dict) or not isinstance(merges, list):
-        raise ValueError("tokenizer.json model must contain vocab and merges")
+    if not isinstance(vocab, dict):
+        raise ValueError("tokenizer.json model must contain vocab")
+    if merges is not None and not isinstance(merges, list):
+        raise ValueError("tokenizer.json model merges must be a list when present")
     return model
 
 
@@ -156,10 +159,45 @@ def pretokenizer_family(tokenizer_json: dict) -> int:
         regex = pattern.get("Regex") if isinstance(pattern, dict) else None
         if isinstance(regex, str):
             if "\\p{Han}" in regex:
-                raise ValueError("Kimi o200k+Han pretokenizer is not CTOK-supported yet")
+                return PRETOKENIZER_KIMI_K3
             if "\\p{Lu}" in regex:
                 return PRETOKENIZER_O200K
     return PRETOKENIZER_BYTE_BPE
+
+
+def token_split_indices(token: str) -> range:
+    return range(1, len(token))
+
+
+def explicit_merge_records(merges: list, vocab: dict[str, int]) -> list[tuple[int, int, int, int]]:
+    records: list[tuple[int, int, int, int]] = []
+    for rank, merge in enumerate(merges):
+        left, right = parse_merge(merge)
+        result = left + right
+        if left not in vocab or right not in vocab or result not in vocab:
+            raise ValueError(f"merge references token absent from vocab: {merge!r}")
+        records.append((vocab[left], vocab[right], vocab[result], rank))
+    return records
+
+
+def rank_bpe_merge_records(vocab: dict[str, int]) -> list[tuple[int, int, int, int]]:
+    records: dict[tuple[int, int], tuple[int, int, int, int]] = {}
+    for result, result_id in vocab.items():
+        if len(result) < 2:
+            continue
+        for split in token_split_indices(result):
+            left = result[:split]
+            right = result[split:]
+            left_id = vocab.get(left)
+            right_id = vocab.get(right)
+            if left_id is None or right_id is None:
+                continue
+            key = (left_id, right_id)
+            current = records.get(key)
+            record = (left_id, right_id, result_id, result_id)
+            if current is None or result_id < current[3]:
+                records[key] = record
+    return list(records.values())
 
 
 def build_ctok(tokenizer_json: dict) -> bytes:
@@ -191,13 +229,11 @@ def build_ctok(tokenizer_json: dict) -> bytes:
     if missing:
         raise ValueError(f"missing byte fallback tokens: {missing[:8]}")
 
-    merge_records: list[tuple[int, int, int, int]] = []
-    for rank, merge in enumerate(model["merges"]):
-        left, right = parse_merge(merge)
-        result = left + right
-        if left not in vocab or right not in vocab or result not in vocab:
-            raise ValueError(f"merge references token absent from vocab: {merge!r}")
-        merge_records.append((vocab[left], vocab[right], vocab[result], rank))
+    merges = model.get("merges")
+    if isinstance(merges, list) and merges:
+        merge_records = explicit_merge_records(merges, vocab)
+    else:
+        merge_records = rank_bpe_merge_records(vocab)
     merge_records.sort(key=lambda item: (item[0], item[1]))
 
     vocab_offset = HEADER_BYTES

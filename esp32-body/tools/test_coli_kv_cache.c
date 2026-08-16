@@ -165,6 +165,73 @@ static void test_unequal_state_planes(void)
     unlink(path);
 }
 
+static void test_variable_layer_capacities_ring_map(void)
+{
+    const uint32_t capacities[] = {2, 5};
+    coli_kv_cache_layout_t layout;
+    assert(coli_kv_cache_layout_custom_per_layer(2, 5, capacities, 4, 4,
+                                                 &layout) == COLI_OK);
+    assert(layout.variable_layer_capacities == 1);
+    assert(layout.key_layer_bytes == 0);
+    assert(layout.layer_token_capacities[0] == 2);
+    assert(layout.layer_token_capacities[1] == 5);
+    assert(layout.total_bytes == 56);
+
+    uint8_t memory[56] = {0};
+    coli_kv_cache_t *cache = NULL;
+    assert(coli_kv_cache_open_ram(&layout, memory, sizeof(memory), &cache) ==
+           COLI_OK);
+    const uint8_t key0[4] = {1, 2, 3, 4};
+    const uint8_t value0[4] = {5, 6, 7, 8};
+    const uint8_t key2[4] = {11, 12, 13, 14};
+    const uint8_t value2[4] = {15, 16, 17, 18};
+    assert(coli_kv_cache_write_token(cache, 0, 0, key0, value0) == COLI_OK);
+    assert(coli_kv_cache_write_token(cache, 0, 2, key2, value2) == COLI_OK);
+    assert_token(cache, 0, 0, key2, value2, sizeof(key2));
+    assert_token(cache, 0, 2, key2, value2, sizeof(key2));
+
+    const uint8_t global_key[4] = {21, 22, 23, 24};
+    const uint8_t global_value[4] = {25, 26, 27, 28};
+    assert(coli_kv_cache_write_token(cache, 1, 4, global_key, global_value) ==
+           COLI_OK);
+    assert_token(cache, 1, 4, global_key, global_value, sizeof(global_key));
+    assert(coli_kv_cache_read_key(cache, 1, 5, memory) == COLI_ERR_RANGE);
+    coli_kv_cache_close(cache);
+}
+
+static void test_variable_large_context_file_is_bounded(void)
+{
+    const uint32_t capacities[] = {512, 1048576, 512};
+    coli_kv_cache_layout_t layout;
+    assert(coli_kv_cache_layout_custom_per_layer(3, 1048576, capacities, 8,
+                                                 8, &layout) == COLI_OK);
+    assert(layout.total_bytes ==
+           ((uint64_t)512 + 1048576u + 512u) * 16u);
+    assert(layout.total_bytes < (uint64_t)32 * 1024 * 1024);
+
+    char path[] = "/tmp/coli-kv-cache-variable-large-XXXXXX";
+    int fd = mkstemp(path);
+    assert(fd >= 0);
+    close(fd);
+    coli_kv_cache_t *cache = NULL;
+    assert(coli_kv_cache_open_file(&layout, path, 4096, &cache) == COLI_OK);
+    const uint8_t key[8] = {1, 3, 5, 7, 9, 11, 13, 15};
+    const uint8_t value[8] = {2, 4, 6, 8, 10, 12, 14, 16};
+    assert(coli_kv_cache_write_token(cache, 1, 1048575u, key, value) ==
+           COLI_OK);
+    assert_token(cache, 1, 1048575u, key, value, sizeof(key));
+    assert(coli_kv_cache_write_token(cache, 0, 1048575u, key, value) ==
+           COLI_OK);
+    assert_token(cache, 0, 1048575u, key, value, sizeof(key));
+    coli_kv_cache_stats_t stats;
+    coli_kv_cache_stats(cache, &stats);
+    assert(stats.logical_bytes == layout.total_bytes);
+    assert(stats.resident_bytes == 4096);
+    assert(stats.resident_bytes < stats.logical_bytes);
+    coli_kv_cache_close(cache);
+    unlink(path);
+}
+
 static void test_large_logical_context_small_resident(void)
 {
     coli_kv_cache_layout_t layout;
@@ -194,7 +261,7 @@ static void test_invalid_cases(void)
            COLI_ERR_ARGUMENT);
     assert(coli_kv_cache_layout(UINT32_MAX, UINT32_MAX, UINT32_MAX,
                                 UINT32_MAX, UINT32_MAX, &layout) ==
-           COLI_ERR_RANGE);
+           COLI_ERR_ARGUMENT);
     assert(coli_kv_cache_layout(1, 1, 4, 2, 1, &layout) == COLI_OK);
 
     uint8_t too_small[7];
@@ -230,6 +297,8 @@ int main(void)
     test_ram_file_parity_and_boundary_crossing();
     test_persistence_reopen();
     test_unequal_state_planes();
+    test_variable_layer_capacities_ring_map();
+    test_variable_large_context_file_is_bounded();
     test_large_logical_context_small_resident();
     test_invalid_cases();
     puts("coli_kv_cache ram/file backends: PASS");

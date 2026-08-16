@@ -12,6 +12,7 @@ extern "C" {
 #define COLI_OLMOE_HIDDEN_SIZE 2048u
 #define COLI_OLMOE_ATTENTION_HEADS 16u
 #define COLI_OLMOE_HEAD_DIM 128u
+#define COLI_KV_CACHE_MAX_LAYERS 256u
 
 typedef struct {
     uint32_t layers;
@@ -25,6 +26,11 @@ typedef struct {
     uint64_t value_layer_bytes;
     uint64_t layer_stride_bytes;
     uint64_t total_bytes;
+    uint32_t variable_layer_capacities;
+    uint32_t layer_token_capacities[COLI_KV_CACHE_MAX_LAYERS];
+    uint64_t layer_offsets[COLI_KV_CACHE_MAX_LAYERS];
+    uint64_t layer_key_token_bytes[COLI_KV_CACHE_MAX_LAYERS];
+    uint64_t layer_value_token_bytes[COLI_KV_CACHE_MAX_LAYERS];
 } coli_kv_cache_layout_t;
 
 coli_status_t coli_ops_rmsnorm(const float *input, const float *weight,

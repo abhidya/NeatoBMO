@@ -155,6 +155,7 @@ coli_status_t coli_ops_kv_cache_layout(uint32_t layers, uint32_t heads,
         total_bytes > (uint64_t)SIZE_MAX)
         return COLI_ERR_RANGE;
 
+    memset(out_layout, 0, sizeof(*out_layout));
     out_layout->layers = layers;
     out_layout->heads = heads;
     out_layout->head_dim = head_dim;

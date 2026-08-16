@@ -43,6 +43,14 @@ static uint32_t max_u32(uint32_t left, uint32_t right)
     return left > right ? left : right;
 }
 
+static bool layer_id_present(const uint32_t *layer_ids, size_t count,
+                             uint32_t layer)
+{
+    for (size_t i = 0; i < count; ++i)
+        if (layer_ids[i] == layer) return true;
+    return false;
+}
+
 static float sigmoidf_bounded(float x)
 {
     if (x >= 0.0f) {
@@ -206,9 +214,34 @@ coli_status_t coli_inkling_state_layout(const coli_inkling_config_t *config,
     uint32_t kv_heads =
         max_u32(config->num_key_value_heads, config->swa_num_key_value_heads);
     uint32_t head_dim = max_u32(config->head_dim, config->swa_head_dim);
-    return coli_kv_cache_layout(config->num_layers, kv_heads, head_dim,
-                                config->max_context_tokens, sizeof(float),
-                                out_layout);
+    uint32_t capacities[COLI_KV_CACHE_MAX_LAYERS];
+    size_t key_bytes[COLI_KV_CACHE_MAX_LAYERS];
+    size_t value_bytes[COLI_KV_CACHE_MAX_LAYERS];
+    if (config->num_layers > COLI_KV_CACHE_MAX_LAYERS)
+        return COLI_ERR_ARGUMENT;
+    for (uint32_t layer = 0; layer < config->num_layers; ++layer) {
+        const bool local_layer =
+            layer_id_present(config->local_layer_ids,
+                             config->local_layer_count, layer);
+        const uint32_t layer_kv_heads =
+            local_layer ? config->swa_num_key_value_heads
+                        : config->num_key_value_heads;
+        const uint32_t layer_head_dim =
+            local_layer ? config->swa_head_dim : config->head_dim;
+        capacities[layer] =
+            local_layer ? config->sliding_window : config->max_context_tokens;
+        key_bytes[layer] =
+            (size_t)layer_kv_heads * layer_head_dim * sizeof(float);
+        value_bytes[layer] = key_bytes[layer];
+    }
+    coli_status_t status = coli_kv_cache_layout_custom_per_layer_bytes(
+        config->num_layers, config->max_context_tokens, capacities,
+        key_bytes, value_bytes, out_layout);
+    if (status != COLI_OK) return status;
+    out_layout->heads = kv_heads;
+    out_layout->head_dim = head_dim;
+    out_layout->bytes_per_value = sizeof(float);
+    return COLI_OK;
 }
 
 bool coli_inkling_is_stop_token(const coli_inkling_config_t *config,

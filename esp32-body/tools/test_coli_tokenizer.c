@@ -37,7 +37,12 @@
 #define TEST_TOKEN_BANG_SLASH_SLASH_NL 3018u
 #define TEST_TOKEN_BANG_SLASH_SLASH_NL_SLASH 3019u
 #define TEST_TOKEN_ROLE_USER 3020u
-#define TEST_MERGE_COUNT 23u
+#define TEST_TOKEN_HAN_NI_PART 3021u
+#define TEST_TOKEN_HAN_NI 3022u
+#define TEST_TOKEN_HAN_HAO_PART 3023u
+#define TEST_TOKEN_HAN_HAO 3024u
+#define TEST_TOKEN_HAN_NIHAO 3025u
+#define TEST_MERGE_COUNT 28u
 
 typedef struct {
     uint32_t token_id;
@@ -122,7 +127,7 @@ static void write_fixture(const char *path, uint16_t pretokenizer_family,
                sizeof(empty_entry));
     }
 
-    fixture_token_t tokens[288];
+    fixture_token_t tokens[296];
     size_t token_count = 0;
     uint64_t data_offset = TEST_TOKEN_DATA_OFFSET;
     uint8_t byte_storage[256];
@@ -183,6 +188,11 @@ static void write_fixture(const char *path, uint16_t pretokenizer_family,
         {TEST_TOKEN_BANG_SLASH_SLASH, "!//"},
         {TEST_TOKEN_BANG_SLASH_SLASH_NL, "!//\n"},
         {TEST_TOKEN_BANG_SLASH_SLASH_NL_SLASH, "!//\n/"},
+        {TEST_TOKEN_HAN_NI_PART, "\xE4\xBD"},
+        {TEST_TOKEN_HAN_NI, "\xE4\xBD\xA0"},
+        {TEST_TOKEN_HAN_HAO_PART, "\xE5\xA5"},
+        {TEST_TOKEN_HAN_HAO, "\xE5\xA5\xBD"},
+        {TEST_TOKEN_HAN_NIHAO, "\xE4\xBD\xA0\xE5\xA5\xBD"},
     };
     for (size_t i = 0; i < sizeof(text_tokens) / sizeof(text_tokens[0]); ++i) {
         uint16_t length = (uint16_t)strlen(text_tokens[i].text);
@@ -276,6 +286,10 @@ static void write_fixture(const char *path, uint16_t pretokenizer_family,
          .result = TEST_TOKEN_AB, .rank = 1},
         {.left = byte_token('c'), .right = byte_token('a'),
          .result = TEST_TOKEN_CA, .rank = 3},
+        {.left = byte_token(0xE4u), .right = byte_token(0xBDu),
+         .result = TEST_TOKEN_HAN_NI_PART, .rank = 3},
+        {.left = byte_token(0xE5u), .right = byte_token(0xA5u),
+         .result = TEST_TOKEN_HAN_HAO_PART, .rank = 3},
         {.left = TEST_TOKEN_AB, .right = byte_token('c'),
          .result = TEST_TOKEN_ABC, .rank = 0},
         {.left = TEST_TOKEN_HE, .right = byte_token('l'),
@@ -308,6 +322,12 @@ static void write_fixture(const char *path, uint16_t pretokenizer_family,
          .result = TEST_TOKEN_BANG_SLASH_SLASH_NL, .rank = 3},
         {.left = TEST_TOKEN_BANG_SLASH_SLASH_NL, .right = byte_token('/'),
          .result = TEST_TOKEN_BANG_SLASH_SLASH_NL_SLASH, .rank = 3},
+        {.left = TEST_TOKEN_HAN_NI_PART, .right = byte_token(0xA0u),
+         .result = TEST_TOKEN_HAN_NI, .rank = 3},
+        {.left = TEST_TOKEN_HAN_NI, .right = TEST_TOKEN_HAN_HAO,
+         .result = TEST_TOKEN_HAN_NIHAO, .rank = 3},
+        {.left = TEST_TOKEN_HAN_HAO_PART, .right = byte_token(0xBDu),
+         .result = TEST_TOKEN_HAN_HAO, .rank = 3},
     };
     assert(fseeko(file, (off_t)merge_offset, SEEK_SET) == 0);
     for (size_t i = 0; i < sizeof(merges) / sizeof(merges[0]); ++i) {
@@ -470,6 +490,53 @@ int main(void)
     assert(token_ids[0] == byte_token('x'));
     assert(token_ids[1] == TEST_TOKEN_ROLE_USER);
     assert(token_ids[2] == byte_token('y'));
+
+    coli_tokenizer_close(&tokenizer);
+    coli_store_close(store);
+
+    write_fixture(path, COLI_TOKENIZER_PRETOKENIZER_KIMI_K3, true);
+    store = NULL;
+    assert(coli_store_open_file(path, &store) == COLI_OK);
+    assert(coli_tokenizer_open(store, &tokenizer) == COLI_OK);
+    assert(tokenizer.pretokenizer_family ==
+           COLI_TOKENIZER_PRETOKENIZER_KIMI_K3);
+
+    assert(coli_tokenizer_encode(&tokenizer, (const uint8_t *)mixed_case,
+                                 strlen(mixed_case), token_ids,
+                                 sizeof(token_ids) / sizeof(token_ids[0]),
+                                 &token_count,
+                                 COLI_TOKENIZER_ENCODE_DEFAULT) == COLI_OK);
+    assert(token_count == 2);
+    assert(token_ids[0] == TEST_TOKEN_HELLO);
+    assert(token_ids[1] == TEST_TOKEN_WORLD);
+
+    assert(coli_tokenizer_encode(&tokenizer, (const uint8_t *)punctuation,
+                                 strlen(punctuation), token_ids,
+                                 sizeof(token_ids) / sizeof(token_ids[0]),
+                                 &token_count,
+                                 COLI_TOKENIZER_ENCODE_DEFAULT) == COLI_OK);
+    assert(token_count == 2);
+    assert(token_ids[0] == TEST_TOKEN_BANG_SLASH_SLASH_NL);
+    assert(token_ids[1] == byte_token('/'));
+
+    const char han_text[] = "\xE4\xBD\xA0\xE5\xA5\xBD";
+    assert(coli_tokenizer_encode(&tokenizer, (const uint8_t *)han_text,
+                                 strlen(han_text), token_ids,
+                                 sizeof(token_ids) / sizeof(token_ids[0]),
+                                 &token_count,
+                                 COLI_TOKENIZER_ENCODE_DEFAULT) == COLI_OK);
+    assert(token_count == 1);
+    assert(token_ids[0] == TEST_TOKEN_HAN_NIHAO);
+
+    const char han_mixed[] = "\xE4\xBD\xA0Hello";
+    assert(coli_tokenizer_encode(&tokenizer, (const uint8_t *)han_mixed,
+                                 strlen(han_mixed), token_ids,
+                                 sizeof(token_ids) / sizeof(token_ids[0]),
+                                 &token_count,
+                                 COLI_TOKENIZER_ENCODE_DEFAULT) == COLI_OK);
+    assert(token_count == 2);
+    assert(token_ids[0] == TEST_TOKEN_HAN_NI);
+    assert(token_ids[1] == TEST_TOKEN_HELLO);
 
     coli_tokenizer_close(&tokenizer);
     coli_store_close(store);

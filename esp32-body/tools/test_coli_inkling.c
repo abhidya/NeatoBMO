@@ -71,7 +71,7 @@ static void write_config_tensor_entry(FILE *file, size_t config_bytes)
 
 static void write_fixture(const char *path)
 {
-    uint8_t config[356] = {0};
+    uint8_t config[352] = {0};
     memcpy(config, "BCFG", 4);
     put_u16(config + 4, 1);
     put_u16(config + 6, BMOQ_CONFIG_HEADER_BYTES);
@@ -100,9 +100,9 @@ static void write_fixture(const char *path)
     uint32_t stops[] = {6};
     cursor = add_entry(config, cursor, BMOQ_CONFIG_STOP_TOKEN_IDS,
                        BMOQ_CONFIG_U32_ARRAY, stops, 1);
-    uint32_t local_layers[] = {0, 1};
+    uint32_t local_layers[] = {1};
     cursor = add_entry(config, cursor, BMOQ_CONFIG_LOCAL_LAYER_IDS,
-                       BMOQ_CONFIG_U32_ARRAY, local_layers, 2);
+                       BMOQ_CONFIG_U32_ARRAY, local_layers, 1);
     uint32_t sparse_layers[] = {1};
     cursor = add_entry(config, cursor, BMOQ_CONFIG_SPARSE_LAYER_IDS,
                        BMOQ_CONFIG_U32_ARRAY, sparse_layers, 1);
@@ -195,7 +195,7 @@ static void test_config_and_state(const coli_inkling_config_t *config)
     assert(config->shared_experts == 1);
     assert(config->moe_intermediate_size == 2);
     assert(config->dense_intermediate_size == 3);
-    assert(config->local_layer_count == 2);
+    assert(config->local_layer_count == 1);
     assert(config->sparse_layer_count == 1);
     assert(coli_inkling_is_stop_token(config, 6));
     assert(!coli_inkling_is_stop_token(config, 5));
@@ -205,6 +205,64 @@ static void test_config_and_state(const coli_inkling_config_t *config)
     assert(coli_inkling_state_layout(config, &layout) == COLI_OK);
     assert(layout.total_bytes > 0);
     assert(layout.max_tokens == 512);
+    assert(layout.variable_layer_capacities == 1);
+    assert(layout.layer_token_capacities[0] == 512);
+    assert(layout.layer_token_capacities[1] == 2);
+    assert(layout.total_bytes == 8224u);
+}
+
+static void test_production_shape_state_is_packed(void)
+{
+    coli_inkling_config_t config;
+    memset(&config, 0, sizeof(config));
+    config.hidden_size = 6144;
+    config.num_layers = 66;
+    config.vocab_size = 201024;
+    config.unpadded_vocab_size = 200064;
+    config.num_heads = 64;
+    config.num_key_value_heads = 8;
+    config.head_dim = 128;
+    config.swa_num_heads = 64;
+    config.swa_num_key_value_heads = 16;
+    config.swa_head_dim = 128;
+    config.sliding_window = 512;
+    config.d_rel = 16;
+    config.rel_extent = 1024;
+    config.conv_kernel = 4;
+    config.num_experts = 256;
+    config.experts_per_token = 6;
+    config.shared_experts = 2;
+    config.moe_intermediate_size = 3072;
+    config.dense_intermediate_size = 24576;
+    config.dense_mlp_index = 1;
+    config.max_context_tokens = 1048576;
+    config.rms_norm_epsilon = 1.0e-6f;
+    config.route_scale = 8.0f;
+    config.logits_mup_width_multiplier = 24.0f;
+    for (uint32_t layer = 0; layer < config.num_layers; ++layer) {
+        if (layer % 6u != 5u)
+            config.local_layer_ids[config.local_layer_count++] = layer;
+        if (layer >= 2u)
+            config.sparse_layer_ids[config.sparse_layer_count++] = layer;
+    }
+
+    coli_kv_cache_layout_t layout;
+    assert(coli_inkling_state_layout(&config, &layout) == COLI_OK);
+    const uint64_t local_token_bytes = (uint64_t)16u * 128u * sizeof(float);
+    const uint64_t global_token_bytes = (uint64_t)8u * 128u * sizeof(float);
+    const uint64_t local_layers = 55u;
+    const uint64_t global_layers = 11u;
+    const uint64_t expected =
+        local_layers * 512u * local_token_bytes * 2u +
+        global_layers * 1048576u * global_token_bytes * 2u;
+    const uint64_t uniform =
+        66ull * 1048576ull * local_token_bytes * 2ull;
+    assert(layout.total_bytes == expected);
+    assert(layout.total_bytes < uniform / 5u);
+    assert(layout.layer_token_capacities[0] == 512);
+    assert(layout.layer_token_capacities[5] == 1048576);
+    assert(layout.layer_key_token_bytes[0] == local_token_bytes);
+    assert(layout.layer_key_token_bytes[5] == global_token_bytes);
 }
 
 static void test_attention(const coli_inkling_config_t *config, bool file_backed)
@@ -365,6 +423,7 @@ int main(void)
     coli_inkling_config_t config;
     assert(coli_inkling_config_load(&model, &config) == COLI_OK);
     test_config_and_state(&config);
+    test_production_shape_state_is_packed();
     test_attention(&config, false);
     test_attention(&config, true);
     test_conv_norm_mlp_and_logits();

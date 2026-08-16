@@ -29,6 +29,23 @@ coli_status_t coli_kv_cache_layout_custom(
     uint32_t layers, uint32_t max_tokens, size_t key_token_bytes,
     size_t value_token_bytes, coli_kv_cache_layout_t *out_layout);
 
+/**
+ * Build a paged state layout where each layer can store fewer physical token
+ * slots than the global logical max. Logical token indices still range up to
+ * `max_tokens`; layers with smaller capacity are ring-mapped by token modulo
+ * that layer's capacity.
+ */
+coli_status_t coli_kv_cache_layout_custom_per_layer(
+    uint32_t layers, uint32_t max_tokens,
+    const uint32_t *layer_token_capacities, size_t key_token_bytes,
+    size_t value_token_bytes, coli_kv_cache_layout_t *out_layout);
+
+coli_status_t coli_kv_cache_layout_custom_per_layer_bytes(
+    uint32_t layers, uint32_t max_tokens,
+    const uint32_t *layer_token_capacities,
+    const size_t *layer_key_token_bytes,
+    const size_t *layer_value_token_bytes, coli_kv_cache_layout_t *out_layout);
+
 /** Wrap caller-owned contiguous memory. The cache object itself is allocated. */
 coli_status_t coli_kv_cache_open_ram(const coli_kv_cache_layout_t *layout,
                                      void *memory, size_t memory_bytes,
