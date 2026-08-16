@@ -13,12 +13,35 @@ dependencies:
   coli_mcu:
     git: https://github.com/abhidya/NeatoBMO.git
     path: esp32-body/components/coli_mcu
-    version: e8687e6
+    version: main
 ```
 
 The manifest intentionally restricts the target to ESP32-S3. When the package
 is split into its own repository, consumers can omit `path`; no source layout
-change inside the component is required.
+change inside the component is required. Pin a release tag or commit rather
+than `main` in production firmware.
+
+## Runtime request API
+
+`coli_runtime_generate()` is the transport-neutral application boundary. A
+request supplies model/tokenizer paths, prompt and generation limits, optional
+SSD KV-cache settings, cooperative cancellation/yield hooks, and a decoded-byte
+callback. The dispatcher reads the BMOQ architecture before selecting an
+engine. It currently dispatches OLMoE and returns `COLI_ERR_UNSUPPORTED` for
+every other architecture instead of guessing compatible semantics.
+
+NeatoBMO exposes this boundary as `POST /v1/completions`. The request may be a
+plain-text prompt or JSON:
+
+```json
+{"prompt":"Hello BMO","max_tokens":64}
+```
+
+The response is `text/event-stream`; decoded bytes arrive incrementally as
+`data: {"choices":[{"text":"..."}]}` events and finish with
+`data: [DONE]`. Disconnecting the client or removing the SSD cancels generation.
+The endpoint returns HTTP 503 until a FAT MSC volume is mounted. NeatoBMO keeps
+the package autorun demo disabled so API generation has a single owner.
 
 The application owns the one USB Host Library installation and its daemon.
 `coli_mcu_start()` installs only Espressif's MSC class client. The M0 task mounts

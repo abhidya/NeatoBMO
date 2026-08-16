@@ -21,6 +21,13 @@
 #include "coli_olmoe.h"
 #include "coli_spm.h"
 
+#ifndef CONFIG_COLI_MCU_AUTORUN_DEMO
+#define CONFIG_COLI_MCU_AUTORUN_DEMO 0
+#endif
+#ifndef CONFIG_COLI_MCU_DEMO_MAX_NEW_TOKENS
+#define CONFIG_COLI_MCU_DEMO_MAX_NEW_TOKENS 1
+#endif
+
 #define COLI_MOUNT_PATH CONFIG_COLI_MCU_MOUNT_PATH
 #define COLI_PROBE_FILE COLI_MOUNT_PATH "/" CONFIG_COLI_MCU_MODEL_FILE
 #define COLI_TOKENIZER_FILE \
@@ -65,7 +72,13 @@ typedef struct {
 
 static QueueHandle_t s_events;
 static volatile bool s_removed;
+static volatile bool s_mounted;
 static TaskHandle_t s_generate_task;
+
+bool coli_mcu_storage_ready(void)
+{
+    return s_mounted && !s_removed;
+}
 
 static bool file_exists(const char *path)
 {
@@ -98,6 +111,7 @@ static void msc_event_callback(const msc_host_event_t *event, void *arg)
         message.device.address = event->device.address;
     } else if (event->event == MSC_DEVICE_DISCONNECTED) {
         s_removed = true;
+        s_mounted = false;
         message.kind = STORAGE_DISCONNECTED;
         message.device.handle = event->device.handle;
     } else {
@@ -445,6 +459,7 @@ static void storage_task(void *arg)
                 ESP_LOGE(TAG, "MSC mount failed: %s", esp_err_to_name(err));
                 continue;
             }
+            s_mounted = true;
             ESP_LOGI(TAG, "MSC mounted at %s", COLI_MOUNT_PATH);
             const char *model_path = model_file_path();
             if (model_path) {
@@ -455,6 +470,7 @@ static void storage_task(void *arg)
         } else if (mounted.device == event.device.handle) {
             ESP_LOGW(TAG, "MSC removed; cancelling storage work");
             s_removed = true;
+            s_mounted = false;
             unmount_device(&mounted);
         }
     }

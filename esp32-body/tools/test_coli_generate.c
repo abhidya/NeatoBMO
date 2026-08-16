@@ -7,6 +7,7 @@
 
 #include "coli_generate.h"
 #include "coli_olmoe.h"
+#include "coli_runtime.h"
 
 #define HIDDEN 4u
 #define HEADS 2u
@@ -311,8 +312,15 @@ int main(void)
     memset(&capture, 0, sizeof(capture));
     config.kv_cache_path = kv_path;
     config.kv_page_bytes = 17;
-    assert(coli_generate_olmoe_greedy(model_store, tokenizer_store, &config,
-                                      &result) == COLI_OK);
+    const coli_runtime_request_t request = {
+        .model_path = model_path,
+        .tokenizer_path = tokenizer_path,
+        .generation = config,
+    };
+    coli_runtime_result_t runtime_result;
+    assert(coli_runtime_generate(&request, &runtime_result) == COLI_OK);
+    assert(runtime_result.architecture == BMOQ_MODEL_ARCH_OLMOE);
+    result = runtime_result.generation;
     assert(result.stage == COLI_GENERATE_STAGE_DONE);
     assert(result.generated_tokens == 2);
     assert(result.decoded_bytes == 2);
@@ -340,6 +348,18 @@ int main(void)
     assert(result.generated_tokens == 1);
     assert(result.decoded_bytes == 1);
     assert(capture.count == 1);
+
+    FILE *unsupported = fopen(model_path, "r+b");
+    assert(unsupported);
+    assert(fseeko(unsupported, BMOQ_MODEL_CONFIG_OFFSET, SEEK_SET) == 0);
+    uint8_t unsupported_arch[4];
+    put_u32(unsupported_arch, 99u);
+    assert(fwrite(unsupported_arch, 1, sizeof(unsupported_arch), unsupported) ==
+           sizeof(unsupported_arch));
+    assert(fclose(unsupported) == 0);
+    assert(coli_runtime_generate(&request, &runtime_result) ==
+           COLI_ERR_UNSUPPORTED);
+    assert(runtime_result.architecture == 99u);
 
     coli_store_close(tokenizer_store);
     coli_store_close(model_store);

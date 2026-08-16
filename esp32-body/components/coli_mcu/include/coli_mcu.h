@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdbool.h>
+
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -13,6 +15,9 @@ extern "C" {
  * usb_host_lib_handle_events() before calling this function.
  */
 esp_err_t coli_mcu_start(void);
+
+/** True only while a FAT USB MSC volume is mounted and usable. */
+bool coli_mcu_storage_ready(void);
 
 #ifdef __cplusplus
 }

@@ -48,7 +48,7 @@ $(BUILD)/test_coli_olmoe_layer: test_coli_olmoe_layer.c $(MCU)/model_format.c \
 $(BUILD)/test_coli_generate: test_coli_generate.c $(MCU)/model_format.c \
 		$(MCU)/store_file.c $(MCU)/q4_matvec.c $(MCU)/ops.c $(MCU)/moe.c \
 		$(MCU)/kv_cache.c $(MCU)/olmoe.c $(MCU)/tokenizer.c \
-		$(MCU)/generate.c | $(BUILD)
+		$(MCU)/generate.c $(MCU)/runtime.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(BUILD)/test_coli_tokenizer: test_coli_tokenizer.c $(MCU)/store_file.c \
