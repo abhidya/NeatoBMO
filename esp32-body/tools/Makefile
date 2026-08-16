@@ -18,7 +18,7 @@ BUILD := build
 TESTS := test_bmoq test_q4_matvec test_coli_ops test_coli_moe \
          test_coli_olmoe_layer test_coli_generate test_coli_tokenizer \
          test_coli_spm test_coli_gemma test_coli_gemma_generate \
-         test_coli_kv_cache test_coli_kv_attention
+         test_coli_kv_cache test_coli_kv_attention test_coli_glm52
 BINS := $(addprefix $(BUILD)/,$(TESTS))
 
 all: $(BINS)
@@ -76,6 +76,11 @@ $(BUILD)/test_coli_kv_cache: test_coli_kv_cache.c $(MCU)/kv_cache.c \
 
 $(BUILD)/test_coli_kv_attention: test_coli_kv_attention.c \
 		$(MCU)/kv_cache.c $(MCU)/ops.c | $(BUILD)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
+
+$(BUILD)/test_coli_glm52: test_coli_glm52.c $(MCU)/model_format.c \
+		$(MCU)/store_file.c $(MCU)/kv_cache.c $(MCU)/ops.c \
+		$(MCU)/glm52.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 test: $(BINS)
