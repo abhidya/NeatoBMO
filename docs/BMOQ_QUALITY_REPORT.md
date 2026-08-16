@@ -117,6 +117,55 @@ the perturbation, with no opportunity for error cancellation. Choosing a
 quantization scheme by per-tensor reconstruction error would have selected
 exactly the wrong thing to protect.
 
+## What precision OLMoE actually needs
+
+The failure is precision, not scheme. Sweeping code width through an
+asymmetric sub-block quantizer with the same structure as llama.cpp's k-quants
+(scale + min per 32 weights, both re-quantized to 6 bits under an f16
+super-scale), applied to every 2-D tensor, 8 independent forwards:
+
+| scheme | bits/weight | model size | top-1 preserved | mean ΔNLL |
+|---|---|---|---|---|
+| BF16 control | 16 | 13.84 GB | 8/8 | — |
+| BMOQ `q4-sym-g32` (today) | 5.00 | 4.33 GB | 0/8 | +2.7117 |
+| asym 4-bit (Q4_K-like) | 4.50 | 3.89 GB | 0/8 | +2.2773 |
+| asym 5-bit (Q5_K-like) | 5.50 | 4.76 GB | 3/8 | +0.7825 |
+| **asym 6-bit (Q6_K-like)** | **6.56** | **5.67 GB** | 3/8 | **+0.0463** |
+| asym 8-bit (Q8_0-like) | 8.50 | 7.35 GB | 7/8 | +0.0188 |
+
+**Four bits is a wall for this model, whatever the scheme.** A correctly
+asymmetric 4-bit format that uses all 16 code points and spends *less* storage
+than BMOQ still leaves +2.28 NLL and preserves 0 of 8 predictions. Six bits is
+effectively lossless at +0.046, and eight buys almost nothing beyond it.
+
+The economics are the useful part: BMOQ today spends 5.00 bits/weight and is
+broken; Q6_K spends 6.56 — 31% more — and works. Because experts are ~93% of
+parameters and are the sensitive family, a mixed Q6-experts/Q4-everything-else
+model lands within ~2% of uniform Q6_K, so uniform is both simpler and
+near-optimal. There is no clever carve-out to find here.
+
+Top-1 counts at 5 and 6 bits (3/8) are noisier than their NLL deltas suggest:
+these are single-token forwards over 8 samples, and once ΔNLL is at +0.05 the
+argmax is decided by near-ties. ΔNLL is the reliable column.
+
+### Consequence for the device
+
+Higher precision costs bandwidth, and bandwidth is what the ESP32 actually
+lacks. Weight traffic per decoded token, at OLMoE's 1.177 G active MACs:
+
+| scheme | model size | bytes read per token |
+|---|---|---|
+| BMOQ `q4-sym-g32` (broken) | 4.33 GB | 736 MB |
+| Q4_K | 3.89 GB | 662 MB |
+| **Q6_K** | **5.67 GB** | **965 MB** |
+
+At 10–40 MB/s over USB MSC that is roughly 97 s, 48 s, or 24 s **per token**.
+This is a property of running a 7B sparse MoE off external storage, not of the
+quantizer — the 4-bit model would have been 736 MB/token and equally
+impractical. It should be measured on the real device before more effort goes
+into the format, because it may indicate that OLMoE-1B-7B is the wrong model
+for this hardware regardless of how well it is quantized.
+
 ## Chosen BMOQ baseline
 
 **None. No configuration is frozen, because none is defensible.**
@@ -151,10 +200,9 @@ in the exporter and runtime would have produced five more broken variants.
 
 That finer groups do not help is itself informative: the failure is not scale
 granularity or per-group outliers. Four bits is simply not enough precision for
-this model's expert weights under any round-to-nearest scheme. The remaining
-options are error-compensating quantization that accounts for activations
-(GPTQ/AWQ family), or more bits for experts and an honest reckoning with the
-resulting model size. Since the runtime is proven exact, that work is entirely
+this model's expert weights under any round-to-nearest scheme. The precision sweep above answers which of
+those to take: six bits recovers the model, four does not, and no scale search
+closes that gap. Since the runtime is proven exact, that work is entirely
 in the exporter.
 
 These rows are simulated quantization over 8 single-token forwards, not exported
