@@ -134,7 +134,7 @@ def run_hf(args: argparse.Namespace) -> Iterable[dict[str, Any]]:
         args.model,
         revision=args.revision,
         torch_dtype=getattr(torch, args.dtype),
-        device_map=args.device_map,
+        device_map=None if args.device_map in ("none", "", None) else args.device_map,
         trust_remote_code=args.trust_remote_code,
     )
     model.eval()

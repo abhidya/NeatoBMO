@@ -17,7 +17,13 @@ from bmoq_eval.compare_quantization import build_report
 from bmoq_eval.eval_bmoq import copy_validated_jsonl
 from bmoq_eval.eval_hf_olmoe import logit_payload, router_topk
 from bmoq_eval.make_fixture import records
-from bmoq_eval.schema import load_eval_records, validate_eval_record, write_jsonl
+from bmoq_eval.run_bmoq_parallel import merge
+from bmoq_eval.schema import (
+    RUN_META_RECORD,
+    load_eval_records,
+    validate_eval_record,
+    write_jsonl,
+)
 
 
 class BmoqEvalTests(unittest.TestCase):
@@ -187,6 +193,170 @@ class BmoqEvalTests(unittest.TestCase):
             expected = json.loads((fixture / "bmoq-vs-bf16.json").read_text(encoding="utf-8"))
             actual = json.loads(regenerated.read_text(encoding="utf-8"))
             self.assertEqual(actual, expected)
+
+
+def _meta(corpus_sha: str, stride: int = 0) -> dict:
+    return {
+        "schema_version": 1,
+        "record_type": RUN_META_RECORD,
+        "checkpoint_id": "test/checkpoint",
+        "tokenizer_id": "test/tokenizer",
+        "corpus_sha256": corpus_sha,
+        "tool_commit": "deadbeef",
+        "full_logit_stride": stride,
+        "variant": {"name": "test"},
+    }
+
+
+class ProvenanceTests(unittest.TestCase):
+    """A comparison across two different token streams is the one failure the
+    metrics themselves cannot reveal, so it must fail loudly."""
+
+    def _write_pair(self, root: Path, reference_meta, candidate_meta):
+        reference = root / "bf16.jsonl"
+        candidate = root / "bmoq.jsonl"
+        write_jsonl(reference, ([reference_meta] if reference_meta else []) + records("bf16"))
+        write_jsonl(candidate, ([candidate_meta] if candidate_meta else []) + records("bmoq"))
+        return reference, candidate
+
+    def test_mismatched_corpus_hash_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reference, candidate = self._write_pair(root, _meta("aaaa"), _meta("bbbb"))
+            with self.assertRaisesRegex(ValueError, "corpus mismatch"):
+                build_report(reference, candidate)
+
+    def test_matching_corpus_hash_is_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reference, candidate = self._write_pair(root, _meta("cafe"), _meta("cafe"))
+            report = build_report(reference, candidate)
+            self.assertTrue(report["provenance"]["corpus_sha256_match"])
+            self.assertEqual(report["overall"]["count"], 6)
+
+    def test_absent_run_meta_warns_rather_than_silently_passing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reference, candidate = self._write_pair(root, None, None)
+            report = build_report(reference, candidate)
+            self.assertIsNone(report["provenance"]["corpus_sha256_match"])
+            self.assertTrue(report["provenance"]["warnings"])
+
+    def test_divergent_full_logit_stride_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reference, candidate = self._write_pair(
+                root, _meta("cafe", stride=32), _meta("cafe", stride=64)
+            )
+            report = build_report(reference, candidate)
+            self.assertTrue(
+                any("full_logit_stride" in w for w in report["provenance"]["warnings"])
+            )
+
+    def test_run_meta_is_not_paired_as_a_token_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reference, candidate = self._write_pair(root, _meta("cafe"), _meta("cafe"))
+            self.assertEqual(len(load_eval_records(reference)), 6)
+
+
+class DistributionTests(unittest.TestCase):
+    def test_report_carries_tails_not_only_means(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reference = root / "bf16.jsonl"
+            candidate = root / "bmoq.jsonl"
+            write_jsonl(reference, records("bf16"))
+            write_jsonl(candidate, records("bmoq"))
+            report = build_report(reference, candidate)
+            for key in ("p50", "p90", "p99", "p99_9", "min", "max"):
+                self.assertIn(key, report["distributions"]["delta_nll"])
+            self.assertIn("catastrophic_flips", report["outliers"])
+            self.assertIn("high_confidence_tokens", report["outliers"])
+
+    def test_catastrophic_flip_is_detected(self) -> None:
+        # Reference is confidently correct (p(target) ~ 0.99) and the candidate
+        # moves the top-1 elsewhere: exactly the failure mode a mean hides.
+        reference = records("bf16")[:1]
+        candidate = records("bmoq")[:1]
+        target = reference[0]["token_id"]
+        reference[0]["logits"] = [0.0] * 6
+        reference[0]["logits"][target] = 12.0
+        reference[0]["nll"] = 1e-5
+        candidate[0]["logits"] = [0.0] * 6
+        candidate[0]["logits"][(target + 1) % 6] = 12.0
+        candidate[0]["nll"] = 12.0
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reference_path = root / "bf16.jsonl"
+            candidate_path = root / "bmoq.jsonl"
+            write_jsonl(reference_path, reference)
+            write_jsonl(candidate_path, candidate)
+            report = build_report(reference_path, candidate_path)
+            self.assertEqual(report["outliers"]["catastrophic_flips"], 1)
+            self.assertEqual(report["outliers"]["high_confidence_tokens"], 1)
+            self.assertEqual(report["outliers"]["catastrophic_rate"], 1.0)
+
+
+class ParallelMergeTests(unittest.TestCase):
+    """Sharding windows across workers must reproduce single-process ordering."""
+
+    def _shard_outputs(self, root: Path, order: list[str], assignment: dict[str, int], workers: int):
+        rows = {sample: [] for sample in order}
+        for sample in order:
+            for position in (1, 2):
+                rows[sample].append(
+                    {
+                        "schema_version": 1,
+                        "record_type": "token_eval",
+                        "sample_id": sample,
+                        "position": position,
+                        "token_id": position,
+                        "nll": 0.5,
+                        "logits": [],
+                        "logit_top_k": [{"token_id": 0, "logit": 1.0}],
+                        "category": "c",
+                        "sequence_length": 3,
+                        "variant": {"name": "bmoq-host"},
+                        "router": [],
+                    }
+                )
+        paths = []
+        for worker in range(workers):
+            path = root / f"result-{worker:03d}.jsonl"
+            payload = [_meta("cafe")]
+            for sample in order:
+                if assignment[sample] == worker:
+                    payload.extend(rows[sample])
+            write_jsonl(path, payload)
+            paths.append(path)
+        return paths
+
+    def test_merge_restores_original_window_order(self) -> None:
+        order = [f"w-{index:03d}" for index in range(7)]
+        workers = 3
+        assignment = {sample: index % workers for index, sample in enumerate(order)}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shards = self._shard_outputs(root, order, assignment, workers)
+            merged = root / "merged.jsonl"
+            written = merge(shards, order, merged)
+            self.assertEqual(written, len(order) * 2)
+            seen = [
+                json.loads(line)["sample_id"]
+                for line in merged.read_text(encoding="utf-8").splitlines()
+                if json.loads(line).get("record_type") == "token_eval"
+            ]
+            self.assertEqual(seen, [s for s in order for _ in range(2)])
+
+    def test_merge_reports_a_window_no_worker_produced(self) -> None:
+        order = [f"w-{index:03d}" for index in range(4)]
+        assignment = {sample: 0 for sample in order}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shards = self._shard_outputs(root, order[:3], assignment, 1)
+            with self.assertRaisesRegex(ValueError, "no worker produced records"):
+                merge(shards, order, root / "merged.jsonl")
 
 
 if __name__ == "__main__":
