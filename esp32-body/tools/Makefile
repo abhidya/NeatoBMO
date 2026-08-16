@@ -28,7 +28,7 @@ TESTS := test_bmoq test_q4_matvec test_coli_ops test_coli_moe \
          test_coli_kv_cache test_coli_kv_attention test_coli_glm52 \
          test_coli_inkling test_bmoq_eval_olmoe
 BINS := $(addprefix $(BUILD)/,$(TESTS))
-HOST_TOOLS := bmoq-eval-olmoe
+HOST_TOOLS := bmoq-eval-olmoe ctok-encode
 HOST_TOOL_BINS := $(addprefix $(BUILD)/,$(HOST_TOOLS))
 
 all: $(BINS) $(HOST_TOOL_BINS)
@@ -109,6 +109,13 @@ $(BUILD)/test_coli_inkling: test_coli_inkling.c $(MCU)/model_format.c \
 $(BUILD)/bmoq-eval-olmoe: bmoq_eval_olmoe.c $(MCU)/model_format.c \
 		$(MCU)/store_mmap.c $(MCU)/q4_matvec.c $(MCU)/ops.c \
 		$(MCU)/moe.c $(MCU)/kv_cache.c $(MCU)/olmoe.c | $(BUILD)
+	$(CC) $(HOST_TOOL_CFLAGS) $^ -o $@ $(LDLIBS)
+
+# Encodes stdin with an exported .ctok so its token ids can be diffed against
+# the reference tokenizer. This is how the OLMoE pre-tokenizer divergence
+# documented in bmoq_eval/README.md was found.
+$(BUILD)/ctok-encode: ctok_encode.c $(MCU)/store_file.c $(MCU)/tokenizer.c \
+		| $(BUILD)
 	$(CC) $(HOST_TOOL_CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(BUILD)/test_bmoq_eval_olmoe: test_bmoq_eval_olmoe.c \

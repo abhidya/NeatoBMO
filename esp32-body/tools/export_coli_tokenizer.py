@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import struct
+import sys
 from pathlib import Path
 
 HEADER_BYTES = 128
@@ -19,7 +20,13 @@ MERGE_BYTES = 16
 VERSION = 1
 PAD_ID = 1
 EOS_ID = 50279
-MAX_TOKEN_BYTES = 256
+# Must match COLI_TOKENIZER_MAX_TOKEN_BYTES. Real byte-level BPE vocabularies
+# carry long whitespace runs; OLMoE-1B-7B-0924 token 19979 is 512 spaces.
+MAX_TOKEN_BYTES = 512
+# Must match COLI_TOKENIZER_MAX_SPECIAL_TOKEN_BYTES. Only special tokens are
+# compared through the runtime's fixed stack buffer, so they carry the
+# tighter bound and the vocabulary cap above costs the ESP32 no stack.
+MAX_SPECIAL_TOKEN_BYTES = 128
 MAX_SPECIAL_TOKENS = 512
 
 TOKEN_FLAG_SPECIAL = 0x0001
@@ -219,15 +226,28 @@ def build_ctok(tokenizer_json: dict) -> bytes:
     specials = special_ids(tokenizer_json, vocab, pad_id, eos_id)
     if len(specials) > MAX_SPECIAL_TOKENS:
         raise ValueError(f"tokenizer has {len(specials)} special tokens; CTOK cap is {MAX_SPECIAL_TOKENS}")
+    for token_id in specials:
+        if len(tokens_by_id[token_id]) > MAX_SPECIAL_TOKEN_BYTES:
+            raise ValueError(
+                f"special token {token_id} is {len(tokens_by_id[token_id])} bytes; "
+                f"the runtime matches special tokens through a "
+                f"{MAX_SPECIAL_TOKEN_BYTES}-byte buffer"
+            )
     byte_token_for_value: dict[int, int] = {}
     for token_id, token_bytes in enumerate(tokens_by_id):
         if token_id in specials:
             continue
         if len(token_bytes) == 1 and token_bytes[0] not in byte_token_for_value:
             byte_token_for_value[token_bytes[0]] = token_id
-    missing = sorted(set(range(256)) - set(byte_token_for_value))
+    # A complete 256-entry byte alphabet is not required. Byte-level BPE
+    # vocabularies omit standalone tokens for byte values that cannot appear in
+    # valid UTF-8; OLMoE-1B-7B-0924 has none for 0xC0, 0xC1, or 0xF5..0xFF.
+    # Encoding fails per byte at runtime if such a byte ever shows up, so only
+    # the bytes ordinary text always needs are required here.
+    required = set(b"\n ")
+    missing = sorted(required - set(byte_token_for_value))
     if missing:
-        raise ValueError(f"missing byte fallback tokens: {missing[:8]}")
+        raise ValueError(f"missing byte fallback tokens for common bytes: {missing}")
 
     merges = model.get("merges")
     if isinstance(merges, list) and merges:
@@ -286,6 +306,17 @@ def main() -> None:
     ctok = build_ctok(tokenizer_json)
     args.output_ctok.write_bytes(ctok)
     print(f"wrote {args.output_ctok} ({len(ctok)} bytes)")
+    if pretokenizer_family(tokenizer_json) == PRETOKENIZER_BYTE_BPE:
+        print(
+            "warning: the runtime's byte-level BPE pre-tokenizer does not yet "
+            "match the GPT-2 regex on a contraction preceded by a space. On "
+            "allenai/OLMoE-1B-7B-0924, \" 's\" encodes as [space, \"'s\"] "
+            "instead of [\" '\", \"s\"], which diverged on 6 of 679 tokens of "
+            "WikiText-2. Verify before relying on on-device text input:\n"
+            "  make -C tools build/ctok-encode\n"
+            "  tools/build/ctok-encode <ctok> < sample.txt | diff - <reference ids>",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":

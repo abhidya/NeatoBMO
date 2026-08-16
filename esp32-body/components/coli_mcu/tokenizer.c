@@ -173,11 +173,11 @@ static coli_status_t match_special(const coli_tokenizer_t *tokenizer,
     if ((entry.flags & COLI_TOKEN_FLAG_SPECIAL) == 0 ||
         entry.byte_length == 0 ||
         position + entry.byte_length > text_bytes ||
-        entry.byte_length > COLI_TOKENIZER_MAX_TOKEN_BYTES) {
+        entry.byte_length > COLI_TOKENIZER_MAX_SPECIAL_TOKEN_BYTES) {
         return COLI_OK;
     }
 
-    uint8_t bytes[COLI_TOKENIZER_MAX_TOKEN_BYTES];
+    uint8_t bytes[COLI_TOKENIZER_MAX_SPECIAL_TOKEN_BYTES];
     status = read_token_bytes(tokenizer, &entry, bytes, sizeof(bytes));
     if (status != COLI_OK) {
         return status;
@@ -840,7 +840,7 @@ coli_status_t coli_tokenizer_open(coli_store_t *store,
         tokenizer->special_token_count > COLI_TOKENIZER_MAX_SPECIAL_TOKENS ||
         (tokenizer->special_token_count > 0 &&
          tokenizer->special_token_offset == 0) ||
-        byte_token_count != 256u ||
+        byte_token_count > 256u ||
         tokenizer->vocab_offset < COLI_TOKENIZER_HEADER_BYTES ||
         tokenizer->vocab_offset > coli_store_size(store) ||
         tokenizer->vocab_size >
@@ -883,11 +883,16 @@ coli_status_t coli_tokenizer_open(coli_store_t *store,
         }
     }
 
-    for (uint32_t byte_value = 0; byte_value < 256u; ++byte_value) {
-        if (!tokenizer->has_byte_token[byte_value]) {
-            coli_tokenizer_close(tokenizer);
-            return COLI_ERR_FORMAT;
-        }
+    /* A complete 256-entry byte alphabet is not required. Real byte-level BPE
+     * vocabularies omit standalone tokens for byte values that cannot begin or
+     * appear in valid UTF-8 (allenai/OLMoE-1B-7B-0924 has no token for 0xC0,
+     * 0xC1, or 0xF5..0xFF). Demanding all 256 rejected those tokenizers
+     * outright. Encoding already fails per byte through has_byte_token, so a
+     * gap only matters if such a byte actually shows up in the input. */
+    if (!tokenizer->has_byte_token[(uint8_t)'\n'] ||
+        !tokenizer->has_byte_token[(uint8_t)' ']) {
+        coli_tokenizer_close(tokenizer);
+        return COLI_ERR_FORMAT;
     }
 
     if (tokenizer->special_token_count > 0) {

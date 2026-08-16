@@ -18,7 +18,18 @@ extern "C" {
 #define COLI_TOKENIZER_VOCAB_SIZE_OLMOE 50304u
 #define COLI_TOKENIZER_PAD_ID_OLMOE 1u
 #define COLI_TOKENIZER_EOS_ID_OLMOE 50279u
-#define COLI_TOKENIZER_MAX_TOKEN_BYTES 256u
+/* Longest decoded vocabulary entry the format accepts. Real byte-level BPE
+ * vocabularies carry long whitespace runs: allenai/OLMoE-1B-7B-0924 token
+ * 19979 is 512 spaces, which a 256-byte cap rejected outright. The on-disk
+ * length fields are uint16, so this can rise again without a format change. */
+#define COLI_TOKENIZER_MAX_TOKEN_BYTES 512u
+
+/* Separate, deliberately smaller bound for the one stack buffer that holds a
+ * candidate token during special-token matching. Only tokens flagged special
+ * are ever compared through it, and those are short markers like
+ * <|endoftext|>. Keeping it decoupled means raising the vocabulary bound above
+ * costs the ESP32 no additional stack. */
+#define COLI_TOKENIZER_MAX_SPECIAL_TOKEN_BYTES 128u
 #define COLI_TOKENIZER_MAX_SPECIAL_TOKENS 512u
 
 typedef enum {
