@@ -76,7 +76,8 @@ We conflated "can't read/decrypt the image" with "can't flash a new image."
 They are different problems; only the first is blocked.
 
 Our robot matches the hackable profile precisely: XV-12, serial
-`...-P`, mainboard **7.1 / Cruz Rev113**, stock `2.4.15667`.
+`...-P`, mainboard **7.1 / Cruz Rev113**, installed `2.5.15893` (factory
+`2.4.15667`).
 
 ## Board check first (do not skip)
 

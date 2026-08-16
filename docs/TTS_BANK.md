@@ -5,10 +5,12 @@ boundaries and burned+spoken chunk by chunk. The speech bank **persists**
 (no restore write per utterance); "Bring back BMO sounds" reinstalls the
 BMO bank on demand. Chat replies speak the same way when the voice selector
 is set to 🤖 robot — stage cues (`neatobmo/cues.py`) are stripped first, so
-only the cue-free speech text reaches the bank, and in the default
-**soundbyte** mode (`NEATOBMO_SPEECH`) LLM replies are additionally
-condensed to a ~1.5 s spoken burst (`cues.condense`); hand-authored
-routine replies bypass the cap.
+only the cue-free speech text reaches the bank. In the default **soundboard**
+mode (`NEATOBMO_SPEECH`) an exact authentic catalog clip is relayed through
+the ESP32 `/speak` path with **no flash write**; only when no clip fits is
+speech synthesized and packed into a bank, and `soundbyte` mode condenses LLM
+replies to a ~1.5 s spoken burst (`cues.condense`); hand-authored routine
+replies bypass the cap.
 
 > Each chunk is one 770,048-byte flash write, except that re-speaking a
 > bank whose hash is already installed skips the write. There is no
@@ -62,7 +64,7 @@ end-to-end when the robot hangs off the ESP32 instead of the Mac.
   mismatch, poisons the trailing transport checksum so the robot NAKs the
   transfer.
 - After every write: GetVersion must show `WTD41611DD` +
-  `Software,2,4,15667`. Playback replies verify each live slot without the
+  `Software,2,5,15893`. Playback replies verify each live slot without the
   audible 0–20 sweep (the explicit BMO restore still runs the full sweep).
 - One speech job at a time; robot access serialized through `rlock`;
   `/sound-bank-install` is blocked while speech runs.

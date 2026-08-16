@@ -135,12 +135,12 @@ Wire sequence:
 6. The buffer is released after playback. No sound flash is erased or written.
 
 The host implementation lives in `SerialTransport.send_binary()` and
-`Robot.play_file()` (currently unused by the web app, which speaks through
-the TTS sound-bank path instead). Speech WAVs come from the neural BMO voice
+`Robot.play_file()` — the native `PlaySound File` branch this patch would
+enable; it is not yet reachable. In the meantime the ESP32 `/speak` endpoint
+already relays exact authentic catalog WAVs to the robot with no sound-flash
+write (`neatobmo/speech.py`). Speech WAVs come from the neural BMO voice
 server by default (`tools/bmo_voice_server.py`), with Colibri
-`/v1/audio/speech` and espeak-ng as fallbacks; once this patch lands,
-`bmo_web.py` can relay those WAVs to `PlaySound File` via the ESP32 `/speak`
-endpoint with no host protocol change.
+`/v1/audio/speech` and espeak-ng as fallbacks.
 
 ## Firmware extraction/patch boundary
 
@@ -169,12 +169,12 @@ substantial strings, lower entropy than ciphertext, and—when available—an
 exact repack hash before any candidate is trusted.
 
 The active next step is not patching. It is read-only recovery preparation:
-verify the actual P-board markings, passively capture P6 DBGU at 115200 8N1,
-and only if the AT91 ROM monitor is reached, use official SAM-BA read commands
-to capture duplicate matching raw images under
-[/Volumes/2TB/neato-firmware-archive/work/inputs/](/Volumes/2TB/neato-firmware-archive/work/inputs/).
-P10 JTAG is not the primary route, J3 erase is out of scope, and any erase,
-program, unlock, or write prompt is a stop condition.
+duplicate external-NAND acquisition with raw page/OOB/ECC preservation,
+preferably on a donor board. Passive P6 DBGU at 115200 8N1 captures the boot
+log — not a SAM-BA `RomBOOT>` monitor — and P10 JTAG returned no stable TAP
+(security-bit or dead-VDDIO), so neither is a viable plaintext read path. J3
+erase is out of scope, and any erase, program, unlock, or write prompt is a
+stop condition.
 
 After plaintext is acquired:
 

@@ -22,10 +22,10 @@ application binary: stock firmware 2.4 does not export that region over USB.
 
 ## Current unlock/recovery status
 
-Status as of 2026-08-11: there is no proven Cruz firmware unlock, decryptor,
-repacker, plaintext application, or byte-restorable full-flash backup. The
-exact public Cruz-P 2.5 application has now been installed successfully, but
-that stock update did not open a readback or custom-firmware route.
+Status as of 2026-08-16: there is no proven Cruz firmware unlock, decryptor,
+repacker, plaintext application, or byte-restorable full-flash backup. Exact
+public Cruz-P 2.5, 2.7, and 3.1 applications were each installed and verified,
+then 2.5.15893 was restored; none opened a readback or custom-firmware route.
 
 Known state:
 

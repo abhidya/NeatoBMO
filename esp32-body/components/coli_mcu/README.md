@@ -1,8 +1,9 @@
 # ESP32 Colibri (`coli_mcu`)
 
 This directory is a Git-importable ESP-IDF component and the staging source for
-the standalone ESP32 Colibri repository. It currently has an OLMoE BMOQ+CTOK prompt-to-text path and a
-separate experimental Gemma path. See [COMPATIBILITY.md](COMPATIBILITY.md) for
+the standalone ESP32 Colibri repository. It currently has an OLMoE BMOQ+CTOK prompt-to-text path, a
+separate experimental Gemma path, and a bounded GLM-5.2 attention path. See
+[COMPATIBILITY.md](COMPATIBILITY.md) for
 the upstream-family matrix and the evidence required before claiming support.
 
 Until the standalone repository exists, pin this component directly from the
@@ -49,7 +50,8 @@ the first FAT-formatted MSC device at `/usb`, prints descriptors and capacity,
 and benchmarks bounded reads of `/usb/model.bmoq` if that file exists.
 The mount path and OLMoE model, tokenizer, and KV filenames are configurable in
 menuconfig. The autorun generation demo is disabled by default for package
-consumers; NeatoBMO enables it in `sdkconfig.defaults`. When enabled and the
+consumers, and NeatoBMO leaves it disabled so API generation has a single
+owner. When enabled and the
 configured model and tokenizer exist, the component starts a low-priority
 `coli_generate` task. The task reads `/usb/prompt.txt` when present
 or falls back to a short fixed prompt, opens the BMOQ model and CTOK tokenizer,
@@ -77,8 +79,10 @@ storage backend here, never in tensor or inference code.
 
 ## Streamed Q4 matrix-vector kernel
 
-`coli_q4_matvec()` is the first compute slice. A matrix uses two aligned BMOQ
-tensors:
+`coli_q4_matvec()` is the first compute slice; the Q4 surface also includes
+`coli_q4_matvec_rows()` (a contiguous output-row range without materializing the
+full output), `coli_q4_dequantize_row()`, and `coli_q4_argmax()`. A matrix uses
+two aligned BMOQ tensors:
 
 - `BMOQ_DTYPE_Q4_SYM` + `BMOQ_LAYOUT_Q4_ROW_MAJOR`: signed nibbles in
   row-major order, low nibble first, with no row padding.

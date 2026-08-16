@@ -29,17 +29,18 @@ The plan below predates the implementation; these decisions supersede it:
   ("hello!", "dance!", "what time is it?") are matched by
   `neatobmo/routines.py` and answered instantly from precached cue-annotated
   scripts, with a small state machine for multi-turn follow-ups; only misses
-  go to the (slow) OLMoE brain. Default speech mode is **soundbyte**
-  (`NEATOBMO_SPEECH`): spoken words are capped at a ~1.5 s burst and the
-  soundboard/moves/faces carry the reply.
-- **Compound-turn correction is designed, not yet implemented.** The current
-  first-match Routine layer can answer one recognized phrase and silently skip
-  the rest of a compound utterance. The approved direction is to execute every
-  confidently resolved local subrequest immediately, preserve all meaningful
-  residual text for the Brain, and show thinking feedback only when residual
-  generation is actually required. See
+  go to the (slow) OLMoE brain. Default speech mode is **soundboard**
+  (`NEATOBMO_SPEECH`): an authentic reviewed BMO clip answers first and
+  neural/synth speech is used only when no clip fits; `soundbyte` and `full`
+  remain as alternatives.
+- **Compound turns are implemented.** `neatobmo/turns.py` (`plan_turn`,
+  `TurnPlan`, `RequestPart`, `RoutineStep`) segments the utterance, executes
+  every confidently resolved local routine in source order via
+  `routines.accepted_routine()` (full-part coverage, not first-match), and
+  preserves the unresolved **Residual request** for the Brain. `bmo_web.py`
+  streams ordered progress events over NDJSON. See
   [`docs/compound-turn-orchestration-design.md`](docs/compound-turn-orchestration-design.md)
-  for the investigation, event contract, dependency decision, and test gates.
+  for the event contract and test gates.
 - **The face lives on the Neato's own LCD first.** `faces.c` on the ESP32 and
   its 1:1 Python port `neatobmo/emote.py` draw the same emoji faces over WiFi
   or USB; the projector head (§3) remains future work.
@@ -71,19 +72,21 @@ The plan below predates the implementation; these decisions supersede it:
   never-crash-chat policy), `brain.BrainClient`, `voice.VoiceSynth`
   (neural→Colibri→espeak ladder), `speech.SpeechService` (speech-job
   state machine + bank burns), `esp32.Esp32Client` (the four ESP32 HTTP
-  endpoints), and `cues.BurstBudget` (one soundbyte budget for both the
-  streaming and blocking reply paths). The frontend is
+  endpoints), `turns` (compound-turn planner), `soundboard_voice.SoundboardVoice`
+  (clip catalog + trust/quarantine), and `cues.BurstBudget` (one soundbyte
+  budget for both the streaming and blocking reply paths). The frontend is
   `static/console.html`. Face tables have a single source of truth in
   `neatobmo/faces.py`; the firmware's `faces_table.h` is generated from
   it (`tools/gen_faces_table.py`, sync-tested). Domain vocabulary lives
   in CONTEXT.md. On the firmware side the Neato transport was extracted
   into `src/neato_usb.c` (transaction-handle binary streams) with a
   `src/neato_protocol.c` command vocabulary above it.
-- **On-MCU brain groundwork exists.** `esp32-body/components/coli_mcu/` builds
+- **On-MCU brain runtime exists.** `esp32-body/components/coli_mcu/` builds
   into the S3 firmware: USB-MSC model storage, the BMOQ quantized-model
-  format, and a streamed Q4 matrix-vector kernel that never assumes a tensor
-  fits in PSRAM. It is a storage/model-format foundation, not an OLMoE
-  runtime — attention, routing, expert scheduling, and KV state are still open.
+  format, streamed Q4 kernels that never assume a tensor fits in PSRAM, and
+  an OLMoE prompt-to-text decode loop (MoE routing, file-backed paged KV
+  cache, streamed attention, SSE streaming) plus experimental Gemma and
+  GLM-5.2 paths. Physical-device latency/parity is still being proven.
 
 ---
 

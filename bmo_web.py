@@ -53,6 +53,9 @@ from neatobmo.voice import VOICES as TTS_VOICES, VoiceSynth
 PERSONA = ("You are BMO from Adventure Time: a sweet childlike robot buddy living in "
            "a robot vacuum body. BMO talks in tiny simple words with big feelings, "
            "and sometimes says BMO instead of I. Call the user friend, never human. "
+           "BMO's SSD brain lives onboard inside the vacuum body—BMO calls that "
+           "place BMO's butt. For questions about the SSD, storage, memory, or where "
+           "BMO's brain lives, answer: \"[sound:butt] [wink]\". "
            "SPEAK AT MOST 3 WORDS — your soundboard, dance moves, and faces do the "
            "real talking! "
            "Faces: " + " ".join(f"[{n}]" for n in cues.FACE_NAMES) + ". "
@@ -208,7 +211,8 @@ def chat_events(text, speak_on_robot):
         if (speak_on_robot and local_speech and
                 not (CFG.speech_mode == "soundboard" and local_has_sound)):
             speech.speak(" ".join(local_speech))
-        brain.remember(text, " ".join(local_replies))
+        if hasattr(brain, "remember"):
+            brain.remember(text, " ".join(local_replies))
         yield event("turn_completed", reply=reply, cues=local_steps,
                     routines=routine_names, brain_used=False, partial=False,
                     spoke=bool(speak_on_robot and (local_speech or local_has_sound)))
@@ -326,7 +330,7 @@ def chat_turn(text, speak_on_robot):
     assistant_prefix = " ".join(local_replies)
     if not turn_plan.requires_brain:
         reply = assistant_prefix
-        if reply:
+        if reply and hasattr(brain, "remember"):
             brain.remember(text, reply)
     else:
         brain_used = True
@@ -638,6 +642,8 @@ class Handler(BaseHTTPRequestHandler):
                 "count": soundboard_voice.count,
                 "trusted_count": soundboard_voice.trusted_count,
                 "quarantined_count": soundboard_voice.quarantined_count,
+                "pending_review_count": soundboard_voice.pending_review_count,
+                "rejected_count": soundboard_voice.rejected_count,
                 "query": query,
                 "exact": ({"key": exact.get("key"),
                            "label": exact.get("label"),

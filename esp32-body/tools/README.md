@@ -5,7 +5,7 @@ Build every host test harness with the Makefile (binaries land in
 deterministic fixture and needs no arguments:
 
 ```sh
-make -C tools        # build all six with -Wall -Wextra -Werror
+make -C tools        # build all thirteen with -Wall -Wextra -Werror
 make -C tools test   # build and run them
 ```
 
@@ -38,6 +38,15 @@ What each test proves:
 - `test_coli_gemma_generate` — Gemma app-level prompt-to-text wrapper:
   callback tokenizer encode/decode, bounded allocation, yield/cancel callback
   plumbing, telemetry, and decoded output over the tiny Gemma fixture.
+- `test_coli_generate` — OLMoE app-level prompt-to-text wrapper: callback
+  tokenizer encode/decode, bounded allocation, yield/cancel plumbing, and
+  decoded output over a tiny OLMoE fixture.
+- `test_coli_spm` — Gemma SentencePiece tokenizer substrate check.
+- `test_coli_kv_cache` — file-backed paged KV-cache read/write golden test
+  against the contiguous-RAM reference.
+- `test_coli_kv_attention` — streamed KV-cache attention decode golden test.
+- `test_coli_glm52` — bounded GLM-5.2 attention state layout and decode golden
+  test.
 
 CTOK is a compact preconverted GPT-NeoX/OLMo byte-level BPE format for firmware:
 128-byte little-endian header, a dense 24-byte token directory indexed by token
@@ -62,6 +71,18 @@ weights. It validates the official `allenai/OLMoE-1B-7B-0924` shape by default,
 streams tensors row-by-row, writes grouped symmetric Q4 weights plus float32
 scale tensors, and embeds an OLMoE manifest/config block for firmware loading.
 Use `--allow-nonstandard` only for synthetic fixtures or deliberate forks.
+
+Inspect or export a local GLM-5.2 safetensors checkpoint to BMOQ v2:
+
+```sh
+python3 tools/export_glm52_bmoq.py /path/to/GLM-5.2 --inspect-only
+python3 tools/export_glm52_bmoq.py /path/to/GLM-5.2 model.bmoq
+```
+
+The exporter reads only local `config.json`, optional `generation_config.json`,
+and safetensors shards. It streams rows into grouped symmetric Q4, writes BMOQ
+version 2, and emits the bounded binary config tensor used by the ESP32 GLM
+loader for MLA ranks, RoPE dimensions, MoE routing, and stop-token metadata.
 
 Inspect or export a local Gemma 3 GGUF (the matching host check is
 `test_coli_gemma`, built and run by the Makefile above):

@@ -81,6 +81,11 @@ class TestSloppyModelOutput(unittest.TestCase):
         for name, target in cues.SOUND_ALIASES.items():
             self.assertIn(target, cues.SOUND_CUES, name)
 
+    def test_storage_tool_alias_uses_spoken_butt_clip(self):
+        p = cues.parse("[sound:ssd] [wink]")
+        self.assertIn(("sound", "butt"), p.steps)
+        self.assertTrue(cues.has_voice_sound(p.steps))
+
 
 class TestFallbacksAndCaps(unittest.TestCase):
     def test_emoji_fallback_when_no_face_cues(self):

@@ -2,7 +2,13 @@
   "schema": 1,
   "approved": [
     "101-28055268-who-wants-to-play-video-games",
-    "101-28062487-i-love-you"
+    "101-28062487-i-love-you",
+    "101-24061869-bmobutt",
+    "101-24061886-bmo-hello",
+    "101-28054910-bmo-always-bounces-back"
   ],
-  "rejected": []
+  "rejected": [
+    "101-24002778-bmo",
+    "101-24101202-bmo-bmo"
+  ]
 }

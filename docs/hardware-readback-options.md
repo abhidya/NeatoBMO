@@ -14,12 +14,12 @@ memory acquisition:
 5. Treat protected internal-flash/JTAG work as a later branch only if external
    NAND still contains encrypted application data. Never use J3 ERASE.
 
-P6 proved the boot/update paths but never exposed SAM-BA. Exact Cruz-P 2.5 was
-then installed successfully from factory mode; its USB help remained identical
-to 2.4, raw dump/readflash returned no application bytes, and XMODEM never
-started. BACK still boots the separate factory 2.4.15667 image. Hardware-level
-capture therefore remains the route to plaintext, flash geometry, or a
-byte-restorable backup.
+P6 proved the boot/update paths but never exposed SAM-BA. Exact Cruz-P 2.5, 2.7,
+and 3.1 were each installed and captured, then 2.5.15893 was restored; none of
+them exposed application readback over USB (dump/readflash returned nothing and
+XMODEM never started), and P10 JTAG returned no stable TAP. BACK still boots the
+separate factory 2.4.15667 image. Hardware-level capture therefore remains the
+route to plaintext, flash geometry, or a byte-restorable backup.
 
 ## Evidence-backed options
 
@@ -82,7 +82,9 @@ Why it matters:
 
 Evidence quality:
 
-- Weak. The repo only establishes that it is not the preferred path.
+- Measured no-TAP. The 2026-08-13 and 2026-08-15 sessions returned no stable
+  TAP/IDCODE/IR length; the cause is narrowed to AT91 security-bit or dead
+  VDDIO. JTAG is not a viable extraction path here.
 
 ## Board-confirmation prerequisites
 
@@ -104,9 +106,9 @@ Hard stop conditions:
 - Any J3 erase workflow.
 - Any assumption that USB `readflash` or `dump` is a full firmware backup.
 
-The repo records that stock USB readback is unavailable from both the former
-installed 2.4 application and installed 2.5. That means a hardware acquisition
-route must stay read-only until geometry and restoration are proven.
+The repo records that stock USB readback is unavailable across installed 2.4,
+2.5, 2.7, and 3.1. That means a hardware acquisition route must stay read-only
+until geometry and restoration are proven.
 
 ## What counts as good evidence
 

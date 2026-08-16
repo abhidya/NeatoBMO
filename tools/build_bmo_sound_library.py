@@ -40,6 +40,11 @@ OFFICIAL_PREFIX = "Payload/Beemo.app/www/"
 EDITORIAL_TRIM_START_SECONDS = {
     "101-28055268-who-wants-to-play-video-games": 2.25,
     "101-28062487-i-love-you": 1.57,
+    "101-24061886-bmo-hello": 1.48,
+    "101-28054910-bmo-always-bounces-back": 2.02,
+}
+EDITORIAL_LABELS = {
+    "101-24061869-bmobutt": "It goes in my butt",
 }
 
 
@@ -267,6 +272,9 @@ def build(output: Path, board_htmls: list[Path], beemo_ipa: Path | None) -> dict
         entries.extend(official_entries(beemo_ipa))
     entries.extend(reviewed_entries())
 
+    for entry in entries:
+        entry["label"] = EDITORIAL_LABELS.get(entry["key"], entry["label"])
+
     ipa = zipfile.ZipFile(beemo_ipa) if beemo_ipa is not None else None
     try:
         for entry in entries:
@@ -344,6 +352,7 @@ def refresh_existing(output: Path) -> dict:
     catalog = json.loads(catalog_path.read_text())
     entries = catalog["sounds"]
     for entry in entries:
+        entry["label"] = EDITORIAL_LABELS.get(entry["key"], entry["label"])
         trim_start = EDITORIAL_TRIM_START_SECONDS.get(entry["key"])
         wav_path = output / entry["wav"]
         if trim_start is not None:

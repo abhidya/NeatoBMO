@@ -21,10 +21,10 @@
   "pages": [
     {
       "index": 0,
-      "file": "modules/bmo-page-000-65bae0a67eed.bin",
+      "file": "modules/bmo-page-000-56b72ef5b78d.bin",
       "bytes": 770048,
-      "sha256": "65bae0a67eed44e907d41cd2f58d0b8d901e0c854415f5a1a4bb16ae30c54a49",
-      "transport_additive_checksum_hex": "0x05894167",
+      "sha256": "56b72ef5b78d6bf5a0877a04f528cd7e79776937f38ed6422e6638ce34c2d45a",
+      "transport_additive_checksum_hex": "0x04f8cbfe",
       "sounds": [
         {
           "canonical_key": "101-24002778-bmo",
@@ -46,10 +46,9 @@
           "label": "bmo always bounces back",
           "slots": [
             2,
-            1,
-            19
+            1
           ],
-          "content_seconds": 4.011383,
+          "content_seconds": 1.991383,
           "alias_count": 1
         }
       ]
@@ -572,10 +571,10 @@
     },
     {
       "index": 11,
-      "file": "modules/bmo-page-011-c7ed28b9554e.bin",
+      "file": "modules/bmo-page-011-c891c7245cd9.bin",
       "bytes": 770048,
-      "sha256": "c7ed28b9554e13ddb5bbba068d0ae211465bcf5bc25d788288bc40f516f55429",
-      "transport_additive_checksum_hex": "0x03daf234",
+      "sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
+      "transport_additive_checksum_hex": "0x03a3d1b9",
       "sounds": [
         {
           "canonical_key": "official-parade-conversation-parade-starters06",
@@ -591,10 +590,9 @@
           "canonical_key": "101-24061886-bmo-hello",
           "label": "BMO Hello",
           "slots": [
-            2,
-            1
+            2
           ],
-          "content_seconds": 2.941497,
+          "content_seconds": 1.461497,
           "alias_count": 1
         },
         {
@@ -911,7 +909,7 @@
         },
         {
           "canonical_key": "101-24061869-bmobutt",
-          "label": "BMObutt",
+          "label": "It goes in my butt",
           "slots": [
             2,
             1
@@ -2511,8 +2509,8 @@
     },
     {
       "page": 0,
-      "module": "modules/bmo-page-000-65bae0a67eed.bin",
-      "module_sha256": "65bae0a67eed44e907d41cd2f58d0b8d901e0c854415f5a1a4bb16ae30c54a49",
+      "module": "modules/bmo-page-000-56b72ef5b78d.bin",
+      "module_sha256": "56b72ef5b78d6bf5a0877a04f528cd7e79776937f38ed6422e6638ce34c2d45a",
       "slots": [
         0,
         7,
@@ -2642,7 +2640,7 @@
         }
       ],
       "key": "101-24061869-bmobutt",
-      "label": "BMObutt",
+      "label": "It goes in my butt",
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/24061869-bmobutt",
@@ -2650,37 +2648,26 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c7ed28b9554e.bin",
-      "module_sha256": "c7ed28b9554e13ddb5bbba068d0ae211465bcf5bc25d788288bc40f516f55429",
+      "module": "modules/bmo-page-011-c891c7245cd9.bin",
+      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
       "slots": [
-        2,
-        1
+        2
       ],
       "commands": [
-        "PlaySound 2",
-        "PlaySound 1"
+        "PlaySound 2"
       ],
       "slot_seconds": [
-        1.869388,
-        1.867392
+        1.869388
       ],
-      "content_seconds": 2.941497,
+      "content_seconds": 1.461497,
       "segments": [
         {
           "slot": 2,
           "pcm_offset": 214032,
-          "content_bytes": 82440,
+          "content_bytes": 64452,
           "slot_bytes": 82440,
-          "content_seconds": 1.869388,
+          "content_seconds": 1.461497,
           "slot_seconds": 1.869388
-        },
-        {
-          "slot": 1,
-          "pcm_offset": 131600,
-          "content_bytes": 47280,
-          "slot_bytes": 82352,
-          "content_seconds": 1.072109,
-          "slot_seconds": 1.867392
         }
       ],
       "key": "101-24061886-bmo-hello",
@@ -2688,7 +2675,8 @@
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/24061886-bmo-hello",
-      "canonical_key": "101-24061886-bmo-hello"
+      "canonical_key": "101-24061886-bmo-hello",
+      "editorial_trim_start_seconds": 1.48
     },
     {
       "page": 5,
@@ -2787,24 +2775,21 @@
     },
     {
       "page": 0,
-      "module": "modules/bmo-page-000-65bae0a67eed.bin",
-      "module_sha256": "65bae0a67eed44e907d41cd2f58d0b8d901e0c854415f5a1a4bb16ae30c54a49",
+      "module": "modules/bmo-page-000-56b72ef5b78d.bin",
+      "module_sha256": "56b72ef5b78d6bf5a0877a04f528cd7e79776937f38ed6422e6638ce34c2d45a",
       "slots": [
         2,
-        1,
-        19
+        1
       ],
       "commands": [
         "PlaySound 2",
-        "PlaySound 1",
-        "PlaySound 19"
+        "PlaySound 1"
       ],
       "slot_seconds": [
         1.869388,
-        1.867392,
-        0.321451
+        1.867392
       ],
-      "content_seconds": 4.011383,
+      "content_seconds": 1.991383,
       "segments": [
         {
           "slot": 2,
@@ -2817,18 +2802,10 @@
         {
           "slot": 1,
           "pcm_offset": 131600,
-          "content_bytes": 82352,
+          "content_bytes": 5380,
           "slot_bytes": 82352,
-          "content_seconds": 1.867392,
+          "content_seconds": 0.121995,
           "slot_seconds": 1.867392
-        },
-        {
-          "slot": 19,
-          "pcm_offset": 755728,
-          "content_bytes": 12110,
-          "slot_bytes": 14176,
-          "content_seconds": 0.274603,
-          "slot_seconds": 0.321451
         }
       ],
       "key": "101-28054910-bmo-always-bounces-back",
@@ -2836,7 +2813,8 @@
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/28054910-bmo-always-bounces-back",
-      "canonical_key": "101-28054910-bmo-always-bounces-back"
+      "canonical_key": "101-28054910-bmo-always-bounces-back",
+      "editorial_trim_start_seconds": 2.02
     },
     {
       "page": 20,
@@ -2955,8 +2933,8 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c7ed28b9554e.bin",
-      "module_sha256": "c7ed28b9554e13ddb5bbba068d0ae211465bcf5bc25d788288bc40f516f55429",
+      "module": "modules/bmo-page-011-c891c7245cd9.bin",
+      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
       "slots": [
         8,
         9
@@ -4571,8 +4549,8 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c7ed28b9554e.bin",
-      "module_sha256": "c7ed28b9554e13ddb5bbba068d0ae211465bcf5bc25d788288bc40f516f55429",
+      "module": "modules/bmo-page-011-c891c7245cd9.bin",
+      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
       "slots": [
         7,
         19
@@ -4923,8 +4901,8 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c7ed28b9554e.bin",
-      "module_sha256": "c7ed28b9554e13ddb5bbba068d0ae211465bcf5bc25d788288bc40f516f55429",
+      "module": "modules/bmo-page-011-c891c7245cd9.bin",
+      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
       "slots": [
         6,
         10
@@ -8917,8 +8895,8 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c7ed28b9554e.bin",
-      "module_sha256": "c7ed28b9554e13ddb5bbba068d0ae211465bcf5bc25d788288bc40f516f55429",
+      "module": "modules/bmo-page-011-c891c7245cd9.bin",
+      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
       "slots": [
         0,
         3
@@ -10189,8 +10167,8 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c7ed28b9554e.bin",
-      "module_sha256": "c7ed28b9554e13ddb5bbba068d0ae211465bcf5bc25d788288bc40f516f55429",
+      "module": "modules/bmo-page-011-c891c7245cd9.bin",
+      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
       "slots": [
         7,
         19

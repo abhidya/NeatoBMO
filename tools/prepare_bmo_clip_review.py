@@ -27,7 +27,7 @@ def main():
     board = SoundboardVoice(catalog)
     args.output.mkdir(parents=True, exist_ok=True)
     review = []
-    for number, sound in enumerate(board.quarantined_sounds, 1):
+    for number, sound in enumerate(board.pending_review_sounds, 1):
         filename = f"{number:02d}-{slug(sound['label'])}.wav"
         wav = board.render_for_review(sound["key"])
         if wav is None:

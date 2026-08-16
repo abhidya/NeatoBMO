@@ -42,6 +42,12 @@ _STOP_WORDS = {
     "this", "to", "would", "you", "your",
 }
 
+_CONTEXT_KEYWORDS = {
+    "brain": "butt", "disk": "butt", "drive": "butt",
+    "memory": "butt", "onboard": "butt", "ssd": "butt",
+    "storage": "butt",
+}
+
 
 def normalize_phrase(text):
     text = text.lower().replace("’", "'").replace("beemo", "bmo")
@@ -63,7 +69,7 @@ def _keywords(text):
             continue
         if len(word) > 3 and word.endswith("s"):
             word = word[:-1]
-        words.append(word)
+        words.append(_CONTEXT_KEYWORDS.get(word, word))
     return set(words)
 
 
@@ -95,6 +101,21 @@ class SoundboardVoice:
     @property
     def quarantined_sounds(self):
         return [sound for sound in self.sounds if not self._eligible(sound)]
+
+    @property
+    def pending_review_sounds(self):
+        return [sound for sound in self.sounds
+                if not self._eligible(sound)
+                and sound.get("key") not in self.rejected_keys]
+
+    @property
+    def pending_review_count(self):
+        return len(self.pending_review_sounds)
+
+    @property
+    def rejected_count(self):
+        return len([sound for sound in self.sounds
+                    if sound.get("key") in self.rejected_keys])
 
     def _eligible(self, sound):
         key = sound.get("key")

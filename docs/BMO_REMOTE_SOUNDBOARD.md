@@ -17,6 +17,12 @@ modules. Every module preserves the validated BMO bank directory, record
 headers, page starts, declared lengths, and non-PCM bytes. Only PCM fields are
 changed. Unused live slots contain silence.
 
+The Python console gates *automatic* speech through this catalog with a
+trust/quarantine model (`neatobmo/soundboard_voice.py`): only clips whose audio
+is authoritative or human-approved in `docs/bmo-clip-approvals.json` are spoken
+automatically; metadata-only imports stay quarantined until a human listens to
+them.
+
 The catalog records provenance, but provenance is not a redistribution
 license. The official-app and fan-board recordings are copyrighted material;
 keep deployment private/personal unless you have permission to publish them.

@@ -10,7 +10,7 @@
 > handoff that no application had been written and P6 was not captured are
 > preserved only as historical context. See `../captures/README.md` D01.
 
-## Current result
+## Result at 2026-08-10 (historical — no application had been written yet)
 
 No Neato application firmware has been dumped, patched, or written. The stock
 USB command interface was exhaustively tested for readback without sending an
@@ -57,7 +57,7 @@ The clean build initially failed because ESP-IDF expected a generated
 certificate-bundle API. The resulting image used 39,640 bytes of RAM and
 940,113 bytes of its application flash allowance.
 
-## Resume point
+## Resume point (superseded — P6 done, SAM-BA ruled out; see FIRMWARE_ARCHIVE.md next gate)
 
 1. Turn the Neato completely off.
 2. Confirm P6 orientation and 3.3 V levels; connect only P6.2, P6.3, and P6.4 as

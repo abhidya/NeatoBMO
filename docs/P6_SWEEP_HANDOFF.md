@@ -177,9 +177,10 @@ The original discriminator was to **prove a signal physically exists on P6.3
 - **Best:** scope / logic analyzer / DMM on P6.3 vs GND. Live toggling → signal
   exists, read the bit period directly (expect ~8.68 µs/bit = 115200). Static
   idle-high → the AT91 isn't transmitting. Contact-dependent noise → loose wire.
-- **No scope? Run the loopback self-test (never actually completed):** flash
-  `-DP6_SELFTEST`, jumper `GPIO17→GPIO18`, confirm `P6-SELFTEST N` appears. That
-  finally proves the ESP32 RX path works at all — which we have never verified.
+- **Loopback self-test (completed 2026-08-11 13:50 PDT):** flash `-DP6_SELFTEST`,
+  jumper `GPIO17→GPIO18`, confirm `P6-SELFTEST N` appears. This passed in
+  `../captures/p6_1786481459.log` (counters 47–70), proving the ESP32 RX/capture
+  chain.
 
 ## Console-path correction
 

@@ -21,6 +21,13 @@ here in the same change.
 - **Routine layer** (`neatobmo/routines.py`) — Siri-style pattern-matched
   instant answers (~2 ms) tried *before* the brain. Routine turns are
   `remember()`-ed into brain history so its memory stays coherent.
+- **Turn planner** (`neatobmo/turns.py`) — `plan_turn()` segments one
+  utterance into **Request part**s and resolves each fully covered part to a
+  **Routine step** in source order (`routines.accepted_routine()`); the
+  unresolved remainder is the **Residual request**, answered by the Brain.
+  Progress is emitted as ordered **Turn event**s (`turn_started` /
+  `routine_result` / `brain_started` / `brain_result` / `turn_completed`) over
+  NDJSON.
 - **Stage cue** — the persona's "tool call": a bracketed token in the
   reply (`[happy] [wiggle] [sound:videogames]`). OLMoE can't emit real
   tool calls; `neatobmo/cues.py` parses cues best-effort instead. Cues
@@ -55,6 +62,11 @@ here in the same change.
   brain/synth is slow.
 - **Chirp-speak** — the fallback when a reply has no cue sounds and robot
   speech is off: play a mood-guessed soundboard clip (like R2-D2).
+- **Clip trust/quarantine** (`neatobmo/soundboard_voice.py`) — automatic
+  speech is limited to clips whose audio is authoritative
+  (`official-cartoon-network-beemo-app` or `existing-manually-reviewed`) or
+  has been human-approved in `docs/bmo-clip-approvals.json`; metadata-only
+  imports stay **quarantined** (counted but never spoken) pending review.
 
 ## Face
 
@@ -84,7 +96,8 @@ here in the same change.
 - **SpeechService** (`neatobmo/speech.py`) — the speech-job state machine:
   synth pipeline → chunk packing → burn+speak, restore, profile installs.
 - **Config** (`neatobmo/config.py`) — every `NEATOBMO_*` knob, read once
-  in the composition root.
+  in the composition root. Default speech mode is `soundboard`; the clip
+  catalog path is `NEATOBMO_SOUNDBOARD_CATALOG`.
 
 ## Firmware (esp32-body)
 
@@ -104,9 +117,11 @@ here in the same change.
 - **neato_protocol** (`src/neato_protocol.c`) — the command vocabulary
   above the transport (LCD ops, PlaySound, TestMode, LEDs). Encodes the
   hardware footguns so callers speak intent, not strings.
-- **coli_mcu** (`components/coli_mcu/`) — on-MCU LLM groundwork: USB-MSC
+- **coli_mcu** (`components/coli_mcu/`) — on-MCU LLM runtime: USB-MSC
   model storage, the **BMOQ** quantized-model format, streamed Q4 kernels,
-  OLMoE decode layers. Host-testable by design (`tools/Makefile`).
+  and an OLMoE prompt-to-text decode loop (MoE routing, file-backed paged
+  KV cache, streamed attention) plus experimental Gemma/GLM-5.2 paths.
+  Host-testable by design (`tools/Makefile`).
 
 ## Architecture words
 

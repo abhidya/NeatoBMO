@@ -71,6 +71,21 @@ static inline uint32_t coli_glm52_o_id(uint32_t layer)
     return coli_glm52_layer_base(layer) + 16u;
 }
 
+static inline uint32_t coli_glm52_dense_gate_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 20u;
+}
+
+static inline uint32_t coli_glm52_dense_up_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 21u;
+}
+
+static inline uint32_t coli_glm52_dense_down_id(uint32_t layer)
+{
+    return coli_glm52_layer_base(layer) + 22u;
+}
+
 static inline uint32_t coli_glm52_scale_id(uint32_t tensor_id)
 {
     return tensor_id + COLI_GLM52_SCALE_ID_OFFSET;
@@ -110,6 +125,12 @@ typedef struct {
     size_t peak_workspace_bytes;
 } coli_glm52_attention_stats_t;
 
+typedef struct {
+    coli_glm52_attention_stats_t attention;
+    coli_q4_stats_t mlp;
+    size_t peak_workspace_bytes;
+} coli_glm52_layer_stats_t;
+
 /** Decode and validate the bounded GLM-5.2 metadata stored in BMOQ v2. */
 coli_status_t coli_glm52_config_load(const coli_model_t *model,
                                      coli_glm52_config_t *out_config);
@@ -148,6 +169,28 @@ coli_status_t coli_glm52_attention_decode(
     size_t input_count, float *output, size_t output_count,
     coli_kv_cache_t *state, void *workspace, size_t workspace_bytes,
     coli_glm52_attention_stats_t *stats);
+
+size_t coli_glm52_dense_mlp_required_workspace(
+    const coli_glm52_config_t *config, size_t q4_workspace_bytes);
+
+/** Execute the SwiGLU MLP used by GLM layers before first_dense_layers. */
+coli_status_t coli_glm52_dense_mlp_decode(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t layer, const float *input, size_t input_count, float *output,
+    size_t output_count, void *workspace, size_t workspace_bytes,
+    coli_q4_stats_t *stats);
+
+size_t coli_glm52_dense_layer_required_workspace(
+    const coli_glm52_config_t *config, uint32_t token_count,
+    size_t q4_workspace_bytes);
+
+/** Execute a complete pre-MoE GLM transformer layer including both residuals. */
+coli_status_t coli_glm52_dense_layer_decode(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t layer, uint32_t position, const float *input,
+    size_t input_count, float *output, size_t output_count,
+    coli_kv_cache_t *state, void *workspace, size_t workspace_bytes,
+    coli_glm52_layer_stats_t *stats);
 
 #ifdef __cplusplus
 }

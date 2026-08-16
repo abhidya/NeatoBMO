@@ -24,6 +24,9 @@ captures/jtag/**/sdram*.bin
 captures/jtag/*/private/
 .worktrees/
 
+# local ESP32 provisioning credentials (NVS remains the device source of truth)
+esp32-body/wifi.local.env
+
 # NeatoOS local build/probe outputs (reference-header probe contains
 # caller-supplied vendor header bytes and must never be committed)
 neatoos/build/

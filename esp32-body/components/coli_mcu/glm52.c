@@ -579,3 +579,143 @@ coli_status_t coli_glm52_attention_decode(
         stats->projections.peak_workspace_bytes;
     return COLI_OK;
 }
+
+size_t coli_glm52_dense_mlp_required_workspace(
+    const coli_glm52_config_t *config, size_t q4_workspace_bytes)
+{
+    if (!config || config->dense_intermediate_size == 0) return 0;
+    size_t total = 0;
+    size_t q4_aligned;
+    return align_float(q4_workspace_bytes, &q4_aligned) &&
+                   add_floats(&total, config->dense_intermediate_size) &&
+                   add_floats(&total, config->dense_intermediate_size) &&
+                   add_size(total, q4_aligned, &total)
+               ? total
+               : 0;
+}
+
+coli_status_t coli_glm52_dense_mlp_decode(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t layer, const float *input, size_t input_count, float *output,
+    size_t output_count, void *workspace, size_t workspace_bytes,
+    coli_q4_stats_t *stats)
+{
+    if (!model || !config || !input || !output || !workspace || !stats ||
+        layer >= config->num_layers || layer >= config->first_dense_layers ||
+        input_count != config->hidden_size || output_count != input_count)
+        return COLI_ERR_ARGUMENT;
+    memset(stats, 0, sizeof(*stats));
+    void *cursor = workspace;
+    size_t remaining = workspace_bytes;
+    float *gate;
+    float *up;
+    if (!carve_floats(&cursor, &remaining, config->dense_intermediate_size,
+                      &gate) ||
+        !carve_floats(&cursor, &remaining, config->dense_intermediate_size,
+                      &up))
+        return COLI_ERR_RANGE;
+
+    const bmoq_tensor_t *weights;
+    const bmoq_tensor_t *scales;
+    coli_q4_stats_t q4;
+    coli_status_t status = find_q4_pair(
+        model, coli_glm52_dense_gate_id(layer), &weights, &scales);
+    if (status != COLI_OK) return status;
+    status = coli_q4_matvec(model, weights, scales, input, input_count, gate,
+                            config->dense_intermediate_size, cursor, remaining,
+                            &q4);
+    if (status != COLI_OK) return status;
+    accumulate_q4(stats, &q4);
+    status = find_q4_pair(model, coli_glm52_dense_up_id(layer), &weights,
+                          &scales);
+    if (status != COLI_OK) return status;
+    status = coli_q4_matvec(model, weights, scales, input, input_count, up,
+                            config->dense_intermediate_size, cursor, remaining,
+                            &q4);
+    if (status != COLI_OK) return status;
+    accumulate_q4(stats, &q4);
+    status = coli_ops_silu_gated(gate, up, gate,
+                                 config->dense_intermediate_size);
+    if (status != COLI_OK) return status;
+    status = find_q4_pair(model, coli_glm52_dense_down_id(layer), &weights,
+                          &scales);
+    if (status != COLI_OK) return status;
+    status = coli_q4_matvec(model, weights, scales, gate,
+                            config->dense_intermediate_size, output,
+                            output_count, cursor, remaining, &q4);
+    if (status == COLI_OK) accumulate_q4(stats, &q4);
+    return status;
+}
+
+size_t coli_glm52_dense_layer_required_workspace(
+    const coli_glm52_config_t *config, uint32_t token_count,
+    size_t q4_workspace_bytes)
+{
+    if (!config) return 0;
+    const size_t attention = coli_glm52_attention_required_workspace(
+        config, token_count, q4_workspace_bytes);
+    const size_t mlp = coli_glm52_dense_mlp_required_workspace(
+        config, q4_workspace_bytes);
+    if (attention == 0 || mlp == 0) return 0;
+    size_t mlp_stage = 0;
+    if (!add_floats(&mlp_stage, config->hidden_size) ||
+        !add_floats(&mlp_stage, config->hidden_size) ||
+        !add_size(mlp_stage, mlp, &mlp_stage))
+        return 0;
+    return attention > mlp_stage ? attention : mlp_stage;
+}
+
+coli_status_t coli_glm52_dense_layer_decode(
+    const coli_model_t *model, const coli_glm52_config_t *config,
+    uint32_t layer, uint32_t position, const float *input,
+    size_t input_count, float *output, size_t output_count,
+    coli_kv_cache_t *state, void *workspace, size_t workspace_bytes,
+    coli_glm52_layer_stats_t *stats)
+{
+    if (!model || !config || !input || !output || !state || !workspace ||
+        !stats || layer >= config->first_dense_layers ||
+        input_count != config->hidden_size || output_count != input_count)
+        return COLI_ERR_ARGUMENT;
+    memset(stats, 0, sizeof(*stats));
+    coli_status_t status = coli_glm52_attention_decode(
+        model, config, layer, position, input, input_count, output,
+        output_count, state, workspace, workspace_bytes, &stats->attention);
+    if (status != COLI_OK) return status;
+    status = coli_ops_residual_add(input, output, output, output_count);
+    if (status != COLI_OK) return status;
+
+    void *cursor = workspace;
+    size_t remaining = workspace_bytes;
+    float *mlp_output;
+    float *normalized;
+    if (!carve_floats(&cursor, &remaining, config->hidden_size, &mlp_output) ||
+        !carve_floats(&cursor, &remaining, config->hidden_size, &normalized))
+        return COLI_ERR_RANGE;
+    status = read_dense_f32(model, coli_glm52_post_attention_norm_id(layer),
+                            mlp_output, config->hidden_size);
+    if (status != COLI_OK) return status;
+    status = coli_ops_rmsnorm(output, mlp_output, normalized,
+                              config->hidden_size,
+                              config->rms_norm_epsilon);
+    if (status != COLI_OK) return status;
+    status = coli_glm52_dense_mlp_decode(
+        model, config, layer, normalized, config->hidden_size, mlp_output,
+        config->hidden_size, cursor, remaining, &stats->mlp);
+    if (status != COLI_OK) return status;
+    status = coli_ops_residual_add(output, mlp_output, output, output_count);
+    if (status != COLI_OK) return status;
+    const size_t stage_buffers = workspace_bytes - remaining;
+    size_t mlp_buffers;
+    if (!mul_size(config->dense_intermediate_size, 2u * sizeof(float),
+                  &mlp_buffers) ||
+        !add_size(mlp_buffers, stats->mlp.peak_workspace_bytes,
+                  &mlp_buffers))
+        return COLI_ERR_RANGE;
+    if (!add_size(stage_buffers, mlp_buffers, &mlp_buffers))
+        return COLI_ERR_RANGE;
+    stats->peak_workspace_bytes =
+        stats->attention.peak_workspace_bytes > mlp_buffers
+            ? stats->attention.peak_workspace_bytes
+            : mlp_buffers;
+    return COLI_OK;
+}

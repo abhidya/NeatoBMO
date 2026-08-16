@@ -78,6 +78,8 @@ def patch_clips(library: Path, publish: Path, keys: list[str]) -> dict:
             for alias in catalog["sounds"]:
                 if alias.get("canonical_key") == sound["canonical_key"]:
                     alias.update(mapping)
+                    if alias["key"] == key:
+                        alias["label"] = source["label"]
                     if "editorial_trim_start_seconds" in source:
                         alias["editorial_trim_start_seconds"] = source[
                             "editorial_trim_start_seconds"]
@@ -85,13 +87,17 @@ def patch_clips(library: Path, publish: Path, keys: list[str]) -> dict:
                               if item["canonical_key"] == sound["canonical_key"])
             page_sound["slots"] = slots
             page_sound["content_seconds"] = seconds
+            page_sound["label"] = source["label"]
 
         payload = bytes(module)
         digest = hashlib.sha256(payload).hexdigest()
         filename = f"bmo-page-{page_index:03d}-{digest[:12]}.bin"
         new_path = old_path.with_name(filename)
-        new_path.write_bytes(payload)
+        # A metadata-only relabel keeps the same payload path. Avoid opening
+        # that file for replacement: a full disk could otherwise truncate the
+        # only valid copy before writing a byte.
         if new_path != old_path:
+            new_path.write_bytes(payload)
             old_path.unlink()
         page["file"] = f"modules/{filename}"
         page["sha256"] = digest

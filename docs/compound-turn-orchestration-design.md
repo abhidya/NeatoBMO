@@ -2,7 +2,8 @@
 
 ## Source of truth
 
-- **Status:** Proposed
+- **Status:** Implemented (2026-08-15; `neatobmo/turns.py`, `bmo_web.py`
+  `chat_events`/`chat_turn`, NDJSON `/chat`)
 - **Last refreshed:** 2026-08-15
 - **Primary product surfaces:** browser wake-word chat, `/chat`, instant routines,
   Brain generation, stage cues, browser/robot thinking sounds, conversation history
@@ -56,7 +57,10 @@ migration is justified for this change. The finite routine vocabulary remains a
 rule-based problem, while browser-native Fetch response streams can carry
 incremental events over the existing POST request.
 
-## Problem and root cause
+## Problem and root cause (historical — pre-implementation)
+
+The behavior below describes the state before `neatobmo/turns.py` landed; it
+is retained as the motivation and regression corpus for the implemented fix.
 
 ### Observed behavior
 
@@ -88,13 +92,13 @@ This creates three defects:
 - **order dependence:** registry order, not spoken order, chooses the result;
 - **incorrect memory:** history says BMO answered content it ignored.
 
-### Adjacent UX defect
+### Adjacent UX defect (resolved)
 
-The browser currently enters `thinking` state and starts thinking audio before
-the server has classified the turn. A routine-only request therefore looks like
-an LLM request even though the Brain is never used. The browser audio loop also
-requests `/thinking-sound`, but `bmo_web.py` has no route serving that resource;
-the WAV assets do exist under `assets/bmo-thinking-sounds/`.
+The thinking UI/audio start is now driven by the `brain_started` event rather
+than request submission, so a routine-only turn no longer looks like an LLM
+request. The browser audio loop requests `/thinking-sound`, which is served by
+an allowlisted route in `bmo_web.py` (names `hum`, `blip-a`, `blip-b`) from
+`assets/bmo-thinking-sounds/`.
 
 ## Brand
 
@@ -213,7 +217,7 @@ the WAV assets do exist under `assets/bmo-thinking-sounds/`.
 
 ## Terminology and domain model
 
-Implementation should add these terms to `CONTEXT.md` when the feature lands:
+These terms are recorded in `CONTEXT.md` (the feature landed 2026-08-15):
 
 - **Turn planner** — pure logic that converts one original utterance into an
   ordered `TurnPlan`. It does not perform body actions or call the Brain.
@@ -722,26 +726,25 @@ whether a real NLP dependency is ever warranted.
 
 ## Acceptance criteria
 
-- [ ] Every meaningful part of the input is local-resolved or preserved in the
+- [x] Every meaningful part of the input is local-resolved or preserved in the
   Residual request.
-- [ ] Multiple local requests execute in source order.
-- [ ] The Brain is called if and only if meaningful residual work exists.
-- [ ] A routine result is visible before Brain completion.
-- [ ] Thinking UI/audio starts only on `brain_started` and stops before generated
+- [x] Multiple local requests execute in source order.
+- [x] The Brain is called if and only if meaningful residual work exists.
+- [x] A routine result is visible before Brain completion.
+- [x] Thinking UI/audio starts only on `brain_started` and stops before generated
   speech begins or on any terminal state.
-- [ ] No body action is replayed by retry or transport recovery.
-- [ ] History contains one original user entry and one combined assistant entry.
-- [ ] Existing routine-only and Brain-only tests continue to pass.
-- [ ] Compound planner, orchestration, HTTP-stream, and browser-state tests pass.
-- [ ] No new runtime dependency is introduced without evidence from the
+- [x] No body action is replayed by retry or transport recovery.
+- [x] History contains one original user entry and one combined assistant entry.
+- [x] Existing routine-only and Brain-only tests continue to pass.
+- [x] Compound planner, orchestration, HTTP-stream, and browser-state tests pass.
+- [x] No new runtime dependency is introduced without evidence from the
   regression corpus.
 
 ## Open questions
 
-- [ ] Should routine results be spoken locally immediately when robot speech is
-  selected but a long residual generation will follow, or should robot speech
-  remain serialized through the current sound-bank job? Owner: product/voice;
-  impact: perceived latency and flash wear.
+- [x] Routine results are spoken immediately when robot speech is selected;
+  residual speech waits behind that owned speech job and remains cancellable.
+  This preserves perceived latency without overlapping access to the body.
 - [ ] Should a failed local body action be retried as text-only, moved into the
   Residual request, or simply reported as partial failure? Owner: Body policy;
   impact: safety and duplicate actions.

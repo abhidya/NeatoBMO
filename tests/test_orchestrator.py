@@ -138,6 +138,10 @@ class BodyControllerTests(unittest.TestCase):
 
 
 class ChatTurnTests(unittest.TestCase):
+    def test_persona_maps_onboard_brain_storage_to_butt_sound(self):
+        self.assertIn("SSD brain lives onboard", self.web.PERSONA)
+        self.assertIn("[sound:butt]", self.web.PERSONA)
+
     """chat_turn through the module seams, with every collaborator faked."""
 
     def setUp(self):

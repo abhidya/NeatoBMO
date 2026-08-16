@@ -10,7 +10,7 @@
 #include "coli_store.h"
 
 #define CONFIG_OFFSET 8192u
-#define FIXTURE_TENSOR_COUNT 14u
+#define FIXTURE_TENSOR_COUNT 21u
 #define QUANT_GROUP 2u
 
 static void put_u16(uint8_t *p, uint16_t value)
@@ -127,7 +127,7 @@ static void write_fixture(const char *path)
     uint8_t *fixed = header + BMOQ_MODEL_CONFIG_OFFSET;
     put_u32(fixed, BMOQ_MODEL_ARCH_GLM52);
     put_u32(fixed + 8, 64);
-    put_u32(fixed + 12, 512);
+    put_u32(fixed + 12, 16);
     put_u32(fixed + 16, 2);
     put_u32(fixed + 20, 4);
     put_u32(fixed + 28, 8);
@@ -146,6 +146,9 @@ static void write_fixture(const char *path)
         {coli_glm52_q_b_id(0), 32, 32, "q_b"},
         {coli_glm52_kv_b_id(0), 56, 12, "kv_b"},
         {coli_glm52_o_id(0), 64, 32, "o"},
+        {coli_glm52_dense_gate_id(0), 16, 64, "mlp_gate"},
+        {coli_glm52_dense_up_id(0), 16, 64, "mlp_up"},
+        {coli_glm52_dense_down_id(0), 64, 16, "mlp_down"},
     };
     uint64_t offsets[sizeof(matrices) / sizeof(matrices[0])][2];
     uint64_t data_offset = align_up(CONFIG_OFFSET + sizeof(config));
@@ -169,11 +172,12 @@ static void write_fixture(const char *path)
         data_offset = align_up(data_offset + scale_bytes);
     }
     const uint32_t norm_ids[] = {coli_glm52_input_norm_id(0),
+                                 coli_glm52_post_attention_norm_id(0),
                                  coli_glm52_q_a_norm_id(0),
                                  coli_glm52_kv_a_norm_id(0)};
-    const uint32_t norm_counts[] = {64, 32, 12};
-    uint64_t norm_offsets[3];
-    for (size_t i = 0; i < 3; ++i) {
+    const uint32_t norm_counts[] = {64, 64, 32, 12};
+    uint64_t norm_offsets[4];
+    for (size_t i = 0; i < 4; ++i) {
         norm_offsets[i] = data_offset;
         write_tensor_entry(file, norm_ids[i], BMOQ_DTYPE_F32, 0,
                            norm_counts[i], 1, data_offset,
@@ -200,7 +204,7 @@ static void write_fixture(const char *path)
             assert(fwrite(&one, 1, sizeof(one), file) == sizeof(one));
         }
     }
-    for (size_t i = 0; i < 3; ++i) {
+    for (size_t i = 0; i < 4; ++i) {
         assert(fseeko(file, (off_t)norm_offsets[i], SEEK_SET) == 0);
         for (uint32_t element = 0; element < norm_counts[i]; ++element) {
             const float one = 1.0f;
@@ -298,6 +302,30 @@ int main(void)
     for (size_t i = 0; i < 64; ++i) assert(output[i] == 0.0f);
     assert(attention_stats.projections.weight_bytes_read > 0);
     assert(attention_stats.peak_workspace_bytes <= attention_workspace_bytes);
+    const size_t mlp_workspace_bytes =
+        coli_glm52_dense_mlp_required_workspace(&config, 64);
+    void *mlp_workspace = malloc(mlp_workspace_bytes);
+    assert(mlp_workspace);
+    coli_q4_stats_t mlp_stats;
+    assert(coli_glm52_dense_mlp_decode(
+               &model, &config, 0, input, 64, output, 64, mlp_workspace,
+               mlp_workspace_bytes, &mlp_stats) == COLI_OK);
+    for (size_t i = 0; i < 64; ++i) assert(output[i] == 0.0f);
+    assert(mlp_stats.weight_bytes_read > 0);
+    free(mlp_workspace);
+
+    const size_t layer_workspace_bytes =
+        coli_glm52_dense_layer_required_workspace(&config, 1, 64);
+    void *layer_workspace = malloc(layer_workspace_bytes);
+    assert(layer_workspace);
+    coli_glm52_layer_stats_t layer_stats;
+    assert(coli_glm52_dense_layer_decode(
+               &model, &config, 0, 0, input, 64, output, 64, state,
+               layer_workspace, layer_workspace_bytes, &layer_stats) ==
+           COLI_OK);
+    for (size_t i = 0; i < 64; ++i) assert(output[i] == input[i]);
+    assert(layer_stats.peak_workspace_bytes <= layer_workspace_bytes);
+    free(layer_workspace);
     free(attention_workspace);
     coli_kv_cache_close(state);
     free(full_state_bytes);
@@ -311,12 +339,18 @@ int main(void)
     production_shape.qk_rope_head_dim = 64;
     production_shape.qk_head_dim = 256;
     production_shape.v_head_dim = 256;
+    production_shape.dense_intermediate_size = 12288;
     production_shape.max_context_tokens = 4096;
     const size_t production_workspace =
         coli_glm52_attention_required_workspace(&production_shape, 4096,
                                                 64u * 1024u);
     assert(production_workspace > 0);
     assert(production_workspace < 224u * 1024u);
+    const size_t production_layer_workspace =
+        coli_glm52_dense_layer_required_workspace(&production_shape, 4096,
+                                                  1024);
+    assert(production_layer_workspace > 0);
+    assert(production_layer_workspace < 152u * 1024u);
 
     coli_model_close(&model);
     coli_store_close(store);

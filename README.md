@@ -16,9 +16,11 @@ full architecture and milestones.
   ESP32 OTA — the header is a mini BMO screen playing animated sprite faces
   that react to replies, think, blink, glance around, and doze off.
 - **Voice in**: browser mic (Chrome/Edge) with a **"hey BMO" wake word**.
-- **Voice out**: neural BMO clone (Piper prosody → RVC timbre,
-  [tools/bmo_voice_server.py](tools/bmo_voice_server.py)) spoken through the
-  robot's own speaker via validated sound-flash banks; espeak-ng fallback.
+- **Voice out**: reviewed authentic BMO catalog clips stream natively through
+  the robot's speaker with **no flash write**; synthetic speech uses the neural
+  BMO clone (Piper prosody → RVC timbre,
+  [tools/bmo_voice_server.py](tools/bmo_voice_server.py)) packed into
+  validated sound-flash banks; espeak-ng fallback.
 - **Instant routines** ([neatobmo/routines.py](neatobmo/routines.py)): a
   Siri-style pattern layer answers everyday utterances ("hello!", "dance!",
   "wanna play a game?") from precached scripts with zero model latency, with
@@ -26,9 +28,9 @@ full architecture and milestones.
 - **Stage cues** ([neatobmo/cues.py](neatobmo/cues.py)): best-effort "tool
   calling" for the small local model — replies carry bracketed cues
   (`[happy] [wiggle] [sound:videogames]`) that a forgiving parser turns into
-  faces, sounds, and dance moves performed on the body. Default **soundbyte**
-  mode caps spoken words to a short burst and lets the performance carry
-  the reply.
+  faces, sounds, and dance moves performed on the body. Default **soundboard**
+  mode answers with a reviewed authentic clip and lets the performance carry
+  the reply; `soundbyte` caps spoken words to a short burst.
 - **Emoji faces** on the Neato's LCD over both paths: ESP32
   ([esp32-body/src/faces.c](esp32-body/src/faces.c)) and a 1:1 Python port
   ([neatobmo/emote.py](neatobmo/emote.py)) used automatically over USB.
@@ -103,6 +105,10 @@ cd esp32-body
 pio run -t upload   # first flash over USB; later flashes via OTA (POST /ota)
 ```
 
+The project pins PlatformIO's application upload offset to `0x20000`, matching
+the first slot in `partitions.csv`. Do not override it with the ESP-IDF default
+`0x10000`; that address is outside this project's bootable OTA slots.
+
 A fresh flash boots a **`NeatoBMO-Setup`** WiFi AP: join it and browse to
 `http://192.168.4.1/wifi` to save your WiFi credentials (persisted in NVS —
 no secrets are compiled into the firmware).
@@ -139,8 +145,9 @@ All knobs are environment variables with sensible defaults:
 | `NEATOBMO_BRAIN_ENGINE` | `/Volumes/2TB/colibri.../olmoe` | Colibri engine binary (auto-start) |
 | `NEATOBMO_BRAIN_SNAP` | `/Volumes/2TB/models/olmoe-snap` | OLMoE model snapshot (auto-start) |
 | `NEATOBMO_VOICE` | `http://127.0.0.1:8486` | Neural BMO voice server |
-| `NEATOBMO_SPEECH` | `soundbyte` | `soundbyte` caps spoken words to a short burst; `full` speaks whole replies |
+| `NEATOBMO_SPEECH` | `soundboard` | `soundboard` answers with a reviewed clip first (synth fallback); `soundbyte` caps spoken words to a short burst; `full` speaks whole replies |
 | `NEATOBMO_SPEECH_BURST` | `1.5` | Soundbyte burst length in seconds |
+| `NEATOBMO_SOUNDBOARD_CATALOG` | `docs/bmo-soundboard/catalog.json` | Soundboard clip catalog path |
 
 ## Local development
 
@@ -178,9 +185,9 @@ history lives in [docs/sound-burn-forensics.md](docs/sound-burn-forensics.md).
 | `bmo_web.py` | The one web console (`:8485`): chat + routines + stage cues, TTS speech, soundboard, guarded bank install/restore, raw console, sensors, OTA proxy |
 | `bmo_brain_server.py` | OpenAI-compatible wrapper around Colibri's OLMoE + espeak-ng TTS |
 | `bmo_agent.py` | CLI tool-calling agent (drive/sounds/LED via any OpenAI-compatible LLM) |
-| `neatobmo/` | Robot library: transports, typed commands, sounds, behaviors, emoji faces (`emote.py`), stage cues (`cues.py`), instant routines (`routines.py`), TTS banks (`tts_bank.py`) |
+| `neatobmo/` | Robot library: transports, typed commands, sounds, behaviors, emoji faces (`emote.py`), stage cues (`cues.py`), instant routines (`routines.py`), compound-turn planner (`turns.py`), soundboard clip voice (`soundboard_voice.py`), TTS banks (`tts_bank.py`) |
 | `esp32-body/` | ESP32-S3 firmware (PlatformIO + ESP-IDF): USB CDC-ACM host ↔ Neato, dashboard + WS bridge + `/emote` + `/speak` + streaming `/soundbank` + OTA (`:80`), log mirror (`:2323`), raw bridge (`:3333`), debug-UART bridge (`:3334`) |
-| `esp32-body/components/coli_mcu/` | On-MCU brain foundation: USB-MSC storage, BMOQ model format, streamed Q4 matvec kernel — **not** an OLMoE runtime yet |
+| `esp32-body/components/coli_mcu/` | On-MCU brain runtime: USB-MSC storage, BMOQ model format, streamed Q4 kernels, OLMoE prompt-to-text (MoE + KV cache + streamed attention) plus experimental Gemma/GLM-5.2 paths |
 | `tools/` | Voice server, sound-bank builders/probes, firmware archive/patch tooling, lidar viewer, cue demo/profiler, ESP32 web simulator |
 | `tests/` | Unit tests (see Local development) |
 | `assets/` | Captured sound-bank evidence, validated BMO bank, original recovery image |
@@ -204,6 +211,16 @@ history lives in [docs/sound-burn-forensics.md](docs/sound-burn-forensics.md).
 | [docs/usb-os-observability.md](docs/usb-os-observability.md) | What the XV OS exposes over USB |
 | [docs/hardware-readback-options.md](docs/hardware-readback-options.md) | Options for reading firmware off the MCU |
 | [docs/neato-os-research-index.md](docs/neato-os-research-index.md) | Index of the OS research notes |
+| [docs/compound-turn-orchestration-design.md](docs/compound-turn-orchestration-design.md) | Compound-turn planner design + NDJSON event contract (implemented) |
+| [docs/bmo-voice-research.md](docs/bmo-voice-research.md) | Soundboard clip catalog, trust/quarantine model, and voice ladder |
+| [docs/neatoos-source-census.md](docs/neatoos-source-census.md) | Census of NeatoOS source slices and probe tools |
+| [docs/neatoos-execution-probe.md](docs/neatoos-execution-probe.md) | NeatoOS execution-probe experiments and checksum-gate result |
+| [docs/neato-p10-jtag-result.md](docs/neato-p10-jtag-result.md) | P10 JTAG no-TAP result (security-bit verdict) |
+| [docs/neato-serial-upload-readback-plan.md](docs/neato-serial-upload-readback-plan.md) | Serial upload-save-area matrix plan and gated harness |
+| [docs/neato-hardware-access.md](docs/neato-hardware-access.md) | Case/mainboard access, P6/P10 pinouts, J3 ERASE warning |
+| [docs/esp32-neato-direct-wiring.md](docs/esp32-neato-direct-wiring.md) | Permanent ESP32-S3→Cruz direct-wiring installation plan |
+| [docs/esp32-neato-usb-resilience.md](docs/esp32-neato-usb-resilience.md) | ESP32 USB CDC re-enumeration/resilience design |
+| [docs/neato-envelope-crypto.md](docs/neato-envelope-crypto.md) | `.enc` envelope crypto analysis |
 
 ## Status
 
@@ -211,14 +228,14 @@ history lives in [docs/sound-burn-forensics.md](docs/sound-burn-forensics.md).
   command round-trip over the LAN.
 - ✅ Web console with Adventure Time skin, animated sprite-face avatar,
   wake-word voice input, and live connection status.
-- ✅ Instant routine layer + stage-cue performances (soundbyte-first).
+- ✅ Instant routine layer + compound-turn planner + stage-cue performances (clip-first).
 - ✅ Neural BMO voice (Piper → RVC) speaking through the robot's own speaker
   via validated sound-flash banks.
 - 🚧 Native streamed speech awaits the XV `PlaySound File` firmware patch
   ([FIRMWARE_SOUND_PATCH.md](FIRMWARE_SOUND_PATCH.md)); until then any
   sound-flash write is governed by the write gates.
-- 🚧 On-MCU brain groundwork (`coli_mcu`): storage + model format + kernels,
-  not a runtime yet.
+- 🚧 On-MCU brain runtime (`coli_mcu`): OLMoE prompt-to-text works; physical
+  device latency/parity still being proven.
 
 ## License & credits
 

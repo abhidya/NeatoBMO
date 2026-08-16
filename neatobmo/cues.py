@@ -64,7 +64,9 @@ SOUND_CUES = {
 # Spoken canonical lines can own the voice channel. Short reactions such as
 # beep/yeah/json only decorate factual speech; treating them as replacements
 # would make answers like the current time inaudible.
-VOICE_SOUND_CUES = frozenset({"hello", "bmotime", "videogames", "homeboys"})
+VOICE_SOUND_CUES = frozenset({
+    "hello", "bmotime", "videogames", "homeboys", "butt",
+})
 
 
 def has_voice_sound(steps):
@@ -81,6 +83,8 @@ SOUND_ALIASES = {
     "happy": "yeah", "excited": "yeah", "wiggle": "yeah",
     "music": "videogames", "song": "videogames", "sing": "videogames",
     "game": "videogames", "dance": "bmotime",
+    "brain": "butt", "disk": "butt", "drive": "butt",
+    "memory": "butt", "ssd": "butt", "storage": "butt",
     "surprise": "json", "surprised": "json", "wow": "json",
     "spin": "beep", "alert": "beep", "sad": "beep", "scared": "beep",
 }

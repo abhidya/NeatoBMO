@@ -35,7 +35,7 @@ Ranked causes:
 - Treat received bytes—not a non-null device handle—as proof that the link is
   alive.
 - Exercise the link periodically with a harmless status command. The existing
-  30-second `GetCharger` heartbeat provides this probe.
+  10-second `GetCharger` heartbeat provides this probe.
 - Recycle the CDC session after bounded consecutive TX failures or a bounded
   interval without RX, then let the single connection task reopen and
   reinitialize it.
@@ -91,7 +91,7 @@ can perform this final recovery step yet.
 1. Flash the hardened build and capture `neato_usb` logs over Wi-Fi (`:2323`) so
    observation does not depend on the USB path under test.
 2. Leave the Neato idle past the previously failing interval.
-3. Confirm each 30-second `GetCharger` produces RX. A missing-RX interval should
+3. Confirm each 10-second `GetCharger` produces RX. A missing-RX interval should
    log a CDC recycle, followed by `Neato connected!` and fresh version/charger
    output without replugging.
 4. Repeat at least five idle/wake cycles and one physical unplug/replug cycle.

@@ -45,7 +45,7 @@ the cause remains unresolved.
 |---|---|---|---|
 | `/Users/abdulrehmanbhidya/Documents/neato/tools/backup_neato.py` | USB `GetVersion`, `Help`, `Get*` queries + transcript + checksums | Configuration/calibration and help output snapshot | Explicitly not application flash dump |
 | `/Users/abdulrehmanbhidya/Documents/neato/tools/firmware_probe.py` | Raw byte capture + optional xmodem receive of `readflash` | Determines whether XMODEM readback ever starts, captures raw replies | Readback appears unavailable for stock app writes in current tests |
-| `/Users/abdulrehmanbhidya/Documents/neato/FIRMWARE_ARCHIVE.md` | Status log | Read-only snapshot and readback status tracked in single source | Readback gate is closed for application probes on stock 2.4 and 2.5, and for sound readflash |
+| `/Users/abdulrehmanbhidya/Documents/neato/FIRMWARE_ARCHIVE.md` | Status log | Read-only snapshot and readback status tracked in single source | Readback gate is closed for application/sound probes on stock 2.4, 2.5, 2.7, and 3.1; on 3.1 `region + dump + Size` selects the upload receiver (ENQ), not readback |
 
 ## Stock command behavior confirmed in write/read experiments
 
@@ -64,13 +64,14 @@ the cause remains unresolved.
 | Backup profile restore assumptions | `docs/SOUND_BANK_UPDATE.md` and `neatobmo/tts_bank.py` validate by post-write `GetVersion` + slot-sweep | Operational gate for destructive writes |
 | 2.5 versus 2.7 USB API | Complete read-only session snapshots | `Help`, `Help Upload`, `Help PlaySound`, `Help SetConfig`, and `Help SetSystemMode` are byte-identical. |
 | 3.1 USB API | Complete read-only session snapshot | `Help` omits `GetLifeStatLog`, `GetSysLog`, `SetDistanceCal`, and `SetWallFollower`; `Help Upload` omits `dump` and `xmodem`. Other probed help replies above remain identical. |
+| 3.1 upload parser fork | 2026-08-16 serial matrix | `Upload code dump Size <n>` and `Upload sound dump Size <n>` select the host upload receiver (ENQ) even though `dump` is unadvertised; no readback payload follows. |
 
 ## Known unknowns / next safe checks
 
 1. Whether any undocumented boot/recovery command is available at USB layer other than what `Help` exposes.  
 2. Exact conditions under which `Upload` subcommands (`dump/readflash`) can become valid in non-stock patched firmware.  
 3. Whether a different service/developer image exposes additional system modes;
-   stock 2.4 and 2.5 do not.
+   stock 2.4 through 3.1 do not.
 4. Whether the 0x1A-terminated ASCII parser is complete enough when firmware emits mixed binary text + telemetry bursts outside command mode.  
 5. Full command universe beyond `Help` output; 2.5/2.7 match for the probed
    replies while 3.1 is smaller, but undocumented service commands may exist.
