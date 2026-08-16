@@ -12,6 +12,13 @@ CFLAGS := -std=c11 -D_FILE_OFFSET_BITS=64 -D_POSIX_C_SOURCE=200809L \
           -Wall -Wextra -Werror -I../components/coli_mcu/include
 LDLIBS := -lm
 
+# The benchmark driver is the same runtime, built to actually finish. -O2 is
+# worth ~2.2x over the unoptimized default and was verified to leave the Q4
+# matvec output bit-identical; -ffp-contract=off keeps it that way by denying
+# the compiler FMA contraction the ESP32 build would not perform.
+# _DARWIN_C_SOURCE re-exposes mmap under the strict _POSIX_C_SOURCE above.
+HOST_TOOL_CFLAGS := $(CFLAGS) -O2 -ffp-contract=off -D_DARWIN_C_SOURCE
+
 MCU := ../components/coli_mcu
 BUILD := build
 
@@ -95,10 +102,14 @@ $(BUILD)/test_coli_inkling: test_coli_inkling.c $(MCU)/model_format.c \
 		$(MCU)/inkling_generate.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
+# store_mmap.c replaces store_file.c for the host benchmark only: it serves the
+# identical bytes through one memcpy instead of an fseeko+fread syscall pair,
+# without loading the model or widening any workspace. The firmware keeps
+# store_file.c / usb_store.c and its bounded SSD paging.
 $(BUILD)/bmoq-eval-olmoe: bmoq_eval_olmoe.c $(MCU)/model_format.c \
-		$(MCU)/store_file.c $(MCU)/q4_matvec.c $(MCU)/ops.c \
+		$(MCU)/store_mmap.c $(MCU)/q4_matvec.c $(MCU)/ops.c \
 		$(MCU)/moe.c $(MCU)/kv_cache.c $(MCU)/olmoe.c | $(BUILD)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
+	$(CC) $(HOST_TOOL_CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(BUILD)/test_bmoq_eval_olmoe: test_bmoq_eval_olmoe.c \
 		$(MCU)/model_format.c $(MCU)/store_file.c $(MCU)/q4_matvec.c \

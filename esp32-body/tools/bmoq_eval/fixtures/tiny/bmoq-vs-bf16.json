@@ -73,7 +73,7 @@
         "cosine": 0.9999214138240896,
         "count": 6,
         "delta_nll": 0.01704491147805709,
-        "kl": 0.00010490097755697912,
+        "kl": 0.00010490097755705798,
         "perplexity_increase_pct": 1.7191004850892533,
         "reference_nll": 1.0678394131332056,
         "reference_perplexity": 2.909087369112989,
@@ -88,7 +88,7 @@
         "cosine": 0.9999214138240896,
         "count": 6,
         "delta_nll": 0.01704491147805709,
-        "kl": 0.00010490097755697912,
+        "kl": 0.00010490097755705798,
         "perplexity_increase_pct": 1.7191004850892533,
         "reference_nll": 1.0678394131332056,
         "reference_perplexity": 2.909087369112989,
@@ -105,7 +105,7 @@
         "cosine": 0.9999286069906893,
         "count": 3,
         "delta_nll": 0.012793897229906648,
-        "kl": 7.98541937467132e-05,
+        "kl": 7.985419374681735e-05,
         "perplexity_increase_pct": 1.2876089277916059,
         "reference_nll": 1.0293329160304043,
         "reference_perplexity": 2.7991979116829886,
@@ -120,7 +120,7 @@
         "cosine": 0.9999142206574901,
         "count": 3,
         "delta_nll": 0.021295925726207532,
-        "kl": 0.00012994776136724504,
+        "kl": 0.0001299477613672986,
         "perplexity_increase_pct": 2.1524302234436465,
         "reference_nll": 1.106345910236007,
         "reference_perplexity": 3.023290809775065,
@@ -137,7 +137,7 @@
         "cosine": 0.9999214138240896,
         "count": 6,
         "delta_nll": 0.01704491147805709,
-        "kl": 0.00010490097755697912,
+        "kl": 0.00010490097755705798,
         "perplexity_increase_pct": 1.7191004850892533,
         "reference_nll": 1.0678394131332056,
         "reference_perplexity": 2.909087369112989,
@@ -154,7 +154,7 @@
         "cosine": 0.9999214138240896,
         "count": 6,
         "delta_nll": 0.01704491147805709,
-        "kl": 0.00010490097755697912,
+        "kl": 0.00010490097755705798,
         "perplexity_increase_pct": 1.7191004850892533,
         "reference_nll": 1.0678394131332056,
         "reference_perplexity": 2.909087369112989,
@@ -171,7 +171,7 @@
         "cosine": 0.9999354098855714,
         "count": 2,
         "delta_nll": 0.012838634472620347,
-        "kl": 8.038659257638182e-05,
+        "kl": 8.038659257653762e-05,
         "perplexity_increase_pct": 1.2921403574972068,
         "reference_nll": 1.067250034852437,
         "reference_perplexity": 2.907373321361651,
@@ -186,7 +186,7 @@
         "cosine": 0.999931475238854,
         "count": 2,
         "delta_nll": 0.01686587177320331,
-        "kl": 9.754188301837406e-05,
+        "kl": 9.754188301851685e-05,
         "perplexity_increase_pct": 1.7008903575769674,
         "reference_nll": 1.0672500348524367,
         "reference_perplexity": 2.9073733213616504,
@@ -201,7 +201,7 @@
         "cosine": 0.9998973563478438,
         "count": 2,
         "delta_nll": 0.021430228188347833,
-        "kl": 0.0001367744570761815,
+        "kl": 0.00013677445707611945,
         "perplexity_increase_pct": 2.1661504676469434,
         "reference_nll": 1.069018169694743,
         "reference_perplexity": 2.912518496772251,
@@ -223,13 +223,55 @@
     }
   },
   "comparison": "bf16_reference_vs_bmoq_candidate",
+  "distributions": {
+    "cosine": {
+      "max": 0.9999408079153407,
+      "min": 0.9998855460908359,
+      "p50": 0.9999285579408173,
+      "p90": 0.9999383271836081,
+      "p99": 0.9999405598421675,
+      "p99_9": 0.9999407831080234
+    },
+    "delta_nll": {
+      "max": 0.022501070569442616,
+      "min": 0.005343923086275515,
+      "p50": 0.020346365833109115,
+      "p90": 0.021777215659828597,
+      "p99": 0.022428685078481215,
+      "p99_9": 0.022493832020346476
+    },
+    "kl": {
+      "max": 0.00014380241107687453,
+      "min": 2.7387634061605548e-05,
+      "p50": 0.00012822886650521305,
+      "p90": 0.0001385939810841721,
+      "p99": 0.00014328156807760428,
+      "p99_9": 0.0001437503267769475
+    },
+    "router_overlap": {
+      "max": 1.0,
+      "min": 0.875,
+      "p50": 1.0,
+      "p90": 1.0,
+      "p99": 1.0,
+      "p99_9": 1.0
+    },
+    "target_logit_delta": null
+  },
+  "outliers": {
+    "catastrophic_flips": 0,
+    "catastrophic_rate": null,
+    "definition": "BF16 top-1 was correct with probability >= 0.9 and BMOQ changed the top-1 token",
+    "high_confidence_tokens": 0,
+    "samples": []
+  },
   "overall": {
     "candidate_nll": 1.0848843246112627,
     "candidate_perplexity": 2.9590975041870804,
     "cosine": 0.9999214138240896,
     "count": 6,
     "delta_nll": 0.01704491147805709,
-    "kl": 0.00010490097755697912,
+    "kl": 0.00010490097755705798,
     "perplexity_increase_pct": 1.7191004850892533,
     "reference_nll": 1.0678394131332056,
     "reference_perplexity": 2.909087369112989,
@@ -242,6 +284,14 @@
     "tokens_compared": 6,
     "top1_changed": 0,
     "top1_same": 6
+  },
+  "provenance": {
+    "candidate": null,
+    "corpus_sha256_match": null,
+    "reference": null,
+    "warnings": [
+      "missing run_meta on one or both sides; corpus identity unverified"
+    ]
   },
   "reference": {
     "path": "esp32-body/tools/bmoq_eval/fixtures/tiny/bf16-results.jsonl",

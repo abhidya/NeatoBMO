@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 import sys
 import tempfile
@@ -108,10 +109,23 @@ class BmoqEvalTests(unittest.TestCase):
             copy_validated_jsonl(source, output)
             self.assertEqual(len(load_eval_records(output)), 6)
 
-    def test_hf_router_topk_uses_probability_values_without_extra_softmax(self) -> None:
-        route = router_topk([[[0.70, 0.20, 0.10]]], token_index=0, top_k=2)
+    def test_hf_router_topk_softmaxes_gate_logits_into_runtime_units(self) -> None:
+        # output_router_logits=True returns raw pre-softmax gate logits, while
+        # coli_mcu select_routes reports post-softmax routing weights. Without
+        # this softmax the router-weight error measures a units mismatch.
+        route = router_topk([[[2.0, 1.0, 0.0]]], token_index=0, top_k=2)
         self.assertEqual(route[0]["top_experts"], [0, 1])
-        self.assertEqual(route[0]["weights"], [0.70, 0.20])
+        expected = [math.exp(2.0), math.exp(1.0), math.exp(0.0)]
+        total = sum(expected)
+        self.assertAlmostEqual(route[0]["weights"][0], expected[0] / total, places=9)
+        self.assertAlmostEqual(route[0]["weights"][1], expected[1] / total, places=9)
+        self.assertAlmostEqual(sum(route[0]["weights"]), 0.9096, places=3)
+
+    def test_hf_router_topk_renormalizes_only_when_model_asks(self) -> None:
+        # OLMoE-1B-7B-0924 ships norm_topk_prob=false, so the default must not
+        # renormalize; the flag exists to mirror models that do.
+        route = router_topk([[[2.0, 1.0, 0.0]]], token_index=0, top_k=2, norm_topk_prob=True)
+        self.assertAlmostEqual(sum(route[0]["weights"]), 1.0, places=9)
 
     def test_hf_sparse_logit_payload_keeps_full_nll_without_dense_infinity(self) -> None:
         nll, dense, sparse = logit_payload([10.0, 9.0, 0.0], token_id=2, top_k=2)

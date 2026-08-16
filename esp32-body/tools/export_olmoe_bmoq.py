@@ -217,6 +217,32 @@ def pack_header(config: OlmoeConfig, tensor_count: int, directory_offset: int, q
     return bytes(header)
 
 
+def quantize_rows(block, group_size: int) -> tuple[bytes, bytes]:
+    """Vectorized equivalent of quantize_row over a contiguous block of rows.
+
+    Bit-for-bit identical to the scalar path: the scale is derived and applied
+    in float64 exactly as the original Python did (only its stored copy is
+    narrowed to float32), and numpy's rint uses the same half-to-even rule as
+    Python's round(). Producing packed nibbles and scales in one pass also
+    removes the duplicate quantization the row writers used to perform.
+    """
+    import numpy as np
+
+    rows, columns = block.shape
+    if columns % group_size:
+        raise ValueError("Q4 group size must divide every matrix row")
+    grouped = block.reshape(rows, columns // group_size, group_size)
+    max_abs = np.abs(grouped).max(axis=2)
+    nonzero = max_abs > 0.0
+    scale = np.where(nonzero, max_abs / 7.0, 1.0)
+    quantized = np.rint(grouped / scale[:, :, None])
+    np.clip(quantized, -8.0, 7.0, out=quantized)
+    quantized = np.where(nonzero[:, :, None], quantized, 0.0)
+    nibbles = (quantized.reshape(rows, columns).astype(np.int8) & 0x0F).astype(np.uint8)
+    packed = nibbles[:, 0::2] | (nibbles[:, 1::2] << 4)
+    return packed.tobytes(), scale.astype(np.float32).tobytes()
+
+
 def quantize_row(row: list[float], group_size: int) -> tuple[bytes, bytes]:
     if len(row) % group_size:
         raise ValueError("Q4 group size must divide every matrix row")
@@ -244,17 +270,36 @@ def dense_writer(source: TensorSource, tensor: LogicalTensor) -> Callable[[objec
     return write
 
 
-def q4_writers(source: TensorSource, tensor: LogicalTensor, group_size: int) -> tuple[Callable[[object], None], Callable[[object], None]]:
-    rows = tensor.shape[0]
+ROW_BLOCK = 512
 
+
+def _quantized_blocks(source: TensorSource, tensor: LogicalTensor, group_size: int):
+    """Yield (packed, scales) per row block, quantizing each row exactly once."""
+    rows = tensor.shape[0]
+    block_reader = getattr(source, "rows_block", None)
+    for first in range(0, rows, ROW_BLOCK):
+        count = min(ROW_BLOCK, rows - first)
+        if block_reader is not None:
+            yield quantize_rows(block_reader(tensor.hf_name, first, count), group_size)
+            continue
+        packed = bytearray()
+        scales = bytearray()
+        for row_index in range(first, first + count):
+            row_packed, row_scales = quantize_row(
+                source.row_floats(tensor.hf_name, row_index), group_size
+            )
+            packed.extend(row_packed)
+            scales.extend(row_scales)
+        yield bytes(packed), bytes(scales)
+
+
+def q4_writers(source: TensorSource, tensor: LogicalTensor, group_size: int) -> tuple[Callable[[object], None], Callable[[object], None]]:
     def write_weights(output: object) -> None:
-        for row_index in range(rows):
-            packed, _ = quantize_row(source.row_floats(tensor.hf_name, row_index), group_size)
+        for packed, _ in _quantized_blocks(source, tensor, group_size):
             output.write(packed)
 
     def write_scales(output: object) -> None:
-        for row_index in range(rows):
-            _, scales = quantize_row(source.row_floats(tensor.hf_name, row_index), group_size)
+        for _, scales in _quantized_blocks(source, tensor, group_size):
             output.write(scales)
 
     return write_weights, write_scales
@@ -393,15 +438,54 @@ class SafetensorSource:
             header_len = struct.unpack("<Q", file.read(8))[0]
             return json.loads(file.read(header_len).decode("utf-8"))
 
+    def _shard_header(self, path: Path) -> tuple[dict, int]:
+        """Parse each shard header once; re-parsing it per row made export of a
+        7B checkpoint take days rather than minutes."""
+        cached = getattr(self, "_header_cache", None)
+        if cached is None:
+            cached = {}
+            self._header_cache = cached
+        entry = cached.get(path)
+        if entry is None:
+            with path.open("rb") as file:
+                header_len = struct.unpack("<Q", file.read(8))[0]
+                header = json.loads(file.read(header_len).decode("utf-8"))
+            entry = (header, 8 + header_len)
+            cached[path] = entry
+        return entry
+
     def _tensor_meta(self, name: str) -> tuple[Path, dict, int]:
         try:
             path = self.index[name]
         except KeyError as exc:
             raise KeyError(f"missing tensor {name}") from exc
+        header, data_start = self._shard_header(path)
+        return path, header[name], data_start
+
+    def rows_block(self, name: str, first_row: int, row_count: int):
+        """Read a contiguous row block as float64, matching row_floats' values."""
+        import numpy as np
+
+        shape = self.shape(name)
+        if len(shape) != 2:
+            raise ValueError(f"{name} is not a matrix")
+        columns = shape[1]
+        path, meta, data_start = self._tensor_meta(name)
+        dtype = meta["dtype"]
+        item_bytes = {"F32": 4, "F16": 2, "BF16": 2}[dtype]
+        count = row_count * columns
+        start = data_start + int(meta["data_offsets"][0]) + first_row * columns * item_bytes
         with path.open("rb") as file:
-            header_len = struct.unpack("<Q", file.read(8))[0]
-            header = json.loads(file.read(header_len).decode("utf-8"))
-        return path, header[name], 8 + header_len
+            file.seek(start)
+            raw = file.read(count * item_bytes)
+        if dtype == "F32":
+            values = np.frombuffer(raw, dtype="<f4")
+        elif dtype == "F16":
+            values = np.frombuffer(raw, dtype="<f2")
+        else:
+            widened = np.frombuffer(raw, dtype="<u2").astype(np.uint32) << 16
+            values = widened.view(np.float32)
+        return values.astype(np.float64).reshape(row_count, columns)
 
     def shape(self, name: str) -> tuple[int, ...]:
         _, meta, _ = self._tensor_meta(name)

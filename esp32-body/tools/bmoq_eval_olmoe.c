@@ -16,17 +16,33 @@
 #define DEFAULT_WORKSPACE_BYTES (8u * 1024u * 1024u)
 #define DEFAULT_KV_PAGE_BYTES (16u * 1024u * 1024u)
 
+/* Emitting the full vocabulary for every target token costs roughly 27 GB of
+ * JSON at benchmark scale, so full distributions are sampled on a stride while
+ * every record still carries the target logit and a sparse top-k. Both runners
+ * must use the same stride for the paired records to stay aligned. */
+#define DEFAULT_LOGIT_TOP_K 32u
+
 typedef struct {
     const char *model_path;
     const char *tokenizer_path;
     const char *input_path;
     const char *output_path;
     const char *kv_cache_path;
+    const char *corpus_sha256;
+    const char *tool_commit;
+    const char *variant_name;
     size_t workspace_bytes;
     size_t kv_page_bytes;
+    uint32_t logit_top_k;
+    uint32_t full_logit_stride;
     bool dump_logits;
     bool dump_routing;
 } args_t;
+
+typedef struct {
+    uint32_t token_id;
+    float logit;
+} logit_slot_t;
 
 typedef struct {
     char sample_id[128];
@@ -71,6 +87,8 @@ static bool parse_args(int argc, char **argv, args_t *args)
     memset(args, 0, sizeof(*args));
     args->workspace_bytes = DEFAULT_WORKSPACE_BYTES;
     args->kv_page_bytes = DEFAULT_KV_PAGE_BYTES;
+    args->logit_top_k = DEFAULT_LOGIT_TOP_K;
+    args->variant_name = "bmoq-host";
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--model") == 0 && i + 1 < argc)
             args->model_path = argv[++i];
@@ -82,10 +100,24 @@ static bool parse_args(int argc, char **argv, args_t *args)
             args->output_path = argv[++i];
         else if (strcmp(argv[i], "--kv-cache") == 0 && i + 1 < argc)
             args->kv_cache_path = argv[++i];
+        else if (strcmp(argv[i], "--corpus-sha256") == 0 && i + 1 < argc)
+            args->corpus_sha256 = argv[++i];
+        else if (strcmp(argv[i], "--tool-commit") == 0 && i + 1 < argc)
+            args->tool_commit = argv[++i];
+        else if (strcmp(argv[i], "--variant-name") == 0 && i + 1 < argc)
+            args->variant_name = argv[++i];
         else if (strcmp(argv[i], "--workspace-bytes") == 0 && i + 1 < argc) {
             if (!parse_size(argv[++i], &args->workspace_bytes)) return false;
         } else if (strcmp(argv[i], "--kv-page-bytes") == 0 && i + 1 < argc) {
             if (!parse_size(argv[++i], &args->kv_page_bytes)) return false;
+        } else if (strcmp(argv[i], "--logit-top-k") == 0 && i + 1 < argc) {
+            size_t value = 0;
+            if (!parse_size(argv[++i], &value) || value > UINT32_MAX) return false;
+            args->logit_top_k = (uint32_t)value;
+        } else if (strcmp(argv[i], "--full-logit-stride") == 0 && i + 1 < argc) {
+            size_t value = 0;
+            if (!parse_size(argv[++i], &value) || value > UINT32_MAX) return false;
+            args->full_logit_stride = (uint32_t)value;
         } else if (strcmp(argv[i], "--teacher-force") == 0) {
         } else if (strcmp(argv[i], "--dump-logits") == 0)
             args->dump_logits = true;
@@ -258,6 +290,47 @@ static coli_status_t observe_layer(void *context, uint32_t layer,
     return COLI_OK;
 }
 
+/* Descending by logit, ties broken by the lower token id. Mirrors the
+ * reference runner's sorted(range(V), key=(-logit, index)) exactly so the two
+ * files order identical distributions identically. */
+static bool logit_precedes(const logit_slot_t *candidate, const logit_slot_t *held)
+{
+    if (candidate->logit != held->logit) return candidate->logit > held->logit;
+    return candidate->token_id < held->token_id;
+}
+
+static void select_top_logits(const float *logits, size_t count, uint32_t top_k,
+                              logit_slot_t *out, size_t *out_count)
+{
+    size_t filled = 0;
+    for (size_t index = 0; index < count; ++index) {
+        logit_slot_t candidate = {.token_id = (uint32_t)index,
+                                  .logit = logits[index]};
+        if (filled == top_k && !logit_precedes(&candidate, &out[filled - 1u]))
+            continue;
+        size_t slot = filled < top_k ? filled : top_k - 1u;
+        while (slot > 0 && logit_precedes(&candidate, &out[slot - 1u])) {
+            out[slot] = out[slot - 1u];
+            --slot;
+        }
+        out[slot] = candidate;
+        if (filled < top_k) ++filled;
+    }
+    *out_count = filled;
+}
+
+static void write_logit_top_k(FILE *output, const logit_slot_t *slots,
+                              size_t count)
+{
+    fputc('[', output);
+    for (size_t i = 0; i < count; ++i) {
+        if (i) fputc(',', output);
+        fprintf(output, "{\"token_id\":%u,\"logit\":%.9g}", slots[i].token_id,
+                slots[i].logit);
+    }
+    fputc(']', output);
+}
+
 static void write_float_array(FILE *output, const float *values, size_t count)
 {
     fputc('[', output);
@@ -321,13 +394,40 @@ static int run(const args_t *args)
 
     void *workspace = malloc(args->workspace_bytes);
     float *logits = malloc((size_t)model.config.vocab_size * sizeof(*logits));
-    if (!workspace || !logits) return COLI_ERR_NO_MEMORY;
+    logit_slot_t *top_logits =
+        args->logit_top_k ? malloc((size_t)args->logit_top_k * sizeof(*top_logits))
+                          : NULL;
+    if (!workspace || !logits || (args->logit_top_k && !top_logits))
+        return COLI_ERR_NO_MEMORY;
 
     FILE *input = fopen(args->input_path, "r");
     FILE *output = fopen(args->output_path, "w");
     if (!input || !output) return COLI_ERR_IO;
     char *line = malloc(MAX_LINE_BYTES);
     if (!line) return COLI_ERR_NO_MEMORY;
+
+    fputs("{\"schema_version\":1,\"record_type\":\"run_meta\",\"checkpoint_id\":",
+          output);
+    write_json_string(output, args->model_path);
+    fputs(",\"tokenizer_id\":", output);
+    write_json_string(output, args->tokenizer_path);
+    fputs(",\"corpus_sha256\":", output);
+    write_json_string(output, args->corpus_sha256 ? args->corpus_sha256 : "");
+    fputs(",\"tool_commit\":", output);
+    write_json_string(output, args->tool_commit ? args->tool_commit : "");
+    fprintf(output,
+            ",\"logit_top_k\":%u,\"full_logit_stride\":%u,"
+            "\"workspace_bytes\":%zu,\"kv_page_bytes\":%zu,"
+            "\"variant\":{\"name\":",
+            args->logit_top_k, args->full_logit_stride, args->workspace_bytes,
+            args->kv_page_bytes);
+    write_json_string(output, args->variant_name);
+    fputs(",\"model\":", output);
+    write_json_string(output, args->model_path);
+    fprintf(output,
+            ",\"tensor_precision\":\"BMOQ\",\"quant_group_size\":%u,"
+            "\"runtime\":\"coli_mcu\"}}\n",
+            model.config.quant_group);
 
     while (fgets(line, MAX_LINE_BYTES, input)) {
         sample_t sample;
@@ -353,23 +453,41 @@ static int run(const args_t *args)
                 &stats);
             if (status != COLI_OK) return status;
             uint32_t target = sample.tokens[position + 1u];
+            /* Keyed on the record's own position, not a running counter, so
+             * the same records carry full logits however the corpus is split
+             * across parallel workers. */
+            bool emit_dense =
+                args->dump_logits ||
+                (args->full_logit_stride &&
+                 (position + 1u) % args->full_logit_stride == 0);
             fputs("{\"schema_version\":1,\"record_type\":\"token_eval\","
                   "\"sample_id\":",
                   output);
             write_json_string(output, sample.sample_id);
             fprintf(output, ",\"position\":%zu,\"token_id\":%u,"
-                            "\"nll\":%.9g,\"logits\":",
+                            "\"nll\":%.9g,\"target_logit\":%.9g,\"logits\":",
                     position + 1u, target,
-                    nll_for_token(logits, model.config.vocab_size, target));
-            if (args->dump_logits)
+                    nll_for_token(logits, model.config.vocab_size, target),
+                    logits[target]);
+            if (emit_dense)
                 write_float_array(output, logits, model.config.vocab_size);
             else
                 fputs("[]", output);
+            fputs(",\"logit_top_k\":", output);
+            if (args->logit_top_k) {
+                size_t selected = 0;
+                select_top_logits(logits, model.config.vocab_size,
+                                  args->logit_top_k, top_logits, &selected);
+                write_logit_top_k(output, top_logits, selected);
+            } else {
+                fputs("[]", output);
+            }
             fputs(",\"category\":", output);
             write_json_string(output, sample.category);
-            fprintf(output, ",\"sequence_length\":%zu,"
-                            "\"variant\":{\"name\":\"bmoq-host\",\"model\":",
+            fprintf(output, ",\"sequence_length\":%zu,\"variant\":{\"name\":",
                     sample.token_count);
+            write_json_string(output, args->variant_name);
+            fputs(",\"model\":", output);
             write_json_string(output, args->model_path);
             fputs(",\"tokenizer\":", output);
             write_json_string(output, args->tokenizer_path);
@@ -391,6 +509,7 @@ static int run(const args_t *args)
     free(line);
     fclose(output);
     fclose(input);
+    free(top_logits);
     free(logits);
     free(workspace);
     coli_model_close(&model);

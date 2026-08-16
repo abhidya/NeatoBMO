@@ -11,6 +11,19 @@ from typing import Any, Iterable
 
 SCHEMA_VERSION = 1
 
+# Provenance records are additive: they carry the Phase 2 reproducibility
+# metadata (checkpoint, tokenizer, corpus, tool commit, host, libraries) and are
+# skipped by every token-pairing code path so older token-only files stay valid.
+RUN_META_RECORD = "run_meta"
+
+RUN_META_REQUIRED = (
+    "checkpoint_id",
+    "corpus_sha256",
+    "tokenizer_id",
+    "tool_commit",
+    "variant",
+)
+
 
 @dataclass(frozen=True)
 class EvalRecord:
@@ -24,6 +37,15 @@ class EvalRecord:
     sequence_length: int
     variant: dict[str, Any]
     router: list[dict[str, Any]]
+    target_logit: float | None = None
+
+
+def validate_run_meta(raw: dict[str, Any], path: Path | None = None) -> dict[str, Any]:
+    where = f"{path}: " if path else ""
+    for key in RUN_META_REQUIRED:
+        if key not in raw:
+            raise ValueError(f"{where}run_meta missing {key}")
+    return raw
 
 
 def read_jsonl(path: Path) -> Iterable[dict[str, Any]]:
@@ -46,9 +68,19 @@ def write_jsonl(path: Path, records: Iterable[dict[str, Any]]) -> None:
             file.write("\n")
 
 
+def read_run_meta(path: Path) -> dict[str, Any] | None:
+    """Return the provenance record for a results file, if it carries one."""
+    for raw in read_jsonl(path):
+        if raw.get("record_type") == RUN_META_RECORD:
+            return validate_run_meta(raw, path)
+    return None
+
+
 def load_eval_records(path: Path) -> list[EvalRecord]:
     records: list[EvalRecord] = []
     for raw in read_jsonl(path):
+        if raw.get("record_type") == RUN_META_RECORD:
+            continue
         records.append(validate_eval_record(raw, path))
     return records
 
@@ -92,6 +124,7 @@ def validate_eval_record(raw: dict[str, Any], path: Path | None = None) -> EvalR
             raise ValueError(f"{where}router entries require layer, top_experts, weights")
         if len(layer["top_experts"]) != len(layer["weights"]):
             raise ValueError(f"{where}router expert and weight lengths differ")
+    target_logit = raw.get("target_logit")
     return EvalRecord(
         sample_id=str(raw["sample_id"]),
         position=int(raw["position"]),
@@ -106,6 +139,7 @@ def validate_eval_record(raw: dict[str, Any], path: Path | None = None) -> EvalR
         sequence_length=int(raw["sequence_length"]),
         variant=dict(raw["variant"]),
         router=list(router),
+        target_logit=None if target_logit is None else float(target_logit),
     )
 
 
