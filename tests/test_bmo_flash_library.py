@@ -63,6 +63,15 @@ class PublishedFlashLibraryTests(unittest.TestCase):
                 self.assertLessEqual(segment["content_bytes"], record.pcm_byte_count)
                 self.assertEqual(segment["slot_bytes"], record.pcm_byte_count)
 
+    def test_reviewed_board_clips_exclude_the_reported_lead_ins(self):
+        sounds = {sound["key"]: sound for sound in self.catalog["sounds"]}
+        games = sounds["101-28055268-who-wants-to-play-video-games"]
+        love = sounds["101-28062487-i-love-you"]
+        self.assertEqual(games["editorial_trim_start_seconds"], 2.25)
+        self.assertLess(games["content_seconds"], 3.5)
+        self.assertEqual(love["editorial_trim_start_seconds"], 1.57)
+        self.assertLess(love["content_seconds"], 1.8)
+
 
 class BuilderTests(unittest.TestCase):
     def test_best_slots_prefers_fewest_then_least_waste(self):

@@ -29,8 +29,8 @@ The prepared repository catalog contains 230 entries (224 unique) across 36
 SHA-256-addressed Neato modules:
 
 - 197 verified from the official Cartoon Network Beemo app source set;
-- 23 indexed from dedicated BMO board metadata and quarantined pending a
-  human listening review;
+- 23 indexed from dedicated BMO board metadata; 21 remain quarantined and two
+  human-reviewed clips have had their non-BMO lead-ins removed;
 - 10 existing manually reviewed clips.
 
 See `docs/bmo-soundboard/catalog.json`.

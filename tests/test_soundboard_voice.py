@@ -21,14 +21,14 @@ class SoundboardVoiceTests(unittest.TestCase):
         board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
         self.assertIsNotNone(board.synth("It is BMO time"))
         suggestions = board.suggestions("Tell me that you love me")
-        self.assertNotIn("i love you", suggestions)
+        self.assertIn("i love you", suggestions)
 
-    def test_unreviewed_soundboard_imports_are_quarantined(self):
+    def test_only_individually_reviewed_soundboard_imports_are_enabled(self):
         board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
         self.assertEqual(board.count, 230)
-        self.assertEqual(board.trusted_count, 207)
-        self.assertEqual(board.quarantined_count, 23)
-        self.assertIsNone(board.resolve("I love you"))
+        self.assertEqual(board.trusted_count, 209)
+        self.assertEqual(board.quarantined_count, 21)
+        self.assertIsNotNone(board.resolve("I love you"))
         self.assertTrue(board.render_for_review("101-28062487-i-love-you")
                         .startswith(b"RIFF"))
 

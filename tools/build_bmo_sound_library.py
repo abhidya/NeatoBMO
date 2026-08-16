@@ -34,6 +34,14 @@ PACK_ALIGNMENT = 4
 SAMPLE_RATE = 22_050
 OFFICIAL_PREFIX = "Payload/Beemo.app/www/"
 
+# Human-reviewed cleanup points for board files that prepend a site ident or
+# transition effect to the actual BMO line. Rebuilding from the source MP3 must
+# preserve these edits instead of reintroducing the unwanted audio.
+EDITORIAL_TRIM_START_SECONDS = {
+    "101-28055268-who-wants-to-play-video-games": 2.25,
+    "101-28062487-i-love-you": 1.57,
+}
+
 
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -67,13 +75,17 @@ def download(url: str, destination: Path) -> None:
     destination.write_bytes(data)
 
 
-def normalize(source: Path, destination: Path) -> None:
+def normalize(source: Path, destination: Path, trim_start: float = 0.0) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
+    filters = []
+    if trim_start:
+        filters += [f"atrim=start={trim_start}", "asetpts=PTS-STARTPTS"]
+    filters += ["highpass=f=70", "lowpass=f=10000",
+                "alimiter=limit=0.891251"]
     command = [
         "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
         "-i", str(source), "-map_metadata", "-1", "-ac", "1", "-ar", str(SAMPLE_RATE),
-        "-c:a", "pcm_s16le", "-af",
-        "highpass=f=70,lowpass=f=10000,alimiter=limit=0.891251",
+        "-c:a", "pcm_s16le", "-af", ",".join(filters),
         str(destination),
     ]
     subprocess.run(command, check=True)
@@ -278,7 +290,11 @@ def build(output: Path, board_htmls: list[Path], beemo_ipa: Path | None) -> dict
                 entry["source_mp3_bytes"] = mp3_path.stat().st_size
                 entry["source_mp3_sha256"] = sha256(mp3_path)
                 if not wav_path.exists():
-                    normalize(mp3_path, wav_path)
+                    normalize(mp3_path, wav_path,
+                              EDITORIAL_TRIM_START_SECONDS.get(entry["key"], 0))
+            trim_start = EDITORIAL_TRIM_START_SECONDS.get(entry["key"])
+            if trim_start is not None:
+                entry["editorial_trim_start_seconds"] = trim_start
             entry["wav"] = str(wav_path.relative_to(output))
             entry["audio"] = wav_metadata(wav_path)
             runtime_mp3 = runtime_dir / f"{entry['key']}.mp3"
@@ -322,14 +338,60 @@ def build(output: Path, board_htmls: list[Path], beemo_ipa: Path | None) -> dict
     return catalog
 
 
+def refresh_existing(output: Path) -> dict:
+    """Reapply editorial trims and rebuild metadata/packs without the web inputs."""
+    catalog_path = output / "catalog.json"
+    catalog = json.loads(catalog_path.read_text())
+    entries = catalog["sounds"]
+    for entry in entries:
+        trim_start = EDITORIAL_TRIM_START_SECONDS.get(entry["key"])
+        wav_path = output / entry["wav"]
+        if trim_start is not None:
+            source = output / entry["source_mp3"]
+            normalize(source, wav_path, trim_start)
+            entry["editorial_trim_start_seconds"] = trim_start
+            runtime_mp3 = output / entry["esp32_mp3"]
+            encode_runtime_mp3(wav_path, runtime_mp3)
+        entry["audio"] = wav_metadata(wav_path)
+        runtime_mp3 = output / entry["esp32_mp3"]
+        entry["esp32_mp3_bytes"] = runtime_mp3.stat().st_size
+        entry["esp32_mp3_sha256"] = sha256(runtime_mp3)
+        entry.pop("duplicate_of", None)
+
+    canonical_by_pcm = {}
+    for entry in entries:
+        pcm_hash = entry["audio"]["pcm_sha256"]
+        if pcm_hash in canonical_by_pcm:
+            entry["duplicate_of"] = canonical_by_pcm[pcm_hash]
+        else:
+            canonical_by_pcm[pcm_hash] = entry["key"]
+    catalog["unique_pcm_count"] = len(canonical_by_pcm)
+    catalog["packs"] = {
+        "web_wav": write_pack(output, entries, "bmo-sounds.wav.pack",
+                              "wav", "wav_pack"),
+        "esp32_mp3": write_pack(output, entries, "bmo-sounds.mp3.pack",
+                                "esp32_mp3", "esp32_pack"),
+    }
+    catalog_path.write_text(json.dumps(catalog, indent=2,
+                                       ensure_ascii=False) + "\n")
+    return catalog
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--board-html", type=Path, action="append", required=True)
+    parser.add_argument("--board-html", type=Path, action="append")
     parser.add_argument("--beemo-ipa", type=Path)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--refresh-existing", action="store_true")
     args = parser.parse_args()
-    catalog = build(args.output.resolve(), [path.resolve() for path in args.board_html],
-                    args.beemo_ipa.resolve() if args.beemo_ipa else None)
+    if args.refresh_existing:
+        catalog = refresh_existing(args.output.resolve())
+    else:
+        if not args.board_html:
+            parser.error("--board-html is required unless --refresh-existing is used")
+        catalog = build(args.output.resolve(),
+                        [path.resolve() for path in args.board_html],
+                        args.beemo_ipa.resolve() if args.beemo_ipa else None)
     print(json.dumps({
         "output": str(args.output.resolve()),
         "sounds": catalog["sound_count"],

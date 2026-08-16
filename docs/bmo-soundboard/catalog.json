@@ -177,20 +177,19 @@
     },
     {
       "index": 4,
-      "file": "modules/bmo-page-004-98cd89dff441.bin",
+      "file": "modules/bmo-page-004-509f8a165f94.bin",
       "bytes": 770048,
-      "sha256": "98cd89dff4417b71819d84e03c5982dd38b7c011e1c366e61eb73774969af0a8",
-      "transport_additive_checksum_hex": "0x0468d4e6",
+      "sha256": "509f8a165f9475331af66570849dfed5aeb72d7079f3f3670e673f4d61eaa9aa",
+      "transport_additive_checksum_hex": "0x0401e0dd",
       "sounds": [
         {
           "canonical_key": "101-28055268-who-wants-to-play-video-games",
           "label": "Who wants to play video games",
           "slots": [
             10,
-            2,
-            1
+            2
           ],
-          "content_seconds": 5.677868,
+          "content_seconds": 3.427846,
           "alias_count": 1
         },
         {
@@ -397,10 +396,10 @@
     },
     {
       "index": 8,
-      "file": "modules/bmo-page-008-adf70c506bd1.bin",
+      "file": "modules/bmo-page-008-bf6e72afb847.bin",
       "bytes": 770048,
-      "sha256": "adf70c506bd1690326a0cc69046368b34e563a53ff47d5031852fc2adf343f54",
-      "transport_additive_checksum_hex": "0x0436ad1d",
+      "sha256": "bf6e72afb847fc21613fdf99768f93d72061f46bf0cea19ee1c15e59ae29ba96",
+      "transport_additive_checksum_hex": "0x03f1d802",
       "sounds": [
         {
           "canonical_key": "official-kompy-general-games04-kompieskastle-alt1",
@@ -416,10 +415,9 @@
           "canonical_key": "101-28062487-i-love-you",
           "label": "I love you",
           "slots": [
-            6,
-            10
+            6
           ],
-          "content_seconds": 3.326395,
+          "content_seconds": 1.756372,
           "alias_count": 1
         },
         {
@@ -2873,8 +2871,8 @@
     },
     {
       "page": 4,
-      "module": "modules/bmo-page-004-98cd89dff441.bin",
-      "module_sha256": "98cd89dff4417b71819d84e03c5982dd38b7c011e1c366e61eb73774969af0a8",
+      "module": "modules/bmo-page-004-509f8a165f94.bin",
+      "module_sha256": "509f8a165f9475331af66570849dfed5aeb72d7079f3f3670e673f4d61eaa9aa",
       "slots": [
         0,
         7
@@ -2999,24 +2997,21 @@
     },
     {
       "page": 4,
-      "module": "modules/bmo-page-004-98cd89dff441.bin",
-      "module_sha256": "98cd89dff4417b71819d84e03c5982dd38b7c011e1c366e61eb73774969af0a8",
+      "module": "modules/bmo-page-004-509f8a165f94.bin",
+      "module_sha256": "509f8a165f9475331af66570849dfed5aeb72d7079f3f3670e673f4d61eaa9aa",
       "slots": [
         10,
-        2,
-        1
+        2
       ],
       "commands": [
         "PlaySound 10",
-        "PlaySound 2",
-        "PlaySound 1"
+        "PlaySound 2"
       ],
       "slot_seconds": [
         1.991338,
-        1.869388,
-        1.867392
+        1.869388
       ],
-      "content_seconds": 5.677868,
+      "content_seconds": 3.427846,
       "segments": [
         {
           "slot": 10,
@@ -3029,18 +3024,10 @@
         {
           "slot": 2,
           "pcm_offset": 214032,
-          "content_bytes": 82440,
+          "content_bytes": 63350,
           "slot_bytes": 82440,
-          "content_seconds": 1.869388,
+          "content_seconds": 1.436508,
           "slot_seconds": 1.869388
-        },
-        {
-          "slot": 1,
-          "pcm_offset": 131600,
-          "content_bytes": 80136,
-          "slot_bytes": 82352,
-          "content_seconds": 1.817143,
-          "slot_seconds": 1.867392
         }
       ],
       "key": "101-28055268-who-wants-to-play-video-games",
@@ -3048,12 +3035,13 @@
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/28055268-who-wants-to-play-video-games",
-      "canonical_key": "101-28055268-who-wants-to-play-video-games"
+      "canonical_key": "101-28055268-who-wants-to-play-video-games",
+      "editorial_trim_start_seconds": 2.25
     },
     {
       "page": 4,
-      "module": "modules/bmo-page-004-98cd89dff441.bin",
-      "module_sha256": "98cd89dff4417b71819d84e03c5982dd38b7c011e1c366e61eb73774969af0a8",
+      "module": "modules/bmo-page-004-509f8a165f94.bin",
+      "module_sha256": "509f8a165f9475331af66570849dfed5aeb72d7079f3f3670e673f4d61eaa9aa",
       "slots": [
         6,
         8,
@@ -3357,37 +3345,26 @@
     },
     {
       "page": 8,
-      "module": "modules/bmo-page-008-adf70c506bd1.bin",
-      "module_sha256": "adf70c506bd1690326a0cc69046368b34e563a53ff47d5031852fc2adf343f54",
+      "module": "modules/bmo-page-008-bf6e72afb847.bin",
+      "module_sha256": "bf6e72afb847fc21613fdf99768f93d72061f46bf0cea19ee1c15e59ae29ba96",
       "slots": [
-        6,
-        10
+        6
       ],
       "commands": [
-        "PlaySound 6",
-        "PlaySound 10"
+        "PlaySound 6"
       ],
       "slot_seconds": [
-        2.008662,
-        1.991338
+        2.008662
       ],
-      "content_seconds": 3.326395,
+      "content_seconds": 1.756372,
       "segments": [
         {
           "slot": 6,
           "pcm_offset": 311312,
-          "content_bytes": 88582,
+          "content_bytes": 77456,
           "slot_bytes": 88582,
-          "content_seconds": 2.008662,
+          "content_seconds": 1.756372,
           "slot_seconds": 2.008662
-        },
-        {
-          "slot": 10,
-          "pcm_offset": 667664,
-          "content_bytes": 58112,
-          "slot_bytes": 87818,
-          "content_seconds": 1.317732,
-          "slot_seconds": 1.991338
         }
       ],
       "key": "101-28062487-i-love-you",
@@ -3395,7 +3372,8 @@
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/28062487-i-love-you",
-      "canonical_key": "101-28062487-i-love-you"
+      "canonical_key": "101-28062487-i-love-you",
+      "editorial_trim_start_seconds": 1.57
     },
     {
       "page": 6,
@@ -3649,8 +3627,8 @@
     },
     {
       "page": 8,
-      "module": "modules/bmo-page-008-adf70c506bd1.bin",
-      "module_sha256": "adf70c506bd1690326a0cc69046368b34e563a53ff47d5031852fc2adf343f54",
+      "module": "modules/bmo-page-008-bf6e72afb847.bin",
+      "module_sha256": "bf6e72afb847fc21613fdf99768f93d72061f46bf0cea19ee1c15e59ae29ba96",
       "slots": [
         8,
         9
@@ -5122,8 +5100,8 @@
     },
     {
       "page": 8,
-      "module": "modules/bmo-page-008-adf70c506bd1.bin",
-      "module_sha256": "adf70c506bd1690326a0cc69046368b34e563a53ff47d5031852fc2adf343f54",
+      "module": "modules/bmo-page-008-bf6e72afb847.bin",
+      "module_sha256": "bf6e72afb847fc21613fdf99768f93d72061f46bf0cea19ee1c15e59ae29ba96",
       "slots": [
         0,
         7
@@ -6328,8 +6306,8 @@
     },
     {
       "page": 8,
-      "module": "modules/bmo-page-008-adf70c506bd1.bin",
-      "module_sha256": "adf70c506bd1690326a0cc69046368b34e563a53ff47d5031852fc2adf343f54",
+      "module": "modules/bmo-page-008-bf6e72afb847.bin",
+      "module_sha256": "bf6e72afb847fc21613fdf99768f93d72061f46bf0cea19ee1c15e59ae29ba96",
       "slots": [
         3,
         19
@@ -6877,8 +6855,8 @@
     },
     {
       "page": 8,
-      "module": "modules/bmo-page-008-adf70c506bd1.bin",
-      "module_sha256": "adf70c506bd1690326a0cc69046368b34e563a53ff47d5031852fc2adf343f54",
+      "module": "modules/bmo-page-008-bf6e72afb847.bin",
+      "module_sha256": "bf6e72afb847fc21613fdf99768f93d72061f46bf0cea19ee1c15e59ae29ba96",
       "slots": [
         2,
         1
@@ -7919,8 +7897,8 @@
     },
     {
       "page": 4,
-      "module": "modules/bmo-page-004-98cd89dff441.bin",
-      "module_sha256": "98cd89dff4417b71819d84e03c5982dd38b7c011e1c366e61eb73774969af0a8",
+      "module": "modules/bmo-page-004-509f8a165f94.bin",
+      "module_sha256": "509f8a165f9475331af66570849dfed5aeb72d7079f3f3670e673f4d61eaa9aa",
       "slots": [
         3,
         19
@@ -10315,8 +10293,8 @@
     },
     {
       "page": 8,
-      "module": "modules/bmo-page-008-adf70c506bd1.bin",
-      "module_sha256": "adf70c506bd1690326a0cc69046368b34e563a53ff47d5031852fc2adf343f54",
+      "module": "modules/bmo-page-008-bf6e72afb847.bin",
+      "module_sha256": "bf6e72afb847fc21613fdf99768f93d72061f46bf0cea19ee1c15e59ae29ba96",
       "slots": [
         0,
         7
