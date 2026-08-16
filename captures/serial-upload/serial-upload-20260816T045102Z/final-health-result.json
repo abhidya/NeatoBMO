@@ -1,0 +1,45 @@
+{
+  "captured_at_utc": "2026-08-16T05:26:23.132862+00:00",
+  "factory_fallback_observed": false,
+  "installed_application": "2.5.15893",
+  "port": "/dev/cu.usbmodem143301",
+  "rows": [
+    {
+      "bytes": 643,
+      "command": "GetVersion",
+      "escaped_text": "GetVersion\r\nComponent,Major,Minor,Build\r\nModelID,-1,XV12,\r\nConfigID,1,,\r\nSerial Number,WTD41611DD,0037829,P\r\nSoftware,2,5,15893\r\nBatteryType,1,NIMH_12CELL,\r\nBlowerType,1,BLOWER_ORIG,\r\nBrushSpeed,1200,,\r\nBrushMotorType,1,BRUSH_MOTOR_ORIG,\r\nSideBrushType,1,SIDE_BRUSH_NONE,\r\nWheelPodType,1,WHEEL_POD_ORIG,\r\nDropSensorType,1,DROP_SENSOR_ORIG,\r\nMagSensorType,1,MAG_SENSOR_ORIG,\r\nWallSensorType,1,WALL_SENSOR_ORIG,\r\nLocale,1,LOCALE_USA,\r\nLDS Software,V2.6.15295,0000000000,\r\nLDS Serial,WTD41411AA-0061795,,\r\nLDS CPU,F2802x/c001,,\r\nMainBoard Vendor ID,543,,\r\nMainBoard Serial Number,25810,,\r\nMainBoard Version,7,1,\r\nChassisRev,1,,\r\nUIPanelRev,1,,\r\n\u001a",
+      "sha256": "38c934121250eea706fa39f8d2f9fe82730ceb94a44e0c2d2cd6af28bb96979f",
+      "terminator_seen": true
+    },
+    {
+      "bytes": 76,
+      "command": "GetErr",
+      "escaped_text": "GetErr\r\n238 - My Battery has a critical error. Please visit web support. \r\n\u001a",
+      "sha256": "35589dd4ed112e852bf84c1899367a7a26d095b87da3c3f5ac023e92c23ebc07",
+      "terminator_seen": true
+    },
+    {
+      "bytes": 686,
+      "command": "Help Upload",
+      "escaped_text": "Help Upload\r\nHelp Strlen = 651\r\nUpload - Uploads new program to the robot.\r\n    dump - Dump the contents of the upload save area.\r\n    code - Upload file is the main application. (Mutually exclusive with sound, LDS)\r\n    sound - Upload file is a sound module. (Mutually exclusive with code, LDS)\r\n    LDS - Upload file is an LDS module. (Mutually exclusive with sound, code)\r\n    xmodem - Use xmodem protocal when transmitting upload module\r\n    size - data size to upload to device.\r\n    noburn - test option -- do NOT burn the flash after the upload.\r\n    readflash - test option -- read the flash at the current region.\r\n    reboot - Reset the robot after performing the upload.\r\n\r\n\u001a",
+      "sha256": "5848b7ada91b8325f4ffd69c106aaa2a85889b1d8bff5e323e8ee32ed510b549",
+      "terminator_seen": true
+    },
+    {
+      "bytes": 14,
+      "command": "PlaySound 0",
+      "escaped_text": "PlaySound 0\r\n\u001a",
+      "sha256": "2c5d404a4d330720db2b2b591d4037987d29c0b0ca13ad86c1b1197dbbeec33a",
+      "terminator_seen": true
+    },
+    {
+      "bytes": 15,
+      "command": "PlaySound 19",
+      "escaped_text": "PlaySound 19\r\n\u001a",
+      "sha256": "13c0142851727ea8bf7a4ed20b522d1e3ea2f16f6889118ac3be46933bdf58a5",
+      "terminator_seen": true
+    }
+  ],
+  "schema": "neatobmo-final-health/v1",
+  "target_identity_verified": true
+}

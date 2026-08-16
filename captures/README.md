@@ -494,3 +494,11 @@ any reflash or baud change.** Details: `analysis/{at91-baud-research,hypothesis-
   This is receiver selection, not dump/readback evidence. See
   `firmware-31-write-result.json`, `stock-31-result.json`, and
   `stock-31-completion-result.json`.
+- The session ended with one ACKed exact stock 2.5 restore, a complete final
+  2.5 matrix, one ACKed exact vendor default sound-bank write, and a complete
+  post-sound 2.5 control. Both final matrices reproduced the same negative
+  readback result. Unterminated lifetime-stat streams failed closed, were
+  drained privately through `0x1a`, and were followed by fresh 2.5 identity
+  checks. `final-health-result.json` verifies USB identity and the installed
+  application; it does not claim full electromechanical or factory-fallback
+  health.

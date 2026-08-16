@@ -232,6 +232,17 @@ Known state:
   entries in the public sound-bank header: `0–3`, `6–10`, and `19` play; all
   other IDs report out of range. See
   [live-playsound-sweep-20260810.md](/Volumes/2TB/neato-firmware-archive/work/logs/live-playsound-sweep-20260810.md).
+- A separate 2026-08-16 serial campaign repeated the exact stock transition
+  sequence 2.5 → 2.7 → 3.1 → 2.5 with one ACKed, zero-retry write per image,
+  then wrote the exact 770,048-byte vendor default sound bank (SHA-256
+  `d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a`).
+  Final USB identity was 2.5.15893; the known accepted sound IDs remained
+  `0–3`, `6–10`, and `19`. Complete metadata-only evidence is under
+  `captures/serial-upload/serial-upload-20260816T045102Z/`.
+- Across that campaign, no dump/readflash grammar returned firmware, NAND,
+  filesystem, sound-region, or volatile sentinel bytes, and XMODEM never
+  emitted SOH/STX. Stock 3.1 did select the host upload receiver for two
+  `region + dump + Size` forms; no payload followed those unexpected ENQs.
 - Read-oriented sound upload commands do not export the installed sound region
   on this firmware: raw `readflash` returns only its terminator and its XMODEM
   form never starts. See

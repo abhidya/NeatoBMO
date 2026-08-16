@@ -2,8 +2,10 @@
   "schema": "neatobmo-serial-upload-session/v1",
   "session_id": "serial-upload-20260816T045102Z",
   "started_at_utc": "2026-08-16T04:51:02Z",
-  "updated_at_utc": "2026-08-16T05:20:06Z",
+  "updated_at_utc": "2026-08-16T05:30:50Z",
+  "collection_complete": true,
   "repository_base_commit": "98aebc7",
+  "repository_checkpoint_before_final_publication": "4472639",
   "target": {
     "robot": "Neato XV-12",
     "serial": "WTD41611DD,0037829,P",
@@ -14,6 +16,21 @@
     "name": "CherryUSB CMSIS-DAP on ESP32-S3",
     "usb_vid_pid": "0D28:0204",
     "p6_cdc_port": "/dev/cu.usbmodem14202"
+  },
+  "tool_versions": "tool-versions.txt",
+  "command_families_run": [
+    "tools/neato_upload_save_area_probe.py on stock 2.5, 2.7, 3.1, final 2.5, and post-sound 2.5",
+    "tools/neato_code_burn_cruz_p.py with exact-hash stock 2.7, 3.1, and 2.5 images",
+    "tools/neato_sound_burn_exact.py with the exact vendor default sound bank",
+    "tools/p6_capture.py in parallel with each persistent write",
+    "fixed final GetVersion, GetErr, Help Upload, PlaySound 0, and PlaySound 19 snapshot"
+  ],
+  "hardware_handoff": {
+    "last_verified_robot_identity": "WTD41611DD,0037829,P / mainboard 7.1 / software 2.5.15893",
+    "last_verified_usb_command_state": "responsive after post-sound lifetime-log drain",
+    "esp_state": "CherryDAP probe firmware; restoration not performed",
+    "temporary_wiring_removal_verified": false,
+    "reason": "operator reassigned the robot and directed all remaining work to be offline"
   },
   "rows": [
     {
@@ -27,6 +44,61 @@
       "life_stat_log_bytes": 498744,
       "life_stat_log_complete": false,
       "p6_bytes": 0
+    },
+    {
+      "name": "exact-stock-25-restore",
+      "result": "firmware-25-restore-result.json",
+      "result_sha256": "461e8dd9940b4425c5dba484f9aa15dc9886ed906594ed57d72806f680f097f2",
+      "image_bytes": 805888,
+      "image_sha256": "e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697",
+      "ack_observed": true,
+      "auto_retries": 0,
+      "software_before": "3.1.17844",
+      "software_after": "2.5.15893"
+    },
+    {
+      "name": "stock-25-final-matrix",
+      "result": "stock-25-final-result.json",
+      "result_sha256": "092833052d7554988f0cfd189327aa1adde668eae252bb115afa1b01cf3ac2a6",
+      "software": "2.5.15893",
+      "dump_or_readflash_payload_observed": false,
+      "xmodem_payload_start_observed": false,
+      "life_stat_log_bytes": 2867448,
+      "life_stat_log_complete": false,
+      "fail_closed": true,
+      "p6_bytes": 0
+    },
+    {
+      "name": "exact-vendor-default-sound-write",
+      "result": "sound-default-write-result.json",
+      "result_sha256": "df56aaa69d29c3c7bec56120401e84b380ae58bd5fcc948ee8cf3a0e293d45d5",
+      "image_bytes": 770048,
+      "image_sha256": "d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a",
+      "ack_observed": true,
+      "application_identity_before_and_after": "2.5.15893",
+      "accepted_sound_ids": [0, 1, 2, 3, 6, 7, 8, 9, 10, 19]
+    },
+    {
+      "name": "stock-25-post-sound-matrix",
+      "result": "stock-25-post-sound-result.json",
+      "result_sha256": "a57e3eeffd4fb232d12992bdf32809e11f7adaa20429e8e18ab7a47f2d873c50",
+      "software": "2.5.15893",
+      "dump_or_readflash_payload_observed": false,
+      "xmodem_payload_start_observed": false,
+      "life_stat_log_bytes": 2868280,
+      "life_stat_log_complete": false,
+      "fail_closed": true,
+      "p6_bytes": 0
+    },
+    {
+      "name": "final-health",
+      "result": "final-health-result.json",
+      "result_sha256": "8fbe1653a40ef418c9c9e42fd8e11c31daec7dbfafe69ef0a91af4cf452fef5b",
+      "target_identity_verified": true,
+      "installed_application": "2.5.15893",
+      "factory_fallback_observed": false,
+      "battery_error_238_observed": true,
+      "full_electromechanical_health_claimed": false
     },
     {
       "name": "exact-stock-31-write",
@@ -132,14 +204,41 @@
       "bytes": 29,
       "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/stock-31-completion/breakthrough-01.bin",
       "sha256": "cb97c49452cbcb79254aea036a75871eb254e43e5ab7884ba92bf0f13bd977e5"
+    },
+    {
+      "description": "final 2.5 restore parallel P6 capture; session header only",
+      "bytes": 74,
+      "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/firmware-25-restore-p6.raw",
+      "sha256": "4d8e919abb56b2ec53fa553a3d00b28ac522974cebe8ee5af62bb26281c3db90"
+    },
+    {
+      "description": "final 2.5 lifetime-stat tail through terminator",
+      "bytes": 65253,
+      "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/stock-25-final/lifestat-drain.raw",
+      "sha256": "0d19458a5bf1a8c6ff0b729d4283fa8ec1bd586a1f0eb711614463ddc7bde3bb"
+    },
+    {
+      "description": "vendor sound write parallel P6 capture; session header only",
+      "bytes": 74,
+      "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/sound-default-write-p6.raw",
+      "sha256": "3a98f2ba1e75438b727d356798e9e98fa46d37d927557d1857b541224e96957e"
+    },
+    {
+      "description": "post-sound lifetime-stat tail through terminator",
+      "bytes": 65221,
+      "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/stock-25-post-sound/lifestat-drain.raw",
+      "sha256": "4e1fc5821eb695e03cfedb45600430449ccafad4667921bf0d5a54a6d18ceec5"
     }
   ],
-  "actions_not_performed_so_far": [
+  "actions_not_performed": [
     "arbitrary or unknown-image write",
     "bare serial erase",
     "J3/AT91 ERASE",
     "GPNVM change",
     "3.2 image transfer",
-    "full firmware or NAND readback"
+    "full firmware or NAND readback",
+    "motor or cleaning-system actuation",
+    "final factory-fallback boot",
+    "ESP firmware restoration after the operator reassigned the robot"
   ]
 }

@@ -82,3 +82,18 @@ Complete read-only USB snapshots collected on the same robot show that stock
 `xmodem`. The clean-room rewrite must model capabilities from the live version
 instead of assuming one universal XV command table. Exact hashes and snapshots
 are under `captures/jtag/jtag-p10-20260813T061756Z/`.
+
+## Serial upload/readback result
+
+The 2026-08-16 fixed-matrix experiment confirms a receive-capable updater but
+no stock serial export path. Stock 2.5 and 2.7 accepted a complete 256-byte
+project sentinel with `noburn`; all tested dump/readflash permutations returned
+only echoes/terminators, and XMODEM never emitted SOH/STX. Exact stock writes
+verified 2.7 and 3.1 before a final exact 2.5 restore. An exact vendor default
+sound write also ACKed and preserved the known slot map.
+
+On 3.1, `code + dump + Size` and `sound + dump + Size` selected the
+host-to-robot receiver (ENQ) despite `dump` being absent from help. No payload
+was sent after those unexpected ENQs. This is a parser precedence observation,
+not firmware/NAND/filesystem readback. See
+`captures/serial-upload/serial-upload-20260816T045102Z/`.

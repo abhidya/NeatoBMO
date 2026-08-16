@@ -171,3 +171,16 @@ Updater reboot did not reliably re-enumerate VID:PID `2108:780B`; reopening the
 old serial pathname cannot recover a device absent from the bus. Rediscover by
 VID:PID plus `GetVersion` identity, tolerate pathname changes, and expose a
 manual reconnect or controllable-hub VBUS-cycle recovery path.
+
+## Binary upload parser boundary
+
+The 2026-08-16 serial matrix proves that the updater's sized host-to-robot
+receiver is real, while its advertised read-oriented flags are not a usable
+acquisition API. Stock 2.5 and 2.7 accepted a fixed `noburn` sentinel, but
+dump/readflash returned no data and XMODEM never started. Stock 3.1 treated two
+`region + dump + Size` forms as upload starts (ENQ), showing that live parser
+precedence differs from help text. NeatoOS should reproduce observed framing
+and version-specific parsing, but keep binary upload commands outside the v0
+runtime surface and never describe receiver entry as readback.
+
+Evidence: `captures/serial-upload/serial-upload-20260816T045102Z/`.

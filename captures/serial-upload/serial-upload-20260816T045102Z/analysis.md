@@ -115,3 +115,49 @@ This is a version-specific parser/state-machine difference, not readback. On
 the binary upload receiver even though `dump` is absent from 3.1 help. ENQ
 means the robot expects host payload bytes; it does not establish dump
 semantics, storage acceptance, firmware extraction, or filesystem access.
+
+## Final stock restore, sound write, and post-sound control
+
+- Exact stock Cruz-P 2.5 build 15893, image SHA-256
+  `e1a31ef56e2b617a4056d70c308aab26b7e2cd95e679cb982d697ff4f089c697`,
+  was restored from 3.1 in one zero-retry `Upload code reboot` transaction.
+  USB returned ACK and the guarded tool verified 2.5.15893 afterward.
+- The complete final 2.5 matrix again accepted the volatile sentinel and found
+  no dump/readflash data, size-qualified ENQ, XMODEM start, or P6 bytes. Its
+  lifetime-stat record reached 2,867,448 bytes without a terminator, so the
+  fail-closed harness exited nonzero. A private 65,253-byte tail was drained
+  through `0x1a`; fresh identity afterward was 2.5.15893.
+- The exact 770,048-byte vendor default sound bank, SHA-256
+  `d3969779a6a195812d72b6859454de004ea45beefdee6f1b5c50a2632564b64a`,
+  was written once with `Upload sound`. The robot emitted ENQ, accepted the
+  payload plus checksum, returned ACK plus terminator, and kept the 2.5
+  application identity. The command-level sweep accepted the known populated
+  IDs `0–3`, `6–10`, and `19`; audible playback was not independently asserted.
+- A complete post-sound 2.5 matrix reproduced the pre-sound capability result:
+  no dump/readflash payload, no XMODEM start, and no P6 bytes. Its 2,868,280-byte
+  partial lifetime log was followed by a private 65,221-byte tail through the
+  terminator and a fresh 2.5.15893 identity check.
+- The final tracked health snapshot verified the expected robot serial,
+  mainboard 7.1, installed 2.5.15893, `Help Upload`, and command acceptance for
+  sound IDs 0 and 19. `GetErr` still reports battery-critical error 238 because
+  the bench robot has no battery; this evidence does not claim full
+  electromechanical health or a final factory-fallback boot.
+- After that verified USB state, the operator reassigned the robot and directed
+  that remaining work be offline. ESP firmware restoration and physical removal
+  of the existing temporary P6/P10 wiring were therefore not performed or
+  verified in this session; the ESP remained on CherryDAP.
+
+## Final classification
+
+The stock serial updater provides a proven host-to-robot binary receive and
+exact-image write path. Across repeated 2.5, 2.7, and 3.1 rows, it did not
+provide firmware, NAND, filesystem, sound-region, or volatile upload-buffer
+readback. Stock 3.1 changes token precedence enough that unadvertised legacy
+tokens can still lead to receiver entry, so live versioned transcripts—not
+help text alone—are the clean-room contract.
+
+Confidence is high for byte-level transport and write observations, high that
+the tested grammar produced no readback, and low for the internal reason those
+flags are inert. The next safest acquisition experiment is duplicate raw
+external-NAND reads from a donor Cruz board, preserving data, OOB, ECC, and
+bad-block markers; it should not be started automatically.

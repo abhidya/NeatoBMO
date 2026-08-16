@@ -75,3 +75,33 @@ still advertises `readflash`.
   write (`nandFlashWrite() OK`), erase, factory fallback, or new power/software
   reset. The expected `noburn` `NoWrite`/`nandflashWrite() fail - -1` diagnostic
   is recorded and does not itself abort the readback matrix.
+
+## Completed result (2026-08-16)
+
+The exact transition sequence 2.5.15893 → 2.7.16621 → 3.1.17844 →
+2.5.15893 completed with one ACKed, zero-retry write per stock image. The exact
+vendor default sound bank was then written once and returned ACK plus
+terminator. All proprietary payloads remained outside Git; public evidence is
+under `../captures/serial-upload/serial-upload-20260816T045102Z/`.
+
+On 2.5 and 2.7, the fixed 256-byte `noburn` sentinel was accepted, but every
+plain and `Size 260`-qualified dump/readflash form returned only text/control
+bytes. XMODEM never emitted SOH/STX. A final 2.5 run and a complete post-sound
+2.5 control reproduced the same result.
+
+Stock 3.1 exposed a parser fork rather than readback. Both
+`Upload code dump Size 260` and `Upload sound dump Size 260` emitted ENQ and
+entered the host-to-robot receiver even though `dump` is absent from 3.1 help.
+CAN/CAN did not confirm cancellation, so the harness sent no payload and failed
+closed; a normal target power cycle cleared each partial frame. These results
+support token-precedence/receiver selection, not dump semantics.
+
+`GetLifeStatLog` can stream for longer than 45 seconds and leave the serial
+parser dirty. The harness now records a stopped reason and exits nonzero unless
+the terminator is observed. Residual tails were stored privately, drained
+through `0x1a`, and followed by a fresh identity check before any later write.
+
+Deviations from the original grid were evidence-driven: once two different 3.1
+region-plus-Size forms selected the receiver without a safe cancellation, the
+remaining redundant forms were not repeated. The post-sound control repeated
+the full 2.5 matrix. No stock serial erase command was invented or sent.

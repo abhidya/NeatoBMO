@@ -1,0 +1,12 @@
+Captured after collection on the unchanged session host.
+
+ProductName: macOS
+ProductVersion: 26.5.2
+BuildVersion: 25F84
+Darwin: 25.5.0 x86_64 (RELEASE_X86_64)
+Architecture: x86_64
+Git: 2.55.0
+Python: 3.14.0
+Homebrew: 6.0.17
+OpenOCD: 0.12.0
+ESP-IDF idf.py: not found in the final shell environment

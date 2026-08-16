@@ -96,7 +96,10 @@ here in the same change.
   USB device requires a physical or controllable-hub VBUS cycle rather than
   merely reopening the old path. Command capabilities are version-sensitive:
   2.5 and 2.7 matched in the captured help surface, while 3.1 omitted several
-  diagnostic/calibration commands and the Upload `dump`/`xmodem` verbs.
+  diagnostic/calibration commands and the Upload `dump`/`xmodem` verbs. Live
+  grammar is authoritative over help: on 3.1, tested `region + dump + Size`
+  forms entered the host upload receiver even though `dump` was unadvertised.
+  ENQ means receiver entry, never readback or persistent-write success.
 - **neato_protocol** (`src/neato_protocol.c`) — the command vocabulary
   above the transport (LCD ops, PlaySound, TestMode, LEDs). Encodes the
   hardware footguns so callers speak intent, not strings.

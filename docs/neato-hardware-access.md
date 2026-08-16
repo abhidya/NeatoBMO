@@ -118,6 +118,10 @@ log is `../captures/p6_1786482063.log` and identifies NEROS Build 15667. As
 expected, it is a Neato boot/application log and contains no SAM-BA prompt.
 
 P6 is now complete as a boot-observability experiment; it is not an unlock.
+The 2026-08-16 application-state USB upload/readback matrix also produced zero
+target bytes on the CherryDAP CDC/P6 path during every 2.5, 2.7, and 3.1 row.
+That silence does not contradict the proven boot-log wiring: it only means this
+adapter/capture path provided no parser or NAND corroboration for those rows.
 The next OS-acquisition experiment is duplicate external-NAND capture, ideally
 on a second scavenged Rev113 robot. On-chip key storage remains unknown. None
 of this is required to run BMO: the sound bank is unencrypted and the speech
