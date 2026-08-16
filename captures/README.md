@@ -462,3 +462,18 @@ any reflash or baud change.** Details: `analysis/{at91-baud-research,hypothesis-
 - Application-transition P6 files are header-only: the CherryDAP CDC path did
   not preserve UART bytes while CMSIS-DAP bulk scans were repeated. USB result
   JSON and snapshots, not those P6 files, establish the application versions.
+
+## Serial upload-save-area matrix (2026-08-16)
+
+- Plan and gated harness: `docs/neato-serial-upload-readback-plan.md` and
+  `tools/neato_upload_save_area_probe.py`.
+- First stock-2.5 row: `serial-upload/serial-upload-20260816T045102Z/`.
+- A real `Upload code noburn Size 260` transaction accepted a 256-byte
+  project-owned sentinel plus checksum. Fourteen unqualified dump/readflash
+  permutations returned only echoes/terminators; six XMODEM receive-start
+  probes produced no SOH/STX and returned to the command parser.
+- `GetLifeStatLog` yielded a 498,744-byte partial textual diagnostics capture;
+  `GetSysLog` was empty. No firmware, NAND, flash, filesystem, or upload-buffer
+  bytes were returned. The P6/CherryDAP CDC path was silent in this row.
+- The next pass adds bounded `Size 260`-qualified readback grammar, then the
+  exact-hash stock 2.7 → 3.1 → 2.5 and vendor-sound persistent write matrix.

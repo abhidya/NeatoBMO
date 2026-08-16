@@ -1,0 +1,46 @@
+{
+  "schema": "neatobmo-serial-upload-session/v1",
+  "session_id": "serial-upload-20260816T045102Z",
+  "started_at_utc": "2026-08-16T04:51:02Z",
+  "first_row_completed_at_utc": "2026-08-16T04:55:50Z",
+  "repository_base_commit": "98aebc7",
+  "target": {
+    "robot": "Neato XV-12",
+    "serial": "WTD41611DD,0037829,P",
+    "mainboard": "7.1",
+    "software": "2.5.15893",
+    "usb_vid_pid": "2108:780B"
+  },
+  "adapter": {
+    "name": "CherryUSB CMSIS-DAP on ESP32-S3",
+    "usb_vid_pid": "0D28:0204",
+    "p6_cdc_port": "/dev/cu.usbmodem14202"
+  },
+  "row": {
+    "result": "stock-25-result.json",
+    "result_sha256": "ff0f3f094fe53f8d71cd98e6c72eff873ccb75088e200b29e2d9071af8a29156",
+    "sentinel_bytes": 256,
+    "sentinel_sha256": "c7df70ec3089d5fdc3ca14710f63c4f8cfd41e04d2e1bd05a89f79db36fa4b99",
+    "opening": "ENQ",
+    "closing": "terminator",
+    "persistent_write_requested": false,
+    "dump_or_readflash_payload_observed": false,
+    "xmodem_payload_start_observed": false,
+    "life_stat_log_bytes": 498744,
+    "life_stat_log_complete": false,
+    "p6_bytes": 0
+  },
+  "private_artifacts": {
+    "p6_path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/stock-25/p6.raw",
+    "p6_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "actions_not_performed_in_this_row": [
+    "persistent application write",
+    "persistent sound write",
+    "erase",
+    "J3/AT91 ERASE",
+    "GPNVM change",
+    "3.2 or unknown-image transfer",
+    "full XMODEM receive"
+  ]
+}

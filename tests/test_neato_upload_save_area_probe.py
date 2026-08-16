@@ -18,6 +18,9 @@ def test_matrix_is_fixed_to_read_or_dump_options():
         assert "reboot" not in lowered
         assert "erase" not in lowered
         assert "noburn" not in lowered
+    for command in probe.SIZE_QUERY_COMMANDS:
+        probe.require_fixed_size_query(command)
+        assert "Size 260" in command
 
 
 @pytest.mark.parametrize(
@@ -75,6 +78,56 @@ def test_send_sentinel_uses_one_noburn_frame(monkeypatch):
     ]
 
 
+def test_size_query_cancels_if_target_requests_a_second_upload(monkeypatch):
+    class Connection:
+        def __init__(self):
+            self.writes = []
+
+        def reset_input_buffer(self):
+            pass
+
+        def write(self, data: bytes):
+            self.writes.append(data)
+
+        def flush(self):
+            pass
+
+    connection = Connection()
+    replies = iter((probe.ENQ, probe.TERM))
+    monkeypatch.setattr(probe, "read_until_quiet", lambda *_args, **_kwargs: next(replies))
+    data, requested, confirmed = probe.probe_size_query(
+        connection, probe.SIZE_QUERY_COMMANDS[0]
+    )
+    assert requested is True
+    assert confirmed is True
+    assert data == probe.ENQ + probe.TERM
+    assert connection.writes == [
+        b"Upload dump Size 260\r",
+        probe.CAN + probe.CAN + b"\n",
+    ]
+
+
+def test_size_query_reports_unconfirmed_cancel_without_terminator(monkeypatch):
+    class Connection:
+        def reset_input_buffer(self):
+            pass
+
+        def write(self, _data: bytes):
+            pass
+
+        def flush(self):
+            pass
+
+    replies = iter((probe.ENQ, b""))
+    monkeypatch.setattr(probe, "read_until_quiet", lambda *_args, **_kwargs: next(replies))
+    data, requested, confirmed = probe.probe_size_query(
+        Connection(), probe.SIZE_QUERY_COMMANDS[0]
+    )
+    assert data == probe.ENQ
+    assert requested is True
+    assert confirmed is False
+
+
 def test_result_paths_are_exclusive_in_cli_source():
     source = Path(probe.__file__).read_text()
     assert "refusing to overwrite an existing result" in source
@@ -91,6 +144,7 @@ def test_private_binary_or_xmodem_start_stops_and_is_not_embedded():
     assert private == [("breakthrough-01.bin", b"\x01binary")]
     assert "escaped_text" not in records[0]
     assert records[0]["private_artifact"] == "breakthrough-01.bin"
+    assert records[0]["terminator_seen"] is False
 
 
 def test_p6_abort_markers_exclude_expected_noburn_failure():
@@ -103,3 +157,10 @@ def test_abort_is_rechecked_before_post_matrix_queries():
     marker = 'if stopped_reason is None and abort.is_set():'
     assert source.count(marker) >= 2
     assert source.index(marker) < source.index('"GetErr after"')
+
+
+def test_large_log_queries_get_a_longer_bounded_capture_window():
+    source = Path(probe.__file__).read_text()
+    assert "quiet=2.0, hard_limit=30.0" in source
+    record = probe.digest_record("GetLifeStatLog", b"partial")
+    assert record["terminator_seen"] is False

@@ -27,7 +27,10 @@ still advertises `readflash`.
    persistent application write.
 5. Immediately capture the fixed grammar matrix:
    `Upload dump`, region-qualified `dump`, `Upload readflash`, and
-   region-qualified `readflash`, in both option orders.
+   region-qualified `readflash`, in both option orders. Follow with exact
+   `Size 260`-qualified dump/readflash forms. If a size-qualified form emits
+   ENQ, record that it selected the host-to-robot receiver and cancel with
+   CAN/CAN without sending a second payload.
 6. Probe the equivalent XMODEM-start forms with receiver `C` handshakes. Stop
    and cancel with CAN/CAN on the first SOH/STX block marker; do not ACK or
    collect a full proprietary image into Git.

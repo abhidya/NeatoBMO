@@ -57,6 +57,19 @@ XMODEM_COMMANDS = (
     "Upload LDS readflash xmodem",
 )
 
+SIZE_QUERY_COMMANDS = (
+    "Upload dump Size 260",
+    "Upload code dump Size 260",
+    "Upload code Size 260 dump",
+    "Upload sound dump Size 260",
+    "Upload LDS dump Size 260",
+    "Upload readflash Size 260",
+    "Upload code readflash Size 260",
+    "Upload code Size 260 readflash",
+    "Upload sound readflash Size 260",
+    "Upload LDS readflash Size 260",
+)
+
 FORBIDDEN_TOKENS = (" erase", " reboot", " size", " burn", "write")
 P6_ABORT_MARKERS = (
     b"nandFlashWrite() OK",
@@ -87,6 +100,14 @@ def require_fixed_read_command(command: str) -> None:
         raise ProbeSafetyError(f"forbidden token in matrix command: {command}")
 
 
+def require_fixed_size_query(command: str) -> None:
+    if command not in SIZE_QUERY_COMMANDS:
+        raise ProbeSafetyError(f"command is not in the fixed size-query matrix: {command}")
+    lowered = command.lower()
+    if "reboot" in lowered or "erase" in lowered or "noburn" in lowered:
+        raise ProbeSafetyError(f"forbidden token in size-query command: {command}")
+
+
 def read_until_quiet(
     connection: serial.Serial, *, quiet: float = 1.0, hard_limit: float = 8.0
 ) -> bytes:
@@ -102,10 +123,16 @@ def read_until_quiet(
     return bytes(data)
 
 
-def raw_command(connection: serial.Serial, command: str) -> bytes:
+def raw_command(
+    connection: serial.Serial,
+    command: str,
+    *,
+    quiet: float = 1.0,
+    hard_limit: float = 8.0,
+) -> bytes:
     connection.reset_input_buffer()
     connection.write((command + "\n").encode())
-    return read_until_quiet(connection)
+    return read_until_quiet(connection, quiet=quiet, hard_limit=hard_limit)
 
 
 def require_identity(reply: bytes) -> None:
@@ -155,6 +182,24 @@ def probe_xmodem_start(connection: serial.Serial, command: str) -> tuple[bytes, 
     return bytes(data), payload_start
 
 
+def probe_size_query(
+    connection: serial.Serial, command: str
+) -> tuple[bytes, bool, bool]:
+    require_fixed_size_query(command)
+    connection.reset_input_buffer()
+    connection.write((command + "\r").encode())
+    data = bytearray(read_until_quiet(connection, quiet=0.5, hard_limit=3.0))
+    requested_upload = ENQ in data
+    cancel_confirmed = False
+    if requested_upload:
+        connection.write(CAN + CAN + b"\n")
+        connection.flush()
+        post_cancel = read_until_quiet(connection, quiet=0.2, hard_limit=1.0)
+        data.extend(post_cancel)
+        cancel_confirmed = TERM in post_cancel
+    return bytes(data), requested_upload, cancel_confirmed
+
+
 def classify(data: bytes) -> str:
     if not data:
         return "no-response"
@@ -175,6 +220,7 @@ def digest_record(command: str, data: bytes, payload_start: bool = False) -> dic
         "sha256": hashlib.sha256(data).hexdigest(),
         "classification": classification,
         "xmodem_payload_start": payload_start,
+        "terminator_seen": TERM in data,
     }
     if classification in {"text-or-protocol-control", "project-sentinel-returned"}:
         record["escaped_text"] = data.decode(errors="backslashreplace")
@@ -256,6 +302,43 @@ def run(
                     break
 
             if stopped_reason is None:
+                for command in SIZE_QUERY_COMMANDS:
+                    if abort.is_set():
+                        stopped_reason = "P6 abort marker observed"
+                        break
+                    data, requested_upload, cancel_confirmed = probe_size_query(
+                        connection, command
+                    )
+                    record = digest_record(command, data)
+                    record["target_requested_upload_bytes"] = requested_upload
+                    record["upload_cancel_confirmed"] = cancel_confirmed
+                    if requested_upload and not cancel_confirmed:
+                        name = f"breakthrough-{len(private_blobs) + 1:02d}.bin"
+                        private_blobs.append((name, data))
+                        record.pop("escaped_text", None)
+                        record["classification"] = (
+                            "upload-receiver-cancel-unconfirmed-private"
+                        )
+                        record["private_artifact"] = name
+                        records.append(record)
+                        stopped_reason = (
+                            "size query selected upload receiver; cancel not confirmed"
+                        )
+                        break
+                    classification = record["classification"]
+                    if classification == "non-text-private-review-required":
+                        name = f"breakthrough-{len(private_blobs) + 1:02d}.bin"
+                        private_blobs.append((name, data))
+                        record["private_artifact"] = name
+                        records.append(record)
+                        stopped_reason = f"private review required after {command}"
+                        break
+                    records.append(record)
+                    if abort.is_set():
+                        stopped_reason = "P6 abort marker observed"
+                        break
+
+            if stopped_reason is None:
                 for command in XMODEM_COMMANDS:
                     if abort.is_set():
                         stopped_reason = "P6 abort marker observed"
@@ -290,7 +373,10 @@ def run(
         for command in (() if stopped_reason else ("GetSysLog", "GetLifeStatLog")):
             try:
                 with serial.Serial(neato_port, 115200, timeout=0.1) as connection:
-                    records.append(digest_record(command, raw_command(connection, command)))
+                    data = raw_command(
+                        connection, command, quiet=2.0, hard_limit=30.0
+                    )
+                    records.append(digest_record(command, data))
             except (serial.SerialException, OSError) as exc:
                 records.append({
                     "command": command,
