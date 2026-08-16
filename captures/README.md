@@ -475,5 +475,13 @@ any reflash or baud change.** Details: `analysis/{at91-baud-research,hypothesis-
 - `GetLifeStatLog` yielded a 498,744-byte partial textual diagnostics capture;
   `GetSysLog` was empty. No firmware, NAND, flash, filesystem, or upload-buffer
   bytes were returned. The P6/CherryDAP CDC path was silent in this row.
-- The next pass adds bounded `Size 260`-qualified readback grammar, then the
-  exact-hash stock 2.7 → 3.1 → 2.5 and vendor-sound persistent write matrix.
+- A second 2.5 pass showed that ten `Size 260`-qualified dump/readflash forms
+  also return no payload or ENQ. The exact stock Cruz-P 2.7 image was then sent
+  once and ACKed; post-reboot identity was 2.7.16621. Its full parser matrix
+  reproduced the 2.5 result: no dump/readflash payload, XMODEM start, or P6
+  device bytes. Large lifetime-stat streams must be drained through their
+  terminator before the next command or firmware-write identity preflight.
+- Result artifacts: `stock-25-size-result.json`,
+  `firmware-27-write-result.json`, and `stock-27-result.json`. The remaining
+  planned transitions are exact stock 3.1, exact 2.5 restore, and an exact
+  vendor default sound-bank write.

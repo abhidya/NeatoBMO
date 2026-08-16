@@ -135,6 +135,17 @@ def raw_command(
     return read_until_quiet(connection, quiet=quiet, hard_limit=hard_limit)
 
 
+def read_large_log(connection: serial.Serial, command: str) -> tuple[bytes, bool]:
+    """Capture a large log with one bounded extension after the main window."""
+    data = bytearray(
+        raw_command(connection, command, quiet=2.0, hard_limit=30.0)
+    )
+    extended = TERM not in data
+    if extended:
+        data.extend(read_until_quiet(connection, quiet=2.0, hard_limit=15.0))
+    return bytes(data), extended
+
+
 def require_identity(reply: bytes) -> None:
     if TARGET_SERIAL not in reply or TARGET_MAINBOARD not in reply:
         raise ProbeSafetyError("connected robot identity/mainboard did not match")
@@ -373,10 +384,10 @@ def run(
         for command in (() if stopped_reason else ("GetSysLog", "GetLifeStatLog")):
             try:
                 with serial.Serial(neato_port, 115200, timeout=0.1) as connection:
-                    data = raw_command(
-                        connection, command, quiet=2.0, hard_limit=30.0
-                    )
-                    records.append(digest_record(command, data))
+                    data, extended = read_large_log(connection, command)
+                    record = digest_record(command, data)
+                    record["capture_extended_after_initial_limit"] = extended
+                    records.append(record)
             except (serial.SerialException, OSError) as exc:
                 records.append({
                     "command": command,

@@ -162,5 +162,22 @@ def test_abort_is_rechecked_before_post_matrix_queries():
 def test_large_log_queries_get_a_longer_bounded_capture_window():
     source = Path(probe.__file__).read_text()
     assert "quiet=2.0, hard_limit=30.0" in source
+    assert "quiet=2.0, hard_limit=15.0" in source
     record = probe.digest_record("GetLifeStatLog", b"partial")
     assert record["terminator_seen"] is False
+
+
+def test_large_log_capture_extends_when_initial_window_has_no_terminator(
+    monkeypatch,
+):
+    initial = b"partial"
+    tail = b"last-row" + probe.TERM
+    monkeypatch.setattr(probe, "raw_command", lambda *_args, **_kwargs: initial)
+    monkeypatch.setattr(
+        probe, "read_until_quiet", lambda *_args, **_kwargs: tail
+    )
+
+    data, extended = probe.read_large_log(object(), "GetLifeStatLog")
+
+    assert data == initial + tail
+    assert extended is True

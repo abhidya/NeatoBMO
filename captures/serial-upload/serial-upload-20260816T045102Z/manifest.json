@@ -2,13 +2,12 @@
   "schema": "neatobmo-serial-upload-session/v1",
   "session_id": "serial-upload-20260816T045102Z",
   "started_at_utc": "2026-08-16T04:51:02Z",
-  "first_row_completed_at_utc": "2026-08-16T04:55:50Z",
+  "updated_at_utc": "2026-08-16T05:08:55Z",
   "repository_base_commit": "98aebc7",
   "target": {
     "robot": "Neato XV-12",
     "serial": "WTD41611DD,0037829,P",
     "mainboard": "7.1",
-    "software": "2.5.15893",
     "usb_vid_pid": "2108:780B"
   },
   "adapter": {
@@ -16,31 +15,78 @@
     "usb_vid_pid": "0D28:0204",
     "p6_cdc_port": "/dev/cu.usbmodem14202"
   },
-  "row": {
-    "result": "stock-25-result.json",
-    "result_sha256": "ff0f3f094fe53f8d71cd98e6c72eff873ccb75088e200b29e2d9071af8a29156",
-    "sentinel_bytes": 256,
-    "sentinel_sha256": "c7df70ec3089d5fdc3ca14710f63c4f8cfd41e04d2e1bd05a89f79db36fa4b99",
-    "opening": "ENQ",
-    "closing": "terminator",
-    "persistent_write_requested": false,
-    "dump_or_readflash_payload_observed": false,
-    "xmodem_payload_start_observed": false,
-    "life_stat_log_bytes": 498744,
-    "life_stat_log_complete": false,
-    "p6_bytes": 0
-  },
-  "private_artifacts": {
-    "p6_path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/stock-25/p6.raw",
-    "p6_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  },
-  "actions_not_performed_in_this_row": [
-    "persistent application write",
-    "persistent sound write",
-    "erase",
+  "rows": [
+    {
+      "name": "stock-25-initial",
+      "result": "stock-25-result.json",
+      "result_sha256": "ff0f3f094fe53f8d71cd98e6c72eff873ccb75088e200b29e2d9071af8a29156",
+      "software": "2.5.15893",
+      "sentinel_accepted": true,
+      "dump_or_readflash_payload_observed": false,
+      "xmodem_payload_start_observed": false,
+      "life_stat_log_bytes": 498744,
+      "life_stat_log_complete": false,
+      "p6_bytes": 0
+    },
+    {
+      "name": "stock-25-size-qualified",
+      "result": "stock-25-size-result.json",
+      "result_sha256": "0c38281a6051d06be21fd810f98f9babe436071f674f00b05c1085c069516611",
+      "software": "2.5.15893",
+      "sentinel_accepted": true,
+      "size_qualified_queries": 10,
+      "size_qualified_enq_observed": false,
+      "dump_or_readflash_payload_observed": false,
+      "xmodem_payload_start_observed": false,
+      "life_stat_log_bytes": 1908856,
+      "life_stat_log_complete": false,
+      "p6_bytes": 0
+    },
+    {
+      "name": "exact-stock-27-write",
+      "result": "firmware-27-write-result.json",
+      "result_sha256": "16d7cdbfa599e6eaa51136279a5f3eb271a939f8dc30417728c68ae2bccc8c24",
+      "image_bytes": 805888,
+      "image_sha256": "2e6033b1ef5440bed949de20e89563d7cb3dda41e0eb5e371c9d86dceeb1633f",
+      "ack_observed": true,
+      "auto_retries": 0,
+      "software_before": "2.5.15893",
+      "software_after": "2.7.16621"
+    },
+    {
+      "name": "stock-27-matrix",
+      "result": "stock-27-result.json",
+      "result_sha256": "6c9a8e5d43ab9015216862053aadc3ad2adf2a63a97ca84f8255388d6e70a32a",
+      "software": "2.7.16621",
+      "sentinel_accepted": true,
+      "size_qualified_enq_observed": false,
+      "dump_or_readflash_payload_observed": false,
+      "xmodem_payload_start_observed": false,
+      "life_stat_log_bytes": 2867960,
+      "life_stat_log_complete": false,
+      "p6_bytes": 0
+    }
+  ],
+  "private_artifacts": [
+    {
+      "description": "2.7 write parallel P6 capture; session header only",
+      "bytes": 74,
+      "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/firmware-27-write-p6.raw",
+      "sha256": "5b326f69e01f47d9a7b151f8713191dbc912c6e60c05a9bb64e6eb14187b3247"
+    },
+    {
+      "description": "2.7 lifetime-stat tail through terminator",
+      "bytes": 65242,
+      "path": "/Volumes/2TB/neato-jtag-private/serial-upload-20260816T045102Z/stock-27/lifestat-drain.raw",
+      "sha256": "2a313112c564798011d5c5d8d9fd9eb0771c5054fbe8460457c34e3920279865"
+    }
+  ],
+  "actions_not_performed_so_far": [
+    "arbitrary or unknown-image write",
+    "bare serial erase",
     "J3/AT91 ERASE",
     "GPNVM change",
-    "3.2 or unknown-image transfer",
-    "full XMODEM receive"
+    "3.2 image transfer",
+    "full firmware or NAND readback"
   ]
 }
