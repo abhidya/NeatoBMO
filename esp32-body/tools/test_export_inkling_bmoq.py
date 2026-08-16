@@ -329,7 +329,7 @@ class ExportInklingBmoqTests(unittest.TestCase):
                         "layer_types": ["hybrid", "unknown", "hybrid_sliding"],
                         "local_layer_ids": [1, 4],
                         "mlp_layer_types": ["dense", "mystery", "sparse"],
-                        "dense_mlp_idx": 3,
+                        "dense_mlp_idx": 1,
                         "dense_intermediate_size": 12,
                         "intermediate_size": 4,
                         "vocab_size": 16,
@@ -341,7 +341,7 @@ class ExportInklingBmoqTests(unittest.TestCase):
                 encoding="utf-8",
             )
             parsed = InklingConfig.from_json(model_dir, quant_group=4)
-            self.assertEqual(parsed.local_layer_ids, (1, 2, 4))
+            self.assertEqual(parsed.local_layer_ids, (2, 4))
             self.assertEqual(parsed.sparse_layer_ids, (2, 3, 4, 5))
 
     def test_context_ignores_tokenizer_sentinel_and_validates_uint32_bounds(self) -> None:

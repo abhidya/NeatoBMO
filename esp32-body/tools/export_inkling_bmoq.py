@@ -308,10 +308,9 @@ def _local_layer_ids(data: dict, layers: int) -> tuple[int, ...]:
         result = []
         for layer in range(layers):
             value = layer_types[layer] if layer < len(layer_types) else None
-            if value == "hybrid_sliding":
-                result.append(layer)
-            elif value == "hybrid":
-                continue
+            if isinstance(value, str):
+                if value == "hybrid_sliding":
+                    result.append(layer)
             elif layer in fallback:
                 result.append(layer)
         return tuple(result)
@@ -332,10 +331,9 @@ def _sparse_layer_ids(data: dict, layers: int) -> tuple[int, ...]:
         result = []
         for layer in range(layers):
             value = layer_types[layer] if layer < len(layer_types) else None
-            if value == "sparse":
-                result.append(layer)
-            elif value == "dense":
-                continue
+            if isinstance(value, str):
+                if value == "sparse":
+                    result.append(layer)
             elif layer >= dense_idx:
                 result.append(layer)
         return tuple(result)
