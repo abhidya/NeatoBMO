@@ -38,6 +38,17 @@ class TestIntentMatching(unittest.TestCase):
         self.assertEqual(hit.routine, "battery")
         self.assertIn("tummy", hit.reply.lower())
 
+    def test_low_battery_and_sleep_use_reviewed_shutdown_line(self):
+        class LowBatteryRobot:
+            def charger(self):
+                return {"FuelPercent": 12}
+
+        battery = routines.match("check battery", routines.ConvoState(),
+                                 {"robot": LowBatteryRobot()})
+        sleepy = routines.match("go to sleep", routines.ConvoState(), {})
+        self.assertEqual(battery.reply, "Battery low shut down [sleepy]")
+        self.assertEqual(sleepy.reply, "Battery low shut down [sleepy]")
+
 
 class TestFollowUpStateMachine(unittest.TestCase):
     def test_game_two_turn_flow(self):

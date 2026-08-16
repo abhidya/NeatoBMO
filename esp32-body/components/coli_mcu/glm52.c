@@ -222,7 +222,7 @@ coli_status_t coli_glm52_config_load(const coli_model_t *model,
         config.num_layers > 128 || config.num_heads == 0 ||
         config.num_heads > 1024 || config.num_experts == 0 ||
         config.num_experts > 4096 || config.experts_per_token == 0 ||
-        config.experts_per_token > 64 ||
+        config.experts_per_token > COLI_MOE_MAX_TOP_K ||
         config.experts_per_token > config.num_experts ||
         config.moe_intermediate_size == 0 ||
         config.moe_intermediate_size > (1u << 20) ||

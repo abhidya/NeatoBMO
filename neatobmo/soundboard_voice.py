@@ -45,7 +45,14 @@ _STOP_WORDS = {
 _CONTEXT_KEYWORDS = {
     "brain": "butt", "disk": "butt", "drive": "butt",
     "memory": "butt", "onboard": "butt", "ssd": "butt",
-    "storage": "butt",
+    "storage": "butt", "sleep": "battery", "sleepy": "battery",
+    "tired": "battery",
+}
+
+_CONTEXT_LINES = {
+    "sleep": "battery low shut down",
+    "sleepy": "battery low shut down",
+    "tired": "battery low shut down",
 }
 
 
@@ -178,8 +185,14 @@ class SoundboardVoice:
         wanted = _keywords(text)
         if not wanted:
             return []
+        normalized_words = set(normalize_phrase(text).split())
+        forced = []
+        for word, line in _CONTEXT_LINES.items():
+            if word in normalized_words and self.resolve(line) is not None:
+                if line not in forced:
+                    forced.append(line)
         ranked = []
-        seen = set()
+        seen = set(forced)
         for sound in self.sounds:
             if not self._eligible(sound):
                 continue
@@ -196,7 +209,7 @@ class SoundboardVoice:
             seen.add(spoken)
             ranked.append((score, sound.get("content_seconds", 999), spoken))
         ranked.sort(key=lambda item: (-item[0], item[1], item[2]))
-        return [spoken for _, _, spoken in ranked[:limit]]
+        return (forced + [spoken for _, _, spoken in ranked])[:limit]
 
     def _module_path(self, sound):
         path = (self.root / sound["module"]).resolve()

@@ -27,6 +27,7 @@ typedef struct {
     uint32_t scale_id;
     matrix_kind_t kind;
     uint32_t expert;
+    uint32_t bundle_experts;
     uint32_t rows;
     uint32_t columns;
     uint64_t weight_offset;
@@ -132,11 +133,24 @@ static void add_spec(matrix_spec_t *specs, size_t *count, uint32_t weight_id,
     spec->scale_id = scale_id;
     spec->kind = kind;
     spec->expert = expert;
+    spec->bundle_experts = 1u;
     spec->rows = rows;
     spec->columns = columns;
     spec->weight_bytes = (uint64_t)rows * columns / 2u;
     spec->scale_bytes =
         (uint64_t)rows * (columns / GROUP_SIZE) * sizeof(float);
+}
+
+static void add_bundle_spec(matrix_spec_t *specs, size_t *count,
+                            uint32_t weight_id, uint32_t scale_id,
+                            matrix_kind_t kind, uint32_t rows,
+                            uint32_t columns)
+{
+    add_spec(specs, count, weight_id, scale_id, kind, 0u, rows, columns);
+    matrix_spec_t *spec = &specs[*count - 1u];
+    spec->bundle_experts = EXPERTS;
+    spec->weight_bytes *= EXPERTS;
+    spec->scale_bytes *= EXPERTS;
 }
 
 static void assign_offsets(matrix_spec_t *specs, size_t count)
@@ -156,24 +170,32 @@ static void write_matrix(FILE *file, const matrix_spec_t *spec)
     assert(fseeko(file, spec->weight_offset, SEEK_SET) == 0);
     uint8_t packed[INTERMEDIATE / 2u];
     assert(spec->columns / 2u <= sizeof(packed));
-    for (uint32_t row = 0; row < spec->rows; ++row) {
-        for (uint32_t column = 0; column < spec->columns; column += 2u) {
-            uint8_t low =
-                (uint8_t)matrix_q(spec->kind, spec->expert, row, column) & 0x0fu;
-            uint8_t high =
-                (uint8_t)matrix_q(spec->kind, spec->expert, row, column + 1u) &
-                0x0fu;
-            packed[column / 2u] = low | (uint8_t)(high << 4);
+    for (uint32_t bundled = 0; bundled < spec->bundle_experts; ++bundled) {
+        uint32_t expert = spec->bundle_experts > 1u ? bundled : spec->expert;
+        for (uint32_t row = 0; row < spec->rows; ++row) {
+            for (uint32_t column = 0; column < spec->columns; column += 2u) {
+                uint8_t low =
+                    (uint8_t)matrix_q(spec->kind, expert, row, column) & 0x0fu;
+                uint8_t high =
+                    (uint8_t)matrix_q(spec->kind, expert, row, column + 1u) &
+                    0x0fu;
+                packed[column / 2u] = low | (uint8_t)(high << 4);
+            }
+            assert(fwrite(packed, 1, spec->columns / 2u, file) ==
+                   spec->columns / 2u);
         }
-        assert(fwrite(packed, 1, spec->columns / 2u, file) ==
-               spec->columns / 2u);
     }
 
     assert(fseeko(file, spec->scale_offset, SEEK_SET) == 0);
-    for (uint32_t row = 0; row < spec->rows; ++row) {
-        for (uint32_t group = 0; group < spec->columns / GROUP_SIZE; ++group) {
-            float scale = matrix_scale(spec->kind, spec->expert, row, group);
-            assert(fwrite(&scale, 1, sizeof(scale), file) == sizeof(scale));
+    for (uint32_t bundled = 0; bundled < spec->bundle_experts; ++bundled) {
+        uint32_t expert = spec->bundle_experts > 1u ? bundled : spec->expert;
+        for (uint32_t row = 0; row < spec->rows; ++row) {
+            for (uint32_t group = 0; group < spec->columns / GROUP_SIZE;
+                 ++group) {
+                float scale = matrix_scale(spec->kind, expert, row, group);
+                assert(fwrite(&scale, 1, sizeof(scale), file) ==
+                       sizeof(scale));
+            }
         }
     }
 }
@@ -198,6 +220,21 @@ static size_t make_specs(matrix_spec_t *specs,
         add_spec(specs, &count, base + 4u, base + 5u, MATRIX_DOWN, expert,
                  HIDDEN, INTERMEDIATE);
     }
+    assign_offsets(specs, count);
+    return count;
+}
+
+static size_t make_bundle_specs(matrix_spec_t specs[4])
+{
+    size_t count = 0;
+    add_spec(specs, &count, 1000u, 1001u, MATRIX_ROUTER, 0u, EXPERTS,
+             HIDDEN);
+    add_bundle_spec(specs, &count, 3000u, 3001u, MATRIX_GATE,
+                    INTERMEDIATE, HIDDEN);
+    add_bundle_spec(specs, &count, 3002u, 3003u, MATRIX_UP, INTERMEDIATE,
+                    HIDDEN);
+    add_bundle_spec(specs, &count, 3004u, 3005u, MATRIX_DOWN, HIDDEN,
+                    INTERMEDIATE);
     assign_offsets(specs, count);
     return count;
 }
@@ -228,15 +265,42 @@ static void write_fixture(const char *path, const matrix_spec_t *specs,
     uint8_t entry[64];
     for (size_t i = 0; i < spec_count; ++i) {
         memset(entry, 0, sizeof(entry));
-        write_entry(entry, specs[i].weight_id, BMOQ_DTYPE_Q4_SYM, GROUP_SIZE,
-                    specs[i].rows, specs[i].columns, specs[i].weight_offset,
-                    specs[i].weight_bytes, BMOQ_LAYOUT_Q4_ROW_MAJOR, "moe.w");
+        if (specs[i].bundle_experts > 1u) {
+            put_u32(entry, specs[i].weight_id);
+            put_u16(entry + 4, BMOQ_DTYPE_Q4_SYM);
+            put_u16(entry + 6, GROUP_SIZE);
+            put_u32(entry + 8, specs[i].bundle_experts);
+            put_u32(entry + 12, specs[i].rows);
+            put_u32(entry + 16, specs[i].columns);
+            put_u32(entry + 20, 1);
+            put_u64(entry + 24, specs[i].weight_offset);
+            put_u64(entry + 32, specs[i].weight_bytes);
+            put_u32(entry + 40, BMOQ_LAYOUT_Q4_EXPERT_BUNDLE);
+        } else {
+            write_entry(entry, specs[i].weight_id, BMOQ_DTYPE_Q4_SYM,
+                        GROUP_SIZE, specs[i].rows, specs[i].columns,
+                        specs[i].weight_offset, specs[i].weight_bytes,
+                        BMOQ_LAYOUT_Q4_ROW_MAJOR, "moe.w");
+        }
         assert(fwrite(entry, 1, sizeof(entry), file) == sizeof(entry));
         memset(entry, 0, sizeof(entry));
-        write_entry(entry, specs[i].scale_id, BMOQ_DTYPE_F32, GROUP_SIZE,
-                    specs[i].rows, specs[i].columns / GROUP_SIZE,
-                    specs[i].scale_offset, specs[i].scale_bytes,
-                    BMOQ_LAYOUT_GROUP_SCALES_F32, "moe.s");
+        if (specs[i].bundle_experts > 1u) {
+            put_u32(entry, specs[i].scale_id);
+            put_u16(entry + 4, BMOQ_DTYPE_F32);
+            put_u16(entry + 6, GROUP_SIZE);
+            put_u32(entry + 8, specs[i].bundle_experts);
+            put_u32(entry + 12, specs[i].rows);
+            put_u32(entry + 16, specs[i].columns / GROUP_SIZE);
+            put_u32(entry + 20, 1);
+            put_u64(entry + 24, specs[i].scale_offset);
+            put_u64(entry + 32, specs[i].scale_bytes);
+            put_u32(entry + 40, BMOQ_LAYOUT_EXPERT_GROUP_SCALES_F32);
+        } else {
+            write_entry(entry, specs[i].scale_id, BMOQ_DTYPE_F32, GROUP_SIZE,
+                        specs[i].rows, specs[i].columns / GROUP_SIZE,
+                        specs[i].scale_offset, specs[i].scale_bytes,
+                        BMOQ_LAYOUT_GROUP_SCALES_F32, "moe.s");
+        }
         assert(fwrite(entry, 1, sizeof(entry), file) == sizeof(entry));
     }
     for (size_t i = 0; i < spec_count; ++i) write_matrix(file, &specs[i]);
@@ -364,10 +428,41 @@ int main(void)
                             workspace, workspace_bytes - 25u, &stats) ==
            COLI_ERR_RANGE);
 
-    free(workspace);
     coli_model_close(&model);
     coli_store_close(store);
     unlink(path);
+
+    matrix_spec_t bundle_specs[4];
+    size_t bundle_spec_count = make_bundle_specs(bundle_specs);
+    char bundle_path[] = "/tmp/coli-moe-bundle-XXXXXX";
+    fd = mkstemp(bundle_path);
+    assert(fd >= 0);
+    close(fd);
+    write_fixture(bundle_path, bundle_specs, bundle_spec_count);
+    assert(coli_store_open_file(bundle_path, &store) == COLI_OK);
+    assert(coli_model_open(store, &model) == COLI_OK);
+    const coli_moe_config_t bundle_config = {
+        .router = {.weight_id = 1000u, .scale_id = 1001u},
+        .expert_bundles =
+            {
+                .gate = {.weight_id = 3000u, .scale_id = 3001u},
+                .up = {.weight_id = 3002u, .scale_id = 3003u},
+                .down = {.weight_id = 3004u, .scale_id = 3005u},
+            },
+        .expert_count = EXPERTS,
+        .top_k = TOP_K,
+        .experts_bundled = true,
+    };
+    assert(coli_moe_forward(&model, &bundle_config, input, HIDDEN, output,
+                            HIDDEN, workspace, workspace_bytes, &stats) ==
+           COLI_OK);
+    for (uint32_t i = 0; i < HIDDEN; ++i)
+        assert(fabsf(output[i] - expected[i]) < 0.0005f);
+
+    free(workspace);
+    coli_model_close(&model);
+    coli_store_close(store);
+    unlink(bundle_path);
     printf("MoE streamed router+experts: PASS (%u experts, top-%u)\n",
            EXPERTS, TOP_K);
     return 0;

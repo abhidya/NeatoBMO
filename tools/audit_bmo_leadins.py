@@ -32,6 +32,14 @@ TEMPLATES = {
         "101-28055268-who-wants-to-play-video-games", 0.24, 1.11),
     "spoken-101soundboards-dot-com": (
         "101-28054910-bmo-always-bounces-back", 0.06, 1.58),
+    "beep-prefix": ("101-23984071-bmo-chop-extended", 0.0, 0.16),
+    "whoosh-soft": ("101-28055067-i-dont-care", 0.87, 1.43),
+    "spoken-101-compact": ("101-28055098-i-am-bmo", 0.0, 0.56),
+    "double-jingle": ("101-28062422-hehehe", 0.0, 0.65),
+    "spoken-101soundboards-alt": (
+        "101-28062439-check-it-out-yall", 0.0, 1.80),
+    "spoken-101soundboards-alt-2": (
+        "101-28062454-ahhhhh", 0.0, 1.50),
 }
 
 
@@ -55,7 +63,7 @@ def read_wav(path: Path) -> np.ndarray:
 def correlation(audio: np.ndarray, template: np.ndarray) -> tuple[float, float]:
     # Downsampling keeps a full scan cheap while preserving these long,
     # broadband signatures. Normalized local energy prevents volume bias.
-    audio = audio[:int(len(audio) * 0.7):10]
+    audio = audio[:min(len(audio), 3 * SAMPLE_RATE):10]
     template = template[::10]
     template -= template.mean()
     if len(audio) < len(template):

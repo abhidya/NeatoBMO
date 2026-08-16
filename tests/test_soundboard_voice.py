@@ -26,9 +26,9 @@ class SoundboardVoiceTests(unittest.TestCase):
     def test_only_individually_reviewed_soundboard_imports_are_enabled(self):
         board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
         self.assertEqual(board.count, 230)
-        self.assertEqual(board.trusted_count, 212)
-        self.assertEqual(board.quarantined_count, 18)
-        self.assertEqual(board.pending_review_count, 16)
+        self.assertEqual(board.trusted_count, 214)
+        self.assertEqual(board.quarantined_count, 16)
+        self.assertEqual(board.pending_review_count, 14)
         self.assertEqual(board.rejected_count, 2)
         self.assertIsNotNone(board.resolve("I love you"))
         self.assertTrue(board.render_for_review("101-28062487-i-love-you")
@@ -40,6 +40,11 @@ class SoundboardVoiceTests(unittest.TestCase):
         self.assertEqual(sound["key"], "101-24061869-bmobutt")
         self.assertIn("it goes in my butt",
                       board.suggestions("Where is your SSD brain?"))
+
+    def test_sleepy_context_retrieves_reviewed_battery_shutdown_line(self):
+        board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")
+        self.assertIn("battery low shut down",
+                      board.suggestions("BMO is sleepy and tired"))
 
     def test_rejected_qa_clips_cannot_resolve(self):
         board = SoundboardVoice(ROOT / "docs/bmo-soundboard/catalog.json")

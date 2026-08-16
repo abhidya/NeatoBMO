@@ -145,7 +145,7 @@ class Glm52Config:
             "num_hidden_layers": (self.num_hidden_layers, 1, 128),
             "num_attention_heads": (self.num_attention_heads, 1, 1024),
             "n_routed_experts": (self.num_experts, 1, 4096),
-            "num_experts_per_tok": (self.num_experts_per_tok, 1, 64),
+            "num_experts_per_tok": (self.num_experts_per_tok, 1, 8),
             "moe_intermediate_size": (self.moe_intermediate_size, 1, 1 << 20),
             "intermediate_size": (self.dense_intermediate_size, 1, 1 << 24),
             "first_k_dense_replace": (self.first_dense_layers, 0, self.num_hidden_layers),

@@ -69,8 +69,9 @@ def _battery_reply(ctx):
         pct = None
     if pct is None:
         return "Tummy not answering! [surprised] [sound:json] [look]"
-    mood = "[party] [sound:yeah]" if pct > 75 else \
-        "[happy] [sound:beep]" if pct > 35 else "[sleepy] [sound:beep]"
+    if pct <= 35:
+        return "Battery low shut down [sleepy]"
+    mood = "[party] [sound:yeah]" if pct > 75 else "[happy] [sound:beep]"
     return f"Battery {pct:.0f} percent! {mood}"
 
 
@@ -119,7 +120,7 @@ ROUTINES = [
      "replies": [_battery_reply]},
     {"name": "sleep",
      "patterns": [r"\bgood ?night\b", r"\bgo to sleep\b", r"\bbed ?time\b"],
-     "replies": ["Night night, friend. [sleepy] [sound:beep]"]},
+     "replies": ["Battery low shut down [sleepy]"]},
     {"name": "game",
      "patterns": [r"\bplay a game\b", r"\bwanna play\b", r"\blet'?s play\b",
                   r"\bvideo ?games?\b"],

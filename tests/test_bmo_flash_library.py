@@ -94,6 +94,23 @@ class PublishedFlashLibraryTests(unittest.TestCase):
             self.assertEqual(sounds[key]["editorial_trim_start_seconds"],
                              trim_start)
 
+    def test_second_human_qa_leadins_are_removed_from_modules(self):
+        sounds = {sound["key"]: sound for sound in self.catalog["sounds"]}
+        expected = {
+            "101-23984071-bmo-chop-extended": 0.45,
+            "101-28055067-i-dont-care": 1.4,
+            "101-28055098-i-am-bmo": 2.136,
+            "101-28055501-battery-low-shut-down": 0.58,
+            "101-28062422-hehehe": 0.65,
+            "101-28062439-check-it-out-yall": 2.021,
+            "101-28062454-ahhhhh": 1.6,
+            "101-28062522-bank-acount": 0.59,
+            "101-28069397-i-will-kill-them": 0.8,
+        }
+        for key, trim_start in expected.items():
+            self.assertEqual(sounds[key]["editorial_trim_start_seconds"],
+                             trim_start)
+
 
 class BuilderTests(unittest.TestCase):
     def test_best_slots_prefers_fewest_then_least_waste(self):

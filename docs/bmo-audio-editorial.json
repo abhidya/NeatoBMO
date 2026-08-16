@@ -10,7 +10,16 @@
     "101-28055317-bmo-chop": 1.86,
     "101-28055358-yaay-bmo": 1.933,
     "101-28055646-funnymoney": 1.175,
-    "101-28069416-hello-family": 1.175
+    "101-28069416-hello-family": 1.175,
+    "101-23984071-bmo-chop-extended": 0.45,
+    "101-28055067-i-dont-care": 1.4,
+    "101-28055098-i-am-bmo": 2.136,
+    "101-28055501-battery-low-shut-down": 0.58,
+    "101-28062422-hehehe": 0.65,
+    "101-28062439-check-it-out-yall": 2.021,
+    "101-28062454-ahhhhh": 1.6,
+    "101-28062522-bank-acount": 0.59,
+    "101-28069397-i-will-kill-them": 0.8
   },
   "labels": {
     "101-24061869-bmobutt": "It goes in my butt"
@@ -61,6 +70,42 @@
       "artifact": "whoosh-tone",
       "correlation": 0.9845,
       "review": "automatic-high-confidence"
+    },
+    "101-23984071-bmo-chop-extended": {
+      "artifact": "beep-prefix",
+      "review": "human"
+    },
+    "101-28055067-i-dont-care": {
+      "artifact": "whoosh-soft",
+      "review": "human"
+    },
+    "101-28055098-i-am-bmo": {
+      "artifact": "spoken-101-compact",
+      "review": "human"
+    },
+    "101-28055501-battery-low-shut-down": {
+      "artifact": "beep-prefix",
+      "review": "human"
+    },
+    "101-28062422-hehehe": {
+      "artifact": "double-jingle",
+      "review": "human"
+    },
+    "101-28062439-check-it-out-yall": {
+      "artifact": "spoken-101soundboards-alt",
+      "review": "human"
+    },
+    "101-28062454-ahhhhh": {
+      "artifact": "spoken-101soundboards-alt-2",
+      "review": "human"
+    },
+    "101-28062522-bank-acount": {
+      "artifact": "double-jingle",
+      "review": "human"
+    },
+    "101-28069397-i-will-kill-them": {
+      "artifact": "spoken-101-compact",
+      "review": "human"
     }
   }
 }
