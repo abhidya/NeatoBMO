@@ -176,10 +176,10 @@
     },
     {
       "index": 4,
-      "file": "modules/bmo-page-004-509f8a165f94.bin",
+      "file": "modules/bmo-page-004-23637a32cd42.bin",
       "bytes": 770048,
-      "sha256": "509f8a165f9475331af66570849dfed5aeb72d7079f3f3670e673f4d61eaa9aa",
-      "transport_additive_checksum_hex": "0x0401e0dd",
+      "sha256": "23637a32cd4201fa707c69f1167358adce2423bcf1a2a7af9e9a0729af50d141",
+      "transport_additive_checksum_hex": "0x033ca9d0",
       "sounds": [
         {
           "canonical_key": "101-28055268-who-wants-to-play-video-games",
@@ -196,20 +196,18 @@
           "label": "Bmo chop!",
           "slots": [
             6,
-            8,
-            9
+            8
           ],
-          "content_seconds": 5.609932,
+          "content_seconds": 3.749932,
           "alias_count": 1
         },
         {
           "canonical_key": "101-28055080-bmo-stop",
           "label": "Bmo:”stop!”",
           "slots": [
-            0,
-            7
+            0
           ],
-          "content_seconds": 4.224082,
+          "content_seconds": 2.24907,
           "alias_count": 1
         },
         {
@@ -336,19 +334,18 @@
     },
     {
       "index": 7,
-      "file": "modules/bmo-page-007-55021a504296.bin",
+      "file": "modules/bmo-page-007-45a7e7393c65.bin",
       "bytes": 770048,
-      "sha256": "55021a5042964d2aab1d17e17914ffdaa9df74dc48ac84440076cdcf9e3dfcaf",
-      "transport_additive_checksum_hex": "0x03f45b35",
+      "sha256": "45a7e7393c656c63f45b38b0bdb8c0c3c0b802c1c599709f1940fb2cba605ede",
+      "transport_additive_checksum_hex": "0x03819918",
       "sounds": [
         {
           "canonical_key": "101-28055358-yaay-bmo",
           "label": "Yaay bmo",
           "slots": [
-            2,
-            1
+            2
           ],
-          "content_seconds": 3.51415,
+          "content_seconds": 1.581179,
           "alias_count": 1
         },
         {
@@ -512,10 +509,10 @@
     },
     {
       "index": 10,
-      "file": "modules/bmo-page-010-63d0e1bea954.bin",
+      "file": "modules/bmo-page-010-4700932008e2.bin",
       "bytes": 770048,
-      "sha256": "63d0e1bea954d31b1a9a554dfef9c4dd15764430f8239bf19b915e3569592f3a",
-      "transport_additive_checksum_hex": "0x0454a085",
+      "sha256": "4700932008e2341a92097770543312fa940ba8ec1545b7df17244e2a3ebca0a4",
+      "transport_additive_checksum_hex": "0x041df895",
       "sounds": [
         {
           "canonical_key": "official-audio-dizzy",
@@ -534,7 +531,7 @@
             2,
             1
           ],
-          "content_seconds": 3.086259,
+          "content_seconds": 1.911247,
           "alias_count": 1
         },
         {
@@ -571,10 +568,10 @@
     },
     {
       "index": 11,
-      "file": "modules/bmo-page-011-c891c7245cd9.bin",
+      "file": "modules/bmo-page-011-ae1777bf7040.bin",
       "bytes": 770048,
-      "sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
-      "transport_additive_checksum_hex": "0x03a3d1b9",
+      "sha256": "ae1777bf70405ee0b6e1e4369b343b31100ea4886b07c96c3abc82644e72898b",
+      "transport_additive_checksum_hex": "0x033a2ab6",
       "sounds": [
         {
           "canonical_key": "official-parade-conversation-parade-starters06",
@@ -609,10 +606,9 @@
           "canonical_key": "101-28055166-mmm-hmm",
           "label": "mmm hmm",
           "slots": [
-            8,
-            9
+            8
           ],
-          "content_seconds": 2.888707,
+          "content_seconds": 1.093696,
           "alias_count": 1
         },
         {
@@ -629,10 +625,10 @@
     },
     {
       "index": 12,
-      "file": "modules/bmo-page-012-fb0a8af5050a.bin",
+      "file": "modules/bmo-page-012-a5d30f24d598.bin",
       "bytes": 770048,
-      "sha256": "fb0a8af5050a5a06a2209b99797a521832eb0d483fda49a08af4e3ea9919a85c",
-      "transport_additive_checksum_hex": "0x043728bb",
+      "sha256": "a5d30f24d598053992af2454494d28abb0d4032166b909ff8caa552d90a67683",
+      "transport_additive_checksum_hex": "0x0400a83e",
       "sounds": [
         {
           "canonical_key": "official-parade-conversation-parade-random01",
@@ -667,10 +663,9 @@
           "canonical_key": "101-28069416-hello-family",
           "label": "hello family",
           "slots": [
-            8,
-            9
+            8
           ],
-          "content_seconds": 2.693379,
+          "content_seconds": 1.518367,
           "alias_count": 1
         },
         {
@@ -2648,8 +2643,8 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c891c7245cd9.bin",
-      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
+      "module": "modules/bmo-page-011-ae1777bf7040.bin",
+      "module_sha256": "ae1777bf70405ee0b6e1e4369b343b31100ea4886b07c96c3abc82644e72898b",
       "slots": [
         2
       ],
@@ -2849,37 +2844,26 @@
     },
     {
       "page": 4,
-      "module": "modules/bmo-page-004-509f8a165f94.bin",
-      "module_sha256": "509f8a165f9475331af66570849dfed5aeb72d7079f3f3670e673f4d61eaa9aa",
+      "module": "modules/bmo-page-004-23637a32cd42.bin",
+      "module_sha256": "23637a32cd4201fa707c69f1167358adce2423bcf1a2a7af9e9a0729af50d141",
       "slots": [
-        0,
-        7
+        0
       ],
       "commands": [
-        "PlaySound 0",
-        "PlaySound 7"
+        "PlaySound 0"
       ],
       "slot_seconds": [
-        2.881995,
-        2.017324
+        2.881995
       ],
-      "content_seconds": 4.224082,
+      "content_seconds": 2.24907,
       "segments": [
         {
           "slot": 0,
           "pcm_offset": 4112,
-          "content_bytes": 127096,
+          "content_bytes": 99184,
           "slot_bytes": 127096,
-          "content_seconds": 2.881995,
+          "content_seconds": 2.24907,
           "slot_seconds": 2.881995
-        },
-        {
-          "slot": 7,
-          "pcm_offset": 400400,
-          "content_bytes": 59186,
-          "slot_bytes": 88964,
-          "content_seconds": 1.342086,
-          "slot_seconds": 2.017324
         }
       ],
       "key": "101-28055080-bmo-stop",
@@ -2887,12 +2871,13 @@
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/28055080-bmostop",
-      "canonical_key": "101-28055080-bmo-stop"
+      "canonical_key": "101-28055080-bmo-stop",
+      "editorial_trim_start_seconds": 1.975
     },
     {
       "page": 7,
-      "module": "modules/bmo-page-007-55021a504296.bin",
-      "module_sha256": "55021a5042964d2aab1d17e17914ffdaa9df74dc48ac84440076cdcf9e3dfcaf",
+      "module": "modules/bmo-page-007-45a7e7393c65.bin",
+      "module_sha256": "45a7e7393c656c63f45b38b0bdb8c0c3c0b802c1c599709f1940fb2cba605ede",
       "slots": [
         6,
         10
@@ -2933,36 +2918,25 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c891c7245cd9.bin",
-      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
+      "module": "modules/bmo-page-011-ae1777bf7040.bin",
+      "module_sha256": "ae1777bf70405ee0b6e1e4369b343b31100ea4886b07c96c3abc82644e72898b",
       "slots": [
-        8,
-        9
+        8
       ],
       "commands": [
-        "PlaySound 8",
-        "PlaySound 9"
+        "PlaySound 8"
       ],
       "slot_seconds": [
-        2.008662,
         2.008662
       ],
-      "content_seconds": 2.888707,
+      "content_seconds": 1.093696,
       "segments": [
         {
           "slot": 8,
           "pcm_offset": 489488,
-          "content_bytes": 88582,
+          "content_bytes": 48232,
           "slot_bytes": 88582,
-          "content_seconds": 2.008662,
-          "slot_seconds": 2.008662
-        },
-        {
-          "slot": 9,
-          "pcm_offset": 578576,
-          "content_bytes": 38810,
-          "slot_bytes": 88582,
-          "content_seconds": 0.880045,
+          "content_seconds": 1.093696,
           "slot_seconds": 2.008662
         }
       ],
@@ -2971,12 +2945,13 @@
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/28055166-mmm-hmm",
-      "canonical_key": "101-28055166-mmm-hmm"
+      "canonical_key": "101-28055166-mmm-hmm",
+      "editorial_trim_start_seconds": 1.795
     },
     {
       "page": 4,
-      "module": "modules/bmo-page-004-509f8a165f94.bin",
-      "module_sha256": "509f8a165f9475331af66570849dfed5aeb72d7079f3f3670e673f4d61eaa9aa",
+      "module": "modules/bmo-page-004-23637a32cd42.bin",
+      "module_sha256": "23637a32cd4201fa707c69f1167358adce2423bcf1a2a7af9e9a0729af50d141",
       "slots": [
         10,
         2
@@ -3018,24 +2993,21 @@
     },
     {
       "page": 4,
-      "module": "modules/bmo-page-004-509f8a165f94.bin",
-      "module_sha256": "509f8a165f9475331af66570849dfed5aeb72d7079f3f3670e673f4d61eaa9aa",
+      "module": "modules/bmo-page-004-23637a32cd42.bin",
+      "module_sha256": "23637a32cd4201fa707c69f1167358adce2423bcf1a2a7af9e9a0729af50d141",
       "slots": [
         6,
-        8,
-        9
+        8
       ],
       "commands": [
         "PlaySound 6",
-        "PlaySound 8",
-        "PlaySound 9"
+        "PlaySound 8"
       ],
       "slot_seconds": [
         2.008662,
-        2.008662,
         2.008662
       ],
-      "content_seconds": 5.609932,
+      "content_seconds": 3.749932,
       "segments": [
         {
           "slot": 6,
@@ -3048,17 +3020,9 @@
         {
           "slot": 8,
           "pcm_offset": 489488,
-          "content_bytes": 88582,
+          "content_bytes": 76790,
           "slot_bytes": 88582,
-          "content_seconds": 2.008662,
-          "slot_seconds": 2.008662
-        },
-        {
-          "slot": 9,
-          "pcm_offset": 578576,
-          "content_bytes": 70234,
-          "slot_bytes": 88582,
-          "content_seconds": 1.592608,
+          "content_seconds": 1.74127,
           "slot_seconds": 2.008662
         }
       ],
@@ -3067,41 +3031,31 @@
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/28055317-bmo-chop",
-      "canonical_key": "101-28055317-bmo-chop"
+      "canonical_key": "101-28055317-bmo-chop",
+      "editorial_trim_start_seconds": 1.86
     },
     {
       "page": 7,
-      "module": "modules/bmo-page-007-55021a504296.bin",
-      "module_sha256": "55021a5042964d2aab1d17e17914ffdaa9df74dc48ac84440076cdcf9e3dfcaf",
+      "module": "modules/bmo-page-007-45a7e7393c65.bin",
+      "module_sha256": "45a7e7393c656c63f45b38b0bdb8c0c3c0b802c1c599709f1940fb2cba605ede",
       "slots": [
-        2,
-        1
+        2
       ],
       "commands": [
-        "PlaySound 2",
-        "PlaySound 1"
+        "PlaySound 2"
       ],
       "slot_seconds": [
-        1.869388,
-        1.867392
+        1.869388
       ],
-      "content_seconds": 3.51415,
+      "content_seconds": 1.581179,
       "segments": [
         {
           "slot": 2,
           "pcm_offset": 214032,
-          "content_bytes": 82440,
+          "content_bytes": 69730,
           "slot_bytes": 82440,
-          "content_seconds": 1.869388,
+          "content_seconds": 1.581179,
           "slot_seconds": 1.869388
-        },
-        {
-          "slot": 1,
-          "pcm_offset": 131600,
-          "content_bytes": 72534,
-          "slot_bytes": 82352,
-          "content_seconds": 1.644762,
-          "slot_seconds": 1.867392
         }
       ],
       "key": "101-28055358-yaay-bmo",
@@ -3109,7 +3063,8 @@
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/28055358-yaay-bmo",
-      "canonical_key": "101-28055358-yaay-bmo"
+      "canonical_key": "101-28055358-yaay-bmo",
+      "editorial_trim_start_seconds": 1.933
     },
     {
       "page": 6,
@@ -3155,8 +3110,8 @@
     },
     {
       "page": 10,
-      "module": "modules/bmo-page-010-63d0e1bea954.bin",
-      "module_sha256": "63d0e1bea954d31b1a9a554dfef9c4dd15764430f8239bf19b915e3569592f3a",
+      "module": "modules/bmo-page-010-4700932008e2.bin",
+      "module_sha256": "4700932008e2341a92097770543312fa940ba8ec1545b7df17244e2a3ebca0a4",
       "slots": [
         2,
         1
@@ -3169,7 +3124,7 @@
         1.869388,
         1.867392
       ],
-      "content_seconds": 3.086259,
+      "content_seconds": 1.911247,
       "segments": [
         {
           "slot": 2,
@@ -3182,9 +3137,9 @@
         {
           "slot": 1,
           "pcm_offset": 131600,
-          "content_bytes": 53664,
+          "content_bytes": 1846,
           "slot_bytes": 82352,
-          "content_seconds": 1.216871,
+          "content_seconds": 0.041859,
           "slot_seconds": 1.867392
         }
       ],
@@ -3193,7 +3148,8 @@
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/28055646-funnymoney",
-      "canonical_key": "101-28055646-funnymoney"
+      "canonical_key": "101-28055646-funnymoney",
+      "editorial_trim_start_seconds": 1.175
     },
     {
       "page": 14,
@@ -3428,36 +3384,25 @@
     },
     {
       "page": 12,
-      "module": "modules/bmo-page-012-fb0a8af5050a.bin",
-      "module_sha256": "fb0a8af5050a5a06a2209b99797a521832eb0d483fda49a08af4e3ea9919a85c",
+      "module": "modules/bmo-page-012-a5d30f24d598.bin",
+      "module_sha256": "a5d30f24d598053992af2454494d28abb0d4032166b909ff8caa552d90a67683",
       "slots": [
-        8,
-        9
+        8
       ],
       "commands": [
-        "PlaySound 8",
-        "PlaySound 9"
+        "PlaySound 8"
       ],
       "slot_seconds": [
-        2.008662,
         2.008662
       ],
-      "content_seconds": 2.693379,
+      "content_seconds": 1.518367,
       "segments": [
         {
           "slot": 8,
           "pcm_offset": 489488,
-          "content_bytes": 88582,
+          "content_bytes": 66960,
           "slot_bytes": 88582,
-          "content_seconds": 2.008662,
-          "slot_seconds": 2.008662
-        },
-        {
-          "slot": 9,
-          "pcm_offset": 578576,
-          "content_bytes": 30196,
-          "slot_bytes": 88582,
-          "content_seconds": 0.684717,
+          "content_seconds": 1.518367,
           "slot_seconds": 2.008662
         }
       ],
@@ -3466,7 +3411,8 @@
       "verification": "dedicated-bmo-board-metadata",
       "category": null,
       "source_page_url": "https://www.101soundboards.com/sounds/28069416-hello-family",
-      "canonical_key": "101-28069416-hello-family"
+      "canonical_key": "101-28069416-hello-family",
+      "editorial_trim_start_seconds": 1.175
     },
     {
       "page": 22,
@@ -3932,8 +3878,8 @@
     },
     {
       "page": 7,
-      "module": "modules/bmo-page-007-55021a504296.bin",
-      "module_sha256": "55021a5042964d2aab1d17e17914ffdaa9df74dc48ac84440076cdcf9e3dfcaf",
+      "module": "modules/bmo-page-007-45a7e7393c65.bin",
+      "module_sha256": "45a7e7393c656c63f45b38b0bdb8c0c3c0b802c1c599709f1940fb2cba605ede",
       "slots": [
         0,
         7
@@ -4434,8 +4380,8 @@
     },
     {
       "page": 10,
-      "module": "modules/bmo-page-010-63d0e1bea954.bin",
-      "module_sha256": "63d0e1bea954d31b1a9a554dfef9c4dd15764430f8239bf19b915e3569592f3a",
+      "module": "modules/bmo-page-010-4700932008e2.bin",
+      "module_sha256": "4700932008e2341a92097770543312fa940ba8ec1545b7df17244e2a3ebca0a4",
       "slots": [
         0,
         3
@@ -4549,8 +4495,8 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c891c7245cd9.bin",
-      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
+      "module": "modules/bmo-page-011-ae1777bf7040.bin",
+      "module_sha256": "ae1777bf70405ee0b6e1e4369b343b31100ea4886b07c96c3abc82644e72898b",
       "slots": [
         7,
         19
@@ -4901,8 +4847,8 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c891c7245cd9.bin",
-      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
+      "module": "modules/bmo-page-011-ae1777bf7040.bin",
+      "module_sha256": "ae1777bf70405ee0b6e1e4369b343b31100ea4886b07c96c3abc82644e72898b",
       "slots": [
         6,
         10
@@ -7833,8 +7779,8 @@
     },
     {
       "page": 7,
-      "module": "modules/bmo-page-007-55021a504296.bin",
-      "module_sha256": "55021a5042964d2aab1d17e17914ffdaa9df74dc48ac84440076cdcf9e3dfcaf",
+      "module": "modules/bmo-page-007-45a7e7393c65.bin",
+      "module_sha256": "45a7e7393c656c63f45b38b0bdb8c0c3c0b802c1c599709f1940fb2cba605ede",
       "slots": [
         3,
         19
@@ -7875,8 +7821,8 @@
     },
     {
       "page": 4,
-      "module": "modules/bmo-page-004-509f8a165f94.bin",
-      "module_sha256": "509f8a165f9475331af66570849dfed5aeb72d7079f3f3670e673f4d61eaa9aa",
+      "module": "modules/bmo-page-004-23637a32cd42.bin",
+      "module_sha256": "23637a32cd4201fa707c69f1167358adce2423bcf1a2a7af9e9a0729af50d141",
       "slots": [
         3,
         19
@@ -8291,8 +8237,8 @@
     },
     {
       "page": 12,
-      "module": "modules/bmo-page-012-fb0a8af5050a.bin",
-      "module_sha256": "fb0a8af5050a5a06a2209b99797a521832eb0d483fda49a08af4e3ea9919a85c",
+      "module": "modules/bmo-page-012-a5d30f24d598.bin",
+      "module_sha256": "a5d30f24d598053992af2454494d28abb0d4032166b909ff8caa552d90a67683",
       "slots": [
         0
       ],
@@ -8561,8 +8507,8 @@
     },
     {
       "page": 7,
-      "module": "modules/bmo-page-007-55021a504296.bin",
-      "module_sha256": "55021a5042964d2aab1d17e17914ffdaa9df74dc48ac84440076cdcf9e3dfcaf",
+      "module": "modules/bmo-page-007-45a7e7393c65.bin",
+      "module_sha256": "45a7e7393c656c63f45b38b0bdb8c0c3c0b802c1c599709f1940fb2cba605ede",
       "slots": [
         8,
         9
@@ -8696,8 +8642,8 @@
     },
     {
       "page": 12,
-      "module": "modules/bmo-page-012-fb0a8af5050a.bin",
-      "module_sha256": "fb0a8af5050a5a06a2209b99797a521832eb0d483fda49a08af4e3ea9919a85c",
+      "module": "modules/bmo-page-012-a5d30f24d598.bin",
+      "module_sha256": "a5d30f24d598053992af2454494d28abb0d4032166b909ff8caa552d90a67683",
       "slots": [
         7,
         3,
@@ -8822,8 +8768,8 @@
     },
     {
       "page": 10,
-      "module": "modules/bmo-page-010-63d0e1bea954.bin",
-      "module_sha256": "63d0e1bea954d31b1a9a554dfef9c4dd15764430f8239bf19b915e3569592f3a",
+      "module": "modules/bmo-page-010-4700932008e2.bin",
+      "module_sha256": "4700932008e2341a92097770543312fa940ba8ec1545b7df17244e2a3ebca0a4",
       "slots": [
         6,
         10
@@ -8895,8 +8841,8 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c891c7245cd9.bin",
-      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
+      "module": "modules/bmo-page-011-ae1777bf7040.bin",
+      "module_sha256": "ae1777bf70405ee0b6e1e4369b343b31100ea4886b07c96c3abc82644e72898b",
       "slots": [
         0,
         3
@@ -9488,8 +9434,8 @@
     },
     {
       "page": 10,
-      "module": "modules/bmo-page-010-63d0e1bea954.bin",
-      "module_sha256": "63d0e1bea954d31b1a9a554dfef9c4dd15764430f8239bf19b915e3569592f3a",
+      "module": "modules/bmo-page-010-4700932008e2.bin",
+      "module_sha256": "4700932008e2341a92097770543312fa940ba8ec1545b7df17244e2a3ebca0a4",
       "slots": [
         8,
         9
@@ -9793,8 +9739,8 @@
     },
     {
       "page": 10,
-      "module": "modules/bmo-page-010-63d0e1bea954.bin",
-      "module_sha256": "63d0e1bea954d31b1a9a554dfef9c4dd15764430f8239bf19b915e3569592f3a",
+      "module": "modules/bmo-page-010-4700932008e2.bin",
+      "module_sha256": "4700932008e2341a92097770543312fa940ba8ec1545b7df17244e2a3ebca0a4",
       "slots": [
         7,
         19
@@ -9835,8 +9781,8 @@
     },
     {
       "page": 12,
-      "module": "modules/bmo-page-012-fb0a8af5050a.bin",
-      "module_sha256": "fb0a8af5050a5a06a2209b99797a521832eb0d483fda49a08af4e3ea9919a85c",
+      "module": "modules/bmo-page-012-a5d30f24d598.bin",
+      "module_sha256": "a5d30f24d598053992af2454494d28abb0d4032166b909ff8caa552d90a67683",
       "slots": [
         2,
         1
@@ -10167,8 +10113,8 @@
     },
     {
       "page": 11,
-      "module": "modules/bmo-page-011-c891c7245cd9.bin",
-      "module_sha256": "c891c7245cd9c5577e8c009115bc520df1ec15ad738b5d5e437f2682528642de",
+      "module": "modules/bmo-page-011-ae1777bf7040.bin",
+      "module_sha256": "ae1777bf70405ee0b6e1e4369b343b31100ea4886b07c96c3abc82644e72898b",
       "slots": [
         7,
         19
@@ -10490,8 +10436,8 @@
     },
     {
       "page": 12,
-      "module": "modules/bmo-page-012-fb0a8af5050a.bin",
-      "module_sha256": "fb0a8af5050a5a06a2209b99797a521832eb0d483fda49a08af4e3ea9919a85c",
+      "module": "modules/bmo-page-012-a5d30f24d598.bin",
+      "module_sha256": "a5d30f24d598053992af2454494d28abb0d4032166b909ff8caa552d90a67683",
       "slots": [
         6,
         10

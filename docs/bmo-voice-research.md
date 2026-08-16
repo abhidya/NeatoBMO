@@ -56,6 +56,12 @@ but does not use loose semantic similarity.
 Adding a metadata-only key to `approved` admits that individual clip; adding it
 to `rejected` prevents use even if another verification label is present.
 
+`tools/audit_bmo_leadins.py` fingerprints pending board clips against the
+human-confirmed 101 idents and whoosh families. `--apply` records only matches
+at or above 0.70 normalized correlation in `docs/bmo-audio-editorial.json`,
+rebuilds the source payloads, and patches only affected Neato pages. A second
+scan must report no remaining automatic matches before the QA pack is emitted.
+
 ## Storage boundary
 
 The Neato flash bank holds ten simultaneously available reaction slots. The

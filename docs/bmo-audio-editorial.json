@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "trim_start_seconds": {
+    "101-28055268-who-wants-to-play-video-games": 2.25,
+    "101-28062487-i-love-you": 1.57,
+    "101-24061886-bmo-hello": 1.48,
+    "101-28054910-bmo-always-bounces-back": 2.02,
+    "101-28055080-bmo-stop": 1.975,
+    "101-28055166-mmm-hmm": 1.795,
+    "101-28055317-bmo-chop": 1.86,
+    "101-28055358-yaay-bmo": 1.933,
+    "101-28055646-funnymoney": 1.175,
+    "101-28069416-hello-family": 1.175
+  },
+  "labels": {
+    "101-24061869-bmobutt": "It goes in my butt"
+  },
+  "trim_evidence": {
+    "101-28055268-who-wants-to-play-video-games": {
+      "artifact": "spoken-101-ident",
+      "review": "human"
+    },
+    "101-28062487-i-love-you": {
+      "artifact": "whoosh",
+      "review": "human"
+    },
+    "101-24061886-bmo-hello": {
+      "artifact": "whoosh",
+      "review": "human"
+    },
+    "101-28054910-bmo-always-bounces-back": {
+      "artifact": "spoken-101soundboards-dot-com",
+      "review": "human"
+    },
+    "101-28055080-bmo-stop": {
+      "artifact": "spoken-101soundboards-dot-com",
+      "correlation": 0.7411,
+      "review": "automatic-high-confidence"
+    },
+    "101-28055166-mmm-hmm": {
+      "artifact": "whoosh-tone",
+      "correlation": 0.9845,
+      "review": "automatic-high-confidence"
+    },
+    "101-28055317-bmo-chop": {
+      "artifact": "whoosh-sweep",
+      "correlation": 0.9629,
+      "review": "automatic-high-confidence"
+    },
+    "101-28055358-yaay-bmo": {
+      "artifact": "spoken-101-ident",
+      "correlation": 0.8298,
+      "review": "automatic-high-confidence"
+    },
+    "101-28055646-funnymoney": {
+      "artifact": "whoosh-tone",
+      "correlation": 0.9845,
+      "review": "automatic-high-confidence"
+    },
+    "101-28069416-hello-family": {
+      "artifact": "whoosh-tone",
+      "correlation": 0.9845,
+      "review": "automatic-high-confidence"
+    }
+  }
+}

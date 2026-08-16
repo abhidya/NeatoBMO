@@ -33,19 +33,18 @@ PACK_MAGIC = b"BMOSND1\0"
 PACK_ALIGNMENT = 4
 SAMPLE_RATE = 22_050
 OFFICIAL_PREFIX = "Payload/Beemo.app/www/"
+EDITORIAL_PATH = ROOT / "docs" / "bmo-audio-editorial.json"
 
-# Human-reviewed cleanup points for board files that prepend a site ident or
-# transition effect to the actual BMO line. Rebuilding from the source MP3 must
-# preserve these edits instead of reintroducing the unwanted audio.
-EDITORIAL_TRIM_START_SECONDS = {
-    "101-28055268-who-wants-to-play-video-games": 2.25,
-    "101-28062487-i-love-you": 1.57,
-    "101-24061886-bmo-hello": 1.48,
-    "101-28054910-bmo-always-bounces-back": 2.02,
-}
-EDITORIAL_LABELS = {
-    "101-24061869-bmobutt": "It goes in my butt",
-}
+
+def load_editorial() -> dict:
+    if not EDITORIAL_PATH.is_file():
+        return {"trim_start_seconds": {}, "labels": {}}
+    return json.loads(EDITORIAL_PATH.read_text())
+
+
+EDITORIAL = load_editorial()
+EDITORIAL_TRIM_START_SECONDS = EDITORIAL.get("trim_start_seconds", {})
+EDITORIAL_LABELS = EDITORIAL.get("labels", {})
 
 
 def sha256(path: Path) -> str:

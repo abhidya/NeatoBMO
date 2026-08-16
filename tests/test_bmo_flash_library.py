@@ -80,6 +80,20 @@ class PublishedFlashLibraryTests(unittest.TestCase):
         self.assertLess(bounce["content_seconds"], 2.0)
         self.assertEqual(butt["label"], "It goes in my butt")
 
+    def test_automatic_leadin_audit_edits_are_embedded_in_modules(self):
+        sounds = {sound["key"]: sound for sound in self.catalog["sounds"]}
+        expected = {
+            "101-28055080-bmo-stop": 1.975,
+            "101-28055166-mmm-hmm": 1.795,
+            "101-28055317-bmo-chop": 1.86,
+            "101-28055358-yaay-bmo": 1.933,
+            "101-28055646-funnymoney": 1.175,
+            "101-28069416-hello-family": 1.175,
+        }
+        for key, trim_start in expected.items():
+            self.assertEqual(sounds[key]["editorial_trim_start_seconds"],
+                             trim_start)
+
 
 class BuilderTests(unittest.TestCase):
     def test_best_slots_prefers_fewest_then_least_waste(self):
