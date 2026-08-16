@@ -36,7 +36,6 @@ from neatobmo import faces
 from neatobmo import emote
 from neatobmo import routines
 from neatobmo import turns
-from neatobmo import turns
 from neatobmo import tts_bank
 from neatobmo.body import BodyController
 from neatobmo.brain import BrainClient
@@ -194,7 +193,40 @@ def chat_events(text, speak_on_robot):
                     spoke=bool(speak_on_robot and local_speech))
         return
 
-    raise NotImplementedError("residual Brain turns are not implemented yet")
+    assistant_prefix = " ".join(local_replies)
+    prompt = _compound_prompt(text, turn_plan.residual, assistant_prefix)
+    yield event("brain_started", residual_summary=turn_plan.residual)
+    body.run(lambda r: (r.led("amber"),
+                        faces.scanline(r, range(20, 110, 30), 0.08)))
+    try:
+        if speak_on_robot:
+            brain_reply, _, err = _streamed_reply(
+                text, prompt=prompt, assistant_prefix=assistant_prefix)
+            if err:
+                raise RuntimeError(err)
+        else:
+            brain_reply = brain.stream(
+                text, lambda _sentence: None, prompt=prompt,
+                assistant_prefix=assistant_prefix)
+        brain_plan = cues.parse(brain_reply)
+        if not routine_names and CFG.speech_mode == "soundbyte":
+            brain_plan = cues.condense(brain_plan,
+                                       burst_seconds=CFG.speech_burst)
+        yield event("brain_result", index=0, display=brain_plan.display,
+                    cues=brain_plan.steps)
+        reply = " ".join(x for x in (local_displays and " ".join(local_displays),
+                                     brain_plan.display) if x)
+        yield event("turn_completed", reply=reply,
+                    cues=local_steps + brain_plan.steps,
+                    routines=routine_names, brain_used=True, partial=False,
+                    spoke=bool(speak_on_robot))
+    except Exception as e:
+        reply = " ".join(local_displays)
+        yield event("turn_error", scope="brain", message=str(e),
+                    recoverable=bool(local_displays))
+        yield event("turn_completed", reply=reply, cues=local_steps,
+                    routines=routine_names, brain_used=True, partial=True,
+                    spoke=False)
 
 def chat_turn(text, speak_on_robot):
     """One conversation turn: routines -> brain -> cues -> body + voice.
@@ -233,8 +265,7 @@ def chat_turn(text, speak_on_robot):
                                  if x)
         else:
             try:
-                brain_reply = brain.chat(text, prompt=prompt,
-                                         assistant_prefix=assistant_prefix)
+                brain_reply = _brain_chat(text, prompt, assistant_prefix)
                 reply = " ".join(x for x in (assistant_prefix, brain_reply)
                                  if x)
             except Exception as e:
@@ -287,6 +318,12 @@ def _compound_prompt(original, residual, assistant_prefix):
     )
 
 
+def _brain_chat(text, prompt=None, assistant_prefix=""):
+    if prompt is None and not assistant_prefix:
+        return brain.chat(text)
+    return brain.chat(text, prompt=prompt, assistant_prefix=assistant_prefix)
+
+
 def _streamed_reply(text, *, prompt=None, assistant_prefix=""):
     """Streaming pipeline: each completed LLM sentence flows into the
     speech synthesizer while later sentences are still generating — BMO
@@ -304,8 +341,7 @@ def _streamed_reply(text, *, prompt=None, assistant_prefix=""):
     stream_job, stream_err = speech.speak(text, units=unit_iter())
     if stream_err is not None:
         try:
-            return brain.chat(text, prompt=prompt,
-                              assistant_prefix=assistant_prefix), False, None
+            return _brain_chat(text, prompt, assistant_prefix), False, None
         except Exception as e:
             return None, False, str(e)
 
@@ -346,8 +382,7 @@ def _streamed_reply(text, *, prompt=None, assistant_prefix=""):
     except Exception as e:
         stream_job["stop"].set()
         try:
-            return brain.chat(text, prompt=prompt,
-                              assistant_prefix=assistant_prefix), False, None
+            return _brain_chat(text, prompt, assistant_prefix), False, None
         except Exception as e2:
             return None, False, f"stream: {e}; retry: {e2}"
     finally:
@@ -370,6 +405,15 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, obj):
         self._reply(json.dumps(obj).encode())
 
+    def _ndjson(self, events):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        for event in events:
+            self.wfile.write(json.dumps(event).encode() + b"\n")
+            self.wfile.flush()
+
     def _robot_json(self, fn):
         """Run fn(robot) under the body lock; shape errors as JSON."""
         if not body.attached:
@@ -380,6 +424,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": str(e)})
 
     def do_GET(self):
+        if self.path.startswith("/thinking-sound?"):
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            names = {
+                "hum": "thinking-hum.wav",
+                "blip-a": "thinking-blip-a.wav",
+                "blip-b": "thinking-blip-b.wav",
+            }
+            filename = names.get(query.get("name", [""])[0])
+            path = (REPO_ROOT / "assets" / "bmo-thinking-sounds" / filename
+                    if filename else None)
+            if path is None or not path.exists():
+                return self._json({"error": "unknown thinking sound"})
+            return self._reply(path.read_bytes(), "audio/wav")
         if self.path.startswith("/sound-bank-file?"):
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             profile = tts_bank.BANK_PROFILES.get(query.get("profile", [""])[0])
@@ -495,8 +552,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": str(e)})
         # /chat
         chat_request = json.loads(raw)
-        self._json(chat_turn(chat_request.get("text", ""),
-                             bool(chat_request.get("speak"))))
+        text = chat_request.get("text", "")
+        speak = bool(chat_request.get("speak"))
+        if "application/x-ndjson" in self.headers.get("Accept", ""):
+            return self._ndjson(chat_events(text, speak))
+        self._json(chat_turn(text, speak))
 
 
 def precache_routine_tts():

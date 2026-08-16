@@ -198,6 +198,34 @@ class ChatTurnTests(unittest.TestCase):
         self.assertFalse(events[-1]["brain_used"])
         self.assertEqual(len(self.web.brain.remembered), 1)
 
+    def test_local_result_precedes_thinking_and_residual_brain_result(self):
+        class FakeBrain:
+            def __init__(self):
+                self.calls = []
+
+            def stream(self, text, on_sentence, **kwargs):
+                self.calls.append((text, kwargs))
+                on_sentence("Blue light scatters! [happy]")
+                return "Blue light scatters! [happy]"
+
+        self.web.brain = FakeBrain()
+        self.web.body = BodyController()
+
+        events = list(self.web.chat_events(
+            "what time is it and why is the sky blue", False))
+
+        self.assertEqual([e["type"] for e in events], [
+            "turn_started", "routine_result", "brain_started",
+            "brain_result", "turn_completed",
+        ])
+        original, options = self.web.brain.calls[0]
+        self.assertEqual(original,
+                         "what time is it and why is the sky blue")
+        self.assertIn("why is the sky blue", options["prompt"])
+        self.assertIn("It is", options["assistant_prefix"])
+        self.assertTrue(events[-1]["brain_used"])
+        self.assertFalse(events[-1]["partial"])
+
 
 if __name__ == "__main__":
     unittest.main()
