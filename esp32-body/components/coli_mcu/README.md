@@ -1,7 +1,9 @@
 # coli_mcu foundation
 
-This component is an ESP-IDF-native storage and model-format foundation with a
-bounded OLMoE BMOQ+CTOK offline generation demo path.
+This component is the staging implementation for a standalone ESP32 Colibri
+ESP-IDF package. It currently has an OLMoE BMOQ+CTOK prompt-to-text path and a
+separate experimental Gemma path. See [COMPATIBILITY.md](COMPATIBILITY.md) for
+the upstream-family matrix and the evidence required before claiming support.
 
 The application owns the one USB Host Library installation and its daemon.
 `coli_mcu_start()` installs only Espressif's MSC class client. The M0 task mounts
@@ -10,9 +12,15 @@ and benchmarks bounded reads of `/usb/model.bmoq` if that file exists.
 If both `/usb/model.bmoq` and `/usb/tokenizer.ctok` exist, it also starts a
 low-priority `coli_generate` task. The task reads `/usb/prompt.txt` when present
 or falls back to a short fixed prompt, opens the BMOQ model and CTOK tokenizer,
-encodes the prompt, runs the OLMoE greedy token loop with a short context, and
+encodes the prompt, runs the OLMoE greedy token loop with its 4096-token logical
+context backed by `/usb/olmoe.kv`, and
 logs decoded chunks. It yields through callback hooks and cancels on MSC
 removal; CDC/safety work must remain higher priority than this demo.
+
+OLMoE KV data now uses a writable file backend with a fixed 64 KiB resident
+page. Host tests compare it against the original contiguous-RAM attention path.
+This removes the full-context PSRAM allocation, but physical FAT/USB behavior and
+latency are not yet proven.
 
 The tensor layer uses a 64-bit `read_at` interface and never assumes that a
 tensor fits in PSRAM. BMOQ stores a 4 KiB little-endian header, a fixed 64-byte

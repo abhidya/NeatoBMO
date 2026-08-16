@@ -25,6 +25,7 @@ static QueueHandle_t s_binary_events;
 static QueueHandle_t s_reconnect_events;
 static volatile bool s_binary_active;
 static neato_usb_health_t s_health;
+static portMUX_TYPE s_health_mux = portMUX_INITIALIZER_UNLOCKED;
 
 enum {
     BINARY_ENQ = 0x05,
@@ -53,18 +54,44 @@ static void request_reconnect(neato_usb_health_result_t reason)
     xQueueSend(s_reconnect_events, &reason, 0);
 }
 
+static void health_connected(uint32_t now)
+{
+    portENTER_CRITICAL(&s_health_mux);
+    neato_usb_health_connected(&s_health, now);
+    portEXIT_CRITICAL(&s_health_mux);
+}
+
+static void health_disconnected(void)
+{
+    portENTER_CRITICAL(&s_health_mux);
+    neato_usb_health_disconnected(&s_health);
+    portEXIT_CRITICAL(&s_health_mux);
+}
+
+static void health_rx(uint32_t now)
+{
+    portENTER_CRITICAL(&s_health_mux);
+    neato_usb_health_rx(&s_health, now);
+    portEXIT_CRITICAL(&s_health_mux);
+}
+
 static void record_ascii_tx(esp_err_t err)
 {
-    neato_usb_health_result_t reason =
-        neato_usb_health_tx(&s_health, err == ESP_OK, now_ms());
+    portENTER_CRITICAL(&s_health_mux);
+    neato_usb_health_result_t reason = neato_usb_health_tx(
+        &s_health, err == ESP_OK, now_ms()
+    );
+    portEXIT_CRITICAL(&s_health_mux);
     request_reconnect(reason);
 }
 
 static void record_tx_failure(esp_err_t err)
 {
     if (err == ESP_OK) return;
+    portENTER_CRITICAL(&s_health_mux);
     neato_usb_health_result_t reason =
         neato_usb_health_tx(&s_health, false, now_ms());
+    portEXIT_CRITICAL(&s_health_mux);
     request_reconnect(reason);
 }
 
@@ -85,7 +112,7 @@ esp_err_t neato_rx_subscribe(neato_rx_fn fn)
 static bool on_rx(const uint8_t *data, size_t len, void *arg)
 {
     /* Neato replies are ASCII lines terminated by 0x1A (Ctrl-Z). */
-    neato_usb_health_rx(&s_health, now_ms());
+    health_rx(now_ms());
     fwrite(data, 1, len, stdout);
     fflush(stdout);
     for (size_t i = 0; i < s_rx_sub_count; i++)
@@ -105,14 +132,29 @@ static bool on_rx(const uint8_t *data, size_t len, void *arg)
 
 static void on_event(const cdc_acm_host_dev_event_data_t *event, void *ctx)
 {
-    if (event->type == CDC_ACM_HOST_DEVICE_DISCONNECTED) {
+    switch (event->type) {
+    case CDC_ACM_HOST_ERROR:
+        ESP_LOGE(TAG, "CDC error: %d", event->data.error);
+        break;
+    case CDC_ACM_HOST_DEVICE_DISCONNECTED:
         ESP_LOGW(TAG, "Neato disconnected");
         if (s_dev == event->data.cdc_hdl) {
             cdc_acm_host_close(event->data.cdc_hdl);
             s_dev = NULL;
-            neato_usb_health_disconnected(&s_health);
+            health_disconnected();
             signal_binary_disconnected();
         }
+        break;
+#ifdef CDC_HOST_SUSPEND_RESUME_API_SUPPORTED
+    case CDC_ACM_HOST_DEVICE_SUSPENDED:
+        ESP_LOGW(TAG, "Neato USB suspended");
+        break;
+    case CDC_ACM_HOST_DEVICE_RESUMED:
+        ESP_LOGI(TAG, "Neato USB resumed");
+        break;
+#endif
+    default:
+        break;
     }
 }
 
@@ -174,7 +216,8 @@ static void connection_task(void *arg)
             continue;
         }
         ESP_LOGI(TAG, "Neato connected!");
-        neato_usb_health_connected(&s_health, now_ms());
+        xQueueReset(s_reconnect_events);
+        health_connected(now_ms());
         cdc_acm_line_coding_t coding = {
             .dwDTERate = 115200, .bDataBits = 8, .bParityType = 0, .bCharFormat = 0,
         };
@@ -195,13 +238,16 @@ static void connection_task(void *arg)
             }
             ESP_LOGW(TAG, "USB health recovery: %s",
                      neato_usb_health_reason_name(reason));
+            if (s_binary_active) {
+                ESP_LOGW(TAG, "USB health recovery waiting for binary transfer");
+            }
             if (xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(2000)) != pdTRUE) {
                 request_reconnect(reason);
                 continue;
             }
             cdc_acm_dev_hdl_t dev = s_dev;
             s_dev = NULL;
-            neato_usb_health_disconnected(&s_health);
+            health_disconnected();
             signal_binary_disconnected();
             xSemaphoreGive(s_tx_mutex);
             if (dev) {

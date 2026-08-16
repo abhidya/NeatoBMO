@@ -3,9 +3,10 @@
  * Plugs: Neato mini-USB  <-- cable -->  ESP32-S3 "USB" (OTG) port.
  * Power the devkit through its "COM"/UART port; logs appear there too.
  *
- * On connect it sends GetVersion, then polls GetCharger every 30 s.
- * All transport lives in neato_usb.c; this file is startup wiring plus
- * the connect demo and heartbeat.
+ * On connect it sends GetVersion, then polls GetCharger every 10 s.
+ * The quiet poll acts as a keepalive so the Neato does not sit idle long
+ * enough to drop the USB session. All transport lives in neato_usb.c; this
+ * file is startup wiring plus the connect demo and heartbeat.
  */
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -47,10 +48,12 @@ void app_main(void)
     neato_usb_start(on_neato_connect);
 
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(30000));
+        vTaskDelay(pdMS_TO_TICKS(10000));
         if (neato_usb_connected()) {
-            neato_play_slot(2); /* heartbeat chirp every 30 s */
-            neato_get_charger();
+            esp_err_t err = neato_get_charger();
+            if (err != ESP_OK) {
+                ESP_LOGW("main", "USB keepalive failed: %s", esp_err_to_name(err));
+            }
         }
     }
 }

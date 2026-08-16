@@ -32,6 +32,14 @@ The plan below predates the implementation; these decisions supersede it:
   go to the (slow) OLMoE brain. Default speech mode is **soundbyte**
   (`NEATOBMO_SPEECH`): spoken words are capped at a ~1.5 s burst and the
   soundboard/moves/faces carry the reply.
+- **Compound-turn correction is designed, not yet implemented.** The current
+  first-match Routine layer can answer one recognized phrase and silently skip
+  the rest of a compound utterance. The approved direction is to execute every
+  confidently resolved local subrequest immediately, preserve all meaningful
+  residual text for the Brain, and show thinking feedback only when residual
+  generation is actually required. See
+  [`docs/compound-turn-orchestration-design.md`](docs/compound-turn-orchestration-design.md)
+  for the investigation, event contract, dependency decision, and test gates.
 - **The face lives on the Neato's own LCD first.** `faces.c` on the ESP32 and
   its 1:1 Python port `neatobmo/emote.py` draw the same emoji faces over WiFi
   or USB; the projector head (§3) remains future work.

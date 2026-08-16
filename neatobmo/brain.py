@@ -31,26 +31,30 @@ class BrainClient:
         self.history.append({"role": "user", "content": user_text})
         self.history.append({"role": "assistant", "content": reply})
 
-    def chat(self, text):
-        self.history.append({"role": "user", "content": text})
+    def chat(self, text, *, prompt=None, assistant_prefix=""):
+        user_message = {"role": "user", "content": prompt or text}
         req = self._request("/chat/completions",
                             {"model": "olmoe",
-                             "messages": self.history[-HISTORY_WINDOW:]})
+                             "messages": (self.history + [user_message])[
+                                 -HISTORY_WINDOW:]})
         with urllib.request.urlopen(req, timeout=300) as resp:
             reply = json.loads(resp.read())["choices"][0]["message"]["content"]
-        self.history.append({"role": "assistant", "content": reply})
+        combined = " ".join(x for x in (assistant_prefix.strip(), reply.strip())
+                            if x)
+        self.remember(text, combined)
         return reply
 
-    def stream(self, text, on_sentence):
+    def stream(self, text, on_sentence, *, prompt=None, assistant_prefix=""):
         """Streaming chat: emit each completed sentence while the LLM runs.
 
         Returns the full reply (history updated like chat()).  Raises if
         the brain doesn't answer; the caller falls back to chat().
         """
-        self.history.append({"role": "user", "content": text})
+        user_message = {"role": "user", "content": prompt or text}
         req = self._request("/chat/completions",
                             {"model": "olmoe", "stream": True,
-                             "messages": self.history[-HISTORY_WINDOW:]})
+                             "messages": (self.history + [user_message])[
+                                 -HISTORY_WINDOW:]})
         reply = ""
         emitted = 0
         with urllib.request.urlopen(req, timeout=300) as resp:
@@ -75,5 +79,7 @@ class BrainClient:
                     emitted = end
         if reply[emitted:].strip():
             on_sentence(reply[emitted:].strip())
-        self.history.append({"role": "assistant", "content": reply})
+        combined = " ".join(x for x in (assistant_prefix.strip(), reply.strip())
+                            if x)
+        self.remember(text, combined)
         return reply

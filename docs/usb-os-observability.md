@@ -79,3 +79,16 @@ Recommended next acquisition pass: make two independent raw external-NAND
 captures with page/OOB/ECC preservation, preferably on a donor Cruz board.
 USB/P6 repetition has reached diminishing returns unless a new firmware or
 service mode supplies genuinely new evidence.
+
+## USB idle recovery notes for the ESP32 host
+
+The current ESP32 body firmware now treats the USB link as lossy rather than
+sticky:
+
+- keepalive traffic is a quiet `GetCharger` poll every 10 seconds instead of an
+  audible heartbeat;
+- the transport now declares an RX stall after 30 seconds without any reply,
+  which is short enough to recover from the robot's idle/sleep edge cases
+  without waiting for a manual replug;
+- the reconnect task already closes and reopens the CDC session, so a stale
+  link now drops back into that existing recovery path.

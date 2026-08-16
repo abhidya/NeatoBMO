@@ -98,7 +98,9 @@ size_t coli_olmoe_layer_required_workspace(size_t hidden_count,
     for (size_t i = 0; i < 7; ++i)
         if (!add_aligned(&total, float_bytes)) return 0;
     size_t score_bytes;
-    if (!mul_size(token_count, sizeof(float), &score_bytes) ||
+    if (!mul_size(token_count, COLI_OLMOE_EXPECTED_ATTENTION_HEADS,
+                  &score_bytes) ||
+        !mul_size(score_bytes, sizeof(float), &score_bytes) ||
         !add_aligned(&total, score_bytes))
         return 0;
     size_t moe_bytes = coli_moe_required_workspace(
@@ -115,13 +117,13 @@ coli_status_t coli_olmoe_layer_decode(const coli_model_t *model,
                                       size_t hidden_count,
                                       float *output,
                                       size_t output_count,
-                                      uint8_t *kv_cache,
-                                      size_t kv_cache_bytes,
-                                      const coli_kv_cache_layout_t *kv_layout,
+                                      coli_kv_cache_t *kv_cache,
                                       void *workspace,
                                       size_t workspace_bytes,
                                       coli_olmoe_layer_stats_t *stats)
 {
+    const coli_kv_cache_layout_t *kv_layout =
+        coli_kv_cache_get_layout(kv_cache);
     if (!model || !input || !output || !kv_cache || !kv_layout || !workspace ||
         !stats || hidden_count == 0 || output_count != hidden_count ||
         layer >= model->config.num_hidden_layers ||
@@ -156,7 +158,8 @@ coli_status_t coli_olmoe_layer_decode(const coli_model_t *model,
         !carve(&cursor, &remaining, hidden_bytes, (void **)&attention) ||
         !carve(&cursor, &remaining, hidden_bytes, (void **)&projected) ||
         !carve(&cursor, &remaining, hidden_bytes, (void **)&post_norm) ||
-        !carve(&cursor, &remaining, (size_t)(position + 1u) * sizeof(float),
+        !carve(&cursor, &remaining,
+               (size_t)kv_layout->heads * (position + 1u) * sizeof(float),
                (void **)&scores))
         return COLI_ERR_RANGE;
 
@@ -192,24 +195,11 @@ coli_status_t coli_olmoe_layer_decode(const coli_model_t *model,
                                  (float)model->config.rope_theta);
     if (status != COLI_OK) return status;
 
-    void *key_slot = NULL;
-    void *value_slot = NULL;
-    status = coli_ops_kv_cache_token_ptrs(kv_cache, kv_cache_bytes, kv_layout,
-                                          layer, position, &key_slot,
-                                          &value_slot);
+    status = coli_kv_cache_write_token(kv_cache, layer, position, key, value);
     if (status != COLI_OK) return status;
-    memcpy(key_slot, key, hidden_bytes);
-    memcpy(value_slot, value, hidden_bytes);
-
-    void *layer_key0 = NULL;
-    void *layer_value0 = NULL;
-    status = coli_ops_kv_cache_token_ptrs(kv_cache, kv_cache_bytes, kv_layout,
-                                          layer, 0, &layer_key0, &layer_value0);
-    if (status != COLI_OK) return status;
-    status = coli_ops_attention_decode(query, layer_key0, layer_value0,
-                                       position + 1u, kv_layout->heads,
-                                       kv_layout->head_dim, attention, scores,
-                                       position + 1u);
+    status = coli_kv_cache_attention_decode(
+        kv_cache, layer, query, position + 1u, attention, scores,
+        (size_t)kv_layout->heads * (position + 1u), key, hidden_count);
     if (status != COLI_OK) return status;
 
     status = q4_project(model, coli_olmoe_o_proj_id(layer), attention,
@@ -268,14 +258,14 @@ coli_status_t coli_olmoe_decode_next_token(
     const coli_model_t *model,
     uint32_t input_token_id,
     uint32_t position,
-    uint8_t *kv_cache,
-    size_t kv_cache_bytes,
-    const coli_kv_cache_layout_t *kv_layout,
+    coli_kv_cache_t *kv_cache,
     void *workspace,
     size_t workspace_bytes,
     uint32_t *out_token_id,
     coli_olmoe_decode_stats_t *stats)
 {
+    const coli_kv_cache_layout_t *kv_layout =
+        coli_kv_cache_get_layout(kv_cache);
     if (!model || !kv_cache || !kv_layout || !workspace || !out_token_id ||
         !stats || model->config.hidden_size == 0 ||
         input_token_id >= model->config.vocab_size ||
@@ -307,8 +297,8 @@ coli_status_t coli_olmoe_decode_next_token(
         coli_olmoe_layer_stats_t layer_stats;
         status = coli_olmoe_layer_decode(model, layer, position, state,
                                          hidden_count, next, hidden_count,
-                                         kv_cache, kv_cache_bytes, kv_layout,
-                                         cursor, remaining, &layer_stats);
+                                         kv_cache, cursor, remaining,
+                                         &layer_stats);
         if (status != COLI_OK) return status;
         stats->last_layer = layer_stats;
         ++stats->layers_executed;
@@ -338,7 +328,7 @@ coli_status_t coli_olmoe_decode_next_token(
     return COLI_OK;
 }
 
-coli_status_t coli_olmoe_generate_greedy(
+coli_status_t coli_olmoe_generate_greedy_stream(
     const coli_model_t *model,
     const uint32_t *prompt_token_ids,
     size_t prompt_token_count,
@@ -346,19 +336,20 @@ coli_status_t coli_olmoe_generate_greedy(
     size_t output_token_capacity,
     size_t max_new_tokens,
     size_t *out_output_token_count,
-    uint8_t *kv_cache,
-    size_t kv_cache_bytes,
-    const coli_kv_cache_layout_t *kv_layout,
+    coli_kv_cache_t *kv_cache,
     void *workspace,
     size_t workspace_bytes,
+    coli_olmoe_token_fn on_token,
+    void *token_context,
     coli_olmoe_generate_stats_t *stats)
 {
     if (!model || !prompt_token_ids || prompt_token_count == 0 ||
         !output_token_ids || !out_output_token_count || !kv_cache ||
-        !kv_layout || !workspace || !stats ||
+        !coli_kv_cache_get_layout(kv_cache) || !workspace || !stats ||
         output_token_capacity < prompt_token_count ||
         max_new_tokens > output_token_capacity - prompt_token_count ||
-        prompt_token_count + max_new_tokens > kv_layout->max_tokens)
+        prompt_token_count + max_new_tokens >
+            coli_kv_cache_get_layout(kv_cache)->max_tokens)
         return COLI_ERR_ARGUMENT;
 
     memset(stats, 0, sizeof(*stats));
@@ -369,9 +360,8 @@ coli_status_t coli_olmoe_generate_greedy(
     uint32_t next_token = prompt_token_ids[0];
     for (size_t i = 0; i < prompt_token_count; ++i) {
         coli_status_t status = coli_olmoe_decode_next_token(
-            model, prompt_token_ids[i], (uint32_t)i, kv_cache, kv_cache_bytes,
-            kv_layout, workspace, workspace_bytes, &next_token,
-            &stats->last_decode);
+            model, prompt_token_ids[i], (uint32_t)i, kv_cache, workspace,
+            workspace_bytes, &next_token, &stats->last_decode);
         if (status != COLI_OK) return status;
         ++stats->prompt_tokens_consumed;
     }
@@ -385,11 +375,36 @@ coli_status_t coli_olmoe_generate_greedy(
         ++*out_output_token_count;
         ++stats->generated_tokens;
 
+        if (on_token) {
+            coli_status_t status =
+                on_token(token_context, next_token, generated);
+            if (status != COLI_OK) return status;
+        }
+
         coli_status_t status = coli_olmoe_decode_next_token(
             model, next_token, (uint32_t)(prompt_token_count + generated),
-            kv_cache, kv_cache_bytes, kv_layout, workspace, workspace_bytes,
-            &next_token, &stats->last_decode);
+            kv_cache, workspace, workspace_bytes, &next_token,
+            &stats->last_decode);
         if (status != COLI_OK) return status;
     }
     return COLI_OK;
+}
+
+coli_status_t coli_olmoe_generate_greedy(
+    const coli_model_t *model,
+    const uint32_t *prompt_token_ids,
+    size_t prompt_token_count,
+    uint32_t *output_token_ids,
+    size_t output_token_capacity,
+    size_t max_new_tokens,
+    size_t *out_output_token_count,
+    coli_kv_cache_t *kv_cache,
+    void *workspace,
+    size_t workspace_bytes,
+    coli_olmoe_generate_stats_t *stats)
+{
+    return coli_olmoe_generate_greedy_stream(
+        model, prompt_token_ids, prompt_token_count, output_token_ids,
+        output_token_capacity, max_new_tokens, out_output_token_count,
+        kv_cache, workspace, workspace_bytes, NULL, NULL, stats);
 }

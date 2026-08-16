@@ -171,6 +171,33 @@ class ChatTurnTests(unittest.TestCase):
         self.assertEqual(out["reply"], "")
         self.assertIn("olmoe", out["error"])
 
+    def test_compound_local_turn_finishes_without_brain_generation(self):
+        class FakeBrain:
+            def __init__(self):
+                self.remembered = []
+
+            def remember(self, user, reply):
+                self.remembered.append((user, reply))
+
+            def chat(self, text, **kwargs):
+                raise AssertionError("local-only turn must not call the brain")
+
+        self.web.brain = FakeBrain()
+        self.web.body = BodyController()
+
+        events = list(self.web.chat_events(
+            "what time is it and check your battery", False))
+
+        self.assertEqual([e["type"] for e in events], [
+            "turn_started", "routine_result", "routine_result",
+            "turn_completed",
+        ])
+        self.assertEqual([e["routine"] for e in events
+                          if e["type"] == "routine_result"],
+                         ["time", "battery"])
+        self.assertFalse(events[-1]["brain_used"])
+        self.assertEqual(len(self.web.brain.remembered), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

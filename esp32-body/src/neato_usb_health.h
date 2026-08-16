@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define NEATO_USB_HEALTH_RX_STALL_MS 90000U
+#define NEATO_USB_HEALTH_RX_STALL_MS 30000U
 #define NEATO_USB_HEALTH_STALL_PROBES 3U
 #define NEATO_USB_HEALTH_TX_FAILURES 3U
 

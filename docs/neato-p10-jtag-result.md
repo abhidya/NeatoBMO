@@ -17,7 +17,7 @@ Observed classification:
 - reset-assisted attach: not tested.
 
 The strongest supported statement is **“P10 did not expose a usable read-only
-ARM926 debug interface under the tested conditions.”**  Do not simplify this to
+ARM926 debug interface under the tested conditions.”** Do not simplify this to
 “security bit proven set”; all-one/all-zero OpenOCD scans also fit wiring,
 signal integrity, reset/TRST gating, or runtime ICE-disable explanations.
 
@@ -40,7 +40,7 @@ ESP GPIO16 -> P10.7 TMS
 ESP GPIO17 -> P10.9 TCK
 ```
 
-Not connected: P10 VDDIO, TRST, SRST, RTCK.  VDDIO was not measured in this
+Not connected: P10 VDDIO, TRST, SRST, RTCK. VDDIO was not measured in this
 session and series resistors were not installed; both are recorded as operator
 waivers, not as validated best practice.
 
@@ -70,10 +70,16 @@ waivers, not as validated best practice.
   controller recovery requirement: rediscover VID:PID `2108:780B` after updater
   reboot and provide a manual or hub-controlled USB VBUS-cycle fallback.
 
+Three later 10 kHz control captures are preserved under
+`captures/jtag/jtag-halt-20260815T224138Z/`,
+`captures/jtag/jtag-halt-20260815T224331Z/`, and
+`captures/jtag/jtag-halt-20260815T224544Z/`. They also returned all ones/no TAP
+and did not justify attempting a halt or memory read.
+
 ## Compatible software policy
 
 Compatible Neato application and sound images are cataloged by path, size/status,
-and SHA-256 only.  Proprietary `.enc` images, sound-bank bytes, ESP full-flash
+and SHA-256 only. Proprietary `.enc` images, sound-bank bytes, ESP full-flash
 backups, keys, and raw dumps must remain outside the public repository.
 
 The side-jack Cruz Rev113 target remains hard-capped at the 3.1 P-family line;
@@ -90,5 +96,5 @@ read-only snapshots.
 
 Use a scope or logic analyzer on TCK/TMS/TDI/TDO during the same `scan_chain`
 sequence to distinguish “adapter is clocking but target never drives TDO” from
-“signal never reaches/leaves P10.”  Do not add SRST/TRST or attempt halt until
+“signal never reaches/leaves P10.” Do not add SRST/TRST or attempt halt until
 that electrical distinction is measured.

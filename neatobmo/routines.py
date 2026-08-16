@@ -139,6 +139,67 @@ FOLLOW_UPS = {
 _rotation = {}   # routine key -> last reply index (rotate, never repeat)
 
 
+_COVERAGE = {
+    "greet": [r"(hello|hi|hiya|hi there|hey (beemo|bmo|buddy)|good morning)"],
+    "who": [r"(who are you|what are you|what'?s your name|your name)"],
+    "dance": [r"(can you |please |would you )?(dance|bust a move|boogie)( for me)?"],
+    "spin": [r"(can you |please |would you )?(spin|turn around|twirl)"],
+    "sing": [r"(can you |please |would you )?(sing|sing a song|play music)"],
+    "love": [r"(i love you|you are my best friend|best friend|i miss(ed)? you)"],
+    "joke": [r"(tell me |make me |say )?(a )?(joke|something funny|laugh)"],
+    "time": [r"(what time is it|what is the time|tell me the time|time please)"],
+    "battery": [r"(check |how is |what is |what'?s )?(your )?(battery|charge|fuel)( level| status)?"],
+    "sleep": [r"(good ?night|go to sleep|bed ?time)"],
+    "game": [r"(play a game|wanna play|let'?s play|video ?games?)"],
+    "stop": [r"(stop|quiet|hush|calm down)"],
+}
+
+
+def _routine_by_name(name):
+    for routine in ROUTINES:
+        if routine["name"] == name:
+            return routine
+    return None
+
+
+def _covered_text(text):
+    t = re.sub(r"\s+", " ", text.strip().lower())
+    t = re.sub(r"^(please|can you|could you|would you|hey|okay|ok),?\s+", "", t)
+    t = re.sub(r"\s+(please)$", "", t)
+    return t
+
+
+def accepts(name, text):
+    """True when a routine can safely own the complete request text.
+
+    This is intentionally stricter than match(): match() discovers a quick
+    answer anywhere in an utterance, while the turn planner needs full-part
+    coverage so it never drops the unhandled rest of a compound request.
+    """
+    t = _covered_text(text)
+    return any(re.fullmatch(p, t) for p in _COVERAGE.get(name, []))
+
+
+def accepted_routine(text):
+    """Return the first routine name that fully covers text, else None."""
+    for routine in ROUTINES:
+        name = routine["name"]
+        if accepts(name, text):
+            return name
+    return None
+
+
+def run(name, state=None, ctx=None):
+    """Execute one already-planned routine by name."""
+    ctx = ctx or {}
+    routine = _routine_by_name(name)
+    if routine is None:
+        return None
+    if state is not None and routine.get("expect"):
+        state.arm(routine["expect"])
+    return Hit(name, _pick(name, routine["replies"], ctx))
+
+
 def _pick(key, replies, ctx):
     i = _rotation[key] = (_rotation.get(key, -1) + 1) % len(replies)
     r = replies[i]

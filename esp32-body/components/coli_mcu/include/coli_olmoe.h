@@ -7,6 +7,7 @@
 #include "coli_moe.h"
 #include "coli_model.h"
 #include "coli_ops.h"
+#include "coli_kv_cache.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -116,6 +117,10 @@ typedef struct {
     bool stopped_on_eos;
 } coli_olmoe_generate_stats_t;
 
+typedef coli_status_t (*coli_olmoe_token_fn)(void *context,
+                                             uint32_t token_id,
+                                             size_t generated_index);
+
 size_t coli_olmoe_layer_required_workspace(size_t hidden_count,
                                            size_t intermediate_count,
                                            size_t expert_count,
@@ -130,9 +135,7 @@ coli_status_t coli_olmoe_layer_decode(const coli_model_t *model,
                                       size_t hidden_count,
                                       float *output,
                                       size_t output_count,
-                                      uint8_t *kv_cache,
-                                      size_t kv_cache_bytes,
-                                      const coli_kv_cache_layout_t *kv_layout,
+                                      coli_kv_cache_t *kv_cache,
                                       void *workspace,
                                       size_t workspace_bytes,
                                       coli_olmoe_layer_stats_t *stats);
@@ -141,9 +144,7 @@ coli_status_t coli_olmoe_decode_next_token(
     const coli_model_t *model,
     uint32_t input_token_id,
     uint32_t position,
-    uint8_t *kv_cache,
-    size_t kv_cache_bytes,
-    const coli_kv_cache_layout_t *kv_layout,
+    coli_kv_cache_t *kv_cache,
     void *workspace,
     size_t workspace_bytes,
     uint32_t *out_token_id,
@@ -157,11 +158,24 @@ coli_status_t coli_olmoe_generate_greedy(
     size_t output_token_capacity,
     size_t max_new_tokens,
     size_t *out_output_token_count,
-    uint8_t *kv_cache,
-    size_t kv_cache_bytes,
-    const coli_kv_cache_layout_t *kv_layout,
+    coli_kv_cache_t *kv_cache,
     void *workspace,
     size_t workspace_bytes,
+    coli_olmoe_generate_stats_t *stats);
+
+coli_status_t coli_olmoe_generate_greedy_stream(
+    const coli_model_t *model,
+    const uint32_t *prompt_token_ids,
+    size_t prompt_token_count,
+    uint32_t *output_token_ids,
+    size_t output_token_capacity,
+    size_t max_new_tokens,
+    size_t *out_output_token_count,
+    coli_kv_cache_t *kv_cache,
+    void *workspace,
+    size_t workspace_bytes,
+    coli_olmoe_token_fn on_token,
+    void *token_context,
     coli_olmoe_generate_stats_t *stats);
 
 #ifdef __cplusplus

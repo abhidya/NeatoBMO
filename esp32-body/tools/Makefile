@@ -17,7 +17,8 @@ BUILD := build
 
 TESTS := test_bmoq test_q4_matvec test_coli_ops test_coli_moe \
          test_coli_olmoe_layer test_coli_generate test_coli_tokenizer \
-         test_coli_spm test_coli_gemma test_coli_gemma_generate
+         test_coli_spm test_coli_gemma test_coli_gemma_generate \
+         test_coli_kv_cache test_coli_kv_attention
 BINS := $(addprefix $(BUILD)/,$(TESTS))
 
 all: $(BINS)
@@ -41,12 +42,13 @@ $(BUILD)/test_coli_moe: test_coli_moe.c $(MCU)/model_format.c \
 
 $(BUILD)/test_coli_olmoe_layer: test_coli_olmoe_layer.c $(MCU)/model_format.c \
 		$(MCU)/store_file.c $(MCU)/q4_matvec.c $(MCU)/ops.c $(MCU)/moe.c \
-		$(MCU)/olmoe.c | $(BUILD)
+		$(MCU)/kv_cache.c $(MCU)/olmoe.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(BUILD)/test_coli_generate: test_coli_generate.c $(MCU)/model_format.c \
 		$(MCU)/store_file.c $(MCU)/q4_matvec.c $(MCU)/ops.c $(MCU)/moe.c \
-		$(MCU)/olmoe.c $(MCU)/tokenizer.c $(MCU)/generate.c | $(BUILD)
+		$(MCU)/kv_cache.c $(MCU)/olmoe.c $(MCU)/tokenizer.c \
+		$(MCU)/generate.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(BUILD)/test_coli_tokenizer: test_coli_tokenizer.c $(MCU)/store_file.c \
@@ -66,6 +68,14 @@ $(BUILD)/test_coli_gemma_generate: test_coli_gemma_generate.c \
 		$(MCU)/model_format.c $(MCU)/store_file.c $(MCU)/q4_matvec.c \
 		$(MCU)/ops.c $(MCU)/gemma.c $(MCU)/gemma_generate.c \
 		$(MCU)/spm.c | $(BUILD)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
+
+$(BUILD)/test_coli_kv_cache: test_coli_kv_cache.c $(MCU)/kv_cache.c \
+		$(MCU)/ops.c | $(BUILD)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
+
+$(BUILD)/test_coli_kv_attention: test_coli_kv_attention.c \
+		$(MCU)/kv_cache.c $(MCU)/ops.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 test: $(BINS)

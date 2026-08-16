@@ -1,0 +1,58 @@
+Open On-Chip Debugger 0.12.0
+Licensed under GNU GPL v2
+For bug reports, read
+	http://openocd.org/doc/doxygen/bugs.html
+adapter speed: 10 kHz
+
+adapter speed: 10 kHz
+
+Info : Using CMSIS-DAPv2 interface with VID:PID=0x0d28:0x0204, serial=00000000000000000123456789ABCDEF
+Info : CMSIS-DAP: SWD supported
+Info : CMSIS-DAP: JTAG supported
+Info : CMSIS-DAP: Atomic commands supported
+Info : CMSIS-DAP: Test domain timer supported
+Info : CMSIS-DAP: UART via USB COM port supported
+Info : CMSIS-DAP: FW Version = 2.1.1
+Info : CMSIS-DAP: Interface Initialised (JTAG)
+Info : SWCLK/TCK = 0 SWDIO/TMS = 0 TDI = 0 TDO = 0 nTRST = 0 nRESET = 1
+Info : CMSIS-DAP: Interface ready
+Info : clock speed 10 kHz
+Warn : There are no enabled taps.  AUTO PROBING MIGHT NOT WORK!!
+Info : cmsis-dap JTAG TLR_RESET
+Info : cmsis-dap JTAG TLR_RESET
+Info : JTAG tap: auto0.tap tap/device found: 0xbf7ffffd (mfg: 0x7fe (<unknown>), part: 0xf7ff, ver: 0xb)
+Info : JTAG tap: auto1.tap tap/device found: 0xfbfbff7f (mfg: 0x7bf (<unknown>), part: 0xbfbf, ver: 0xf)
+Info : JTAG tap: auto2.tap tap/device found: 0xeffffeff (mfg: 0x77f (<invalid>), part: 0xffff, ver: 0xe)
+Info : JTAG tap: auto3.tap tap/device found: 0xff7ffef3 (mfg: 0x779 (<unknown>), part: 0xf7ff, ver: 0xf)
+Info : JTAG tap: auto4.tap tap/device found: 0x7ffffdff (mfg: 0x6ff (<invalid>), part: 0xffff, ver: 0x7)
+Info : JTAG tap: auto5.tap tap/device found: 0xe7efaf3f (mfg: 0x79f (<unknown>), part: 0x7efa, ver: 0xe)
+Info : TAP auto6.tap does not have valid IDCODE (idcode=0xffbf7ffe)
+Info : JTAG tap: auto7.tap tap/device found: 0x7fdfbfff (mfg: 0x7ff (<invalid>), part: 0xfdfb, ver: 0x7)
+Info : JTAG tap: auto8.tap tap/device found: 0xfe797fff (mfg: 0x7ff (<invalid>), part: 0xe797, ver: 0xf)
+Info : TAP auto9.tap does not have valid IDCODE (idcode=0xc3d0eafe)
+Info : JTAG tap: auto10.tap tap/device found: 0xe1e8757f (mfg: 0x2bf (Avago Technologies), part: 0x1e87, ver: 0xe)
+Info : JTAG tap: auto11.tap tap/device found: 0xcfd3d8f1 (mfg: 0x478 (Anvo-Systems Dresden GmbH), part: 0xfd3d, ver: 0xc)
+Info : JTAG tap: auto12.tap tap/device found: 0x343c3e2f (mfg: 0x717 (<unknown>), part: 0x43c3, ver: 0x3)
+Info : TAP auto13.tap does not have valid IDCODE (idcode=0x343478)
+Info : TAP auto14.tap does not have valid IDCODE (idcode=0x1a1a3c)
+Info : TAP auto15.tap does not have valid IDCODE (idcode=0xd0d1e)
+Info : JTAG tap: auto16.tap tap/device found: 0x8006868f (mfg: 0x347 (Dune Networks), part: 0x0068, ver: 0x8)
+Info : TAP auto17.tap does not have valid IDCODE (idcode=0xf8385806)
+Info : JTAG tap: auto18.tap tap/device found: 0x7c1c2c03 (mfg: 0x601 (Beijing Haawking Technology Co Ltd), part: 0xc1c2, ver: 0x7)
+Info : TAP auto19.tap does not have valid IDCODE (idcode=0xd383e1f8)
+Info : TAP auto20.tap does not have valid IDCODE (idcode=0xe9c1f0fc)
+Warn : Unexpected idcode after end of chain: 424 0xf4e0f87e
+Warn : Unexpected idcode after end of chain: 456 0x6cbefcf8
+Warn : Unexpected idcode after end of chain: 488 0x0f2e5e7e
+Warn : Unexpected idcode after end of chain: 520 0x070f0207
+Warn : Unexpected idcode after end of chain: 552 0xe081070f
+Warn : Unexpected idcode after end of chain: 584 0x187878e0
+Warn : Unexpected idcode after end of chain: 616 0x2b070f0e
+Error: double-check your JTAG setup (interface, speed, ...)
+Error: Trying to use configured scan chain anyway...
+Warn : AUTO auto0.tap - use "jtag newtap auto0 tap -irlen 2 -expected-id 0xbf7ffffd"
+Error: auto0.tap: IR capture error; saw 0x0003 not 0x0001
+Info : cmsis-dap JTAG TLR_RESET
+Warn : Bypassing JTAG setup events due to errors
+Warn : gdb services need one or more targets defined
+shutdown command invoked

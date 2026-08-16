@@ -35,6 +35,8 @@ from neatobmo import cues
 from neatobmo import faces
 from neatobmo import emote
 from neatobmo import routines
+from neatobmo import turns
+from neatobmo import turns
 from neatobmo import tts_bank
 from neatobmo.body import BodyController
 from neatobmo.brain import BrainClient
@@ -143,34 +145,102 @@ def ensure_brain():
 
 # ---- chat orchestration --------------------------------------------------
 
+def chat_events(text, speak_on_robot):
+    """Yield ordered progress events for one compound conversation turn."""
+    turn_id = f"turn-{time.time_ns()}"
+    seq = 0
+
+    def event(kind, **payload):
+        nonlocal seq
+        out = {"version": 1, "turn_id": turn_id, "seq": seq, "type": kind,
+               **payload}
+        seq += 1
+        return out
+
+    yield event("turn_started", original=text)
+    turn_plan = turns.plan_turn(text, convo_state)
+    local_replies = []
+    local_displays = []
+    local_speech = []
+    local_steps = []
+    routine_names = []
+
+    for index, step in enumerate(turn_plan.routines):
+        hit = routines.run(step.routine, convo_state, {"robot": body.robot})
+        if hit is None:
+            continue
+        plan = cues.parse(hit.reply)
+        local_replies.append(hit.reply)
+        local_displays.append(plan.display)
+        local_speech.append(plan.speech)
+        local_steps.extend(plan.steps)
+        routine_names.append(hit.routine)
+        yield event("routine_result", routine=hit.routine, index=index,
+                    display=plan.display, cues=plan.steps)
+
+    if local_displays:
+        body.emote(" ".join(local_displays))
+    if local_steps:
+        body.perform([(kind, name) for kind, name in local_steps
+                      if kind != "face"])
+
+    if not turn_plan.requires_brain:
+        reply = " ".join(local_displays)
+        if speak_on_robot and local_speech:
+            speech.speak(" ".join(local_speech))
+        brain.remember(text, " ".join(local_replies))
+        yield event("turn_completed", reply=reply, cues=local_steps,
+                    routines=routine_names, brain_used=False, partial=False,
+                    spoke=bool(speak_on_robot and local_speech))
+        return
+
+    raise NotImplementedError("residual Brain turns are not implemented yet")
+
 def chat_turn(text, speak_on_robot):
     """One conversation turn: routines -> brain -> cues -> body + voice.
 
     Returns the JSON-ready response dict.
     """
     routine = None
+    routine_names = []
     streamed = False
     err = None
     reply = None
-    # instant routine layer first (Siri-style): pattern-matched canned
-    # answers with choreography skip the tens-of-seconds LLM round-trip;
-    # anything unmatched falls through to the brain.
-    hit = routines.match(text, convo_state, {"robot": body.robot})
-    if hit:
-        reply, routine = hit.reply, hit.routine
-        # keep the LLM's memory coherent: routine turns enter history
-        # exactly as if the brain had said them
-        brain.remember(text, reply)
+    partial = False
+    brain_used = False
+    turn_plan = turns.plan_turn(text, convo_state)
+    local_replies = []
+    for step in turn_plan.routines:
+        hit = routines.run(step.routine, convo_state, {"robot": body.robot})
+        if hit:
+            local_replies.append(hit.reply)
+            routine_names.append(hit.routine)
+    assistant_prefix = " ".join(local_replies)
+    if not turn_plan.requires_brain:
+        reply = assistant_prefix
+        if reply:
+            brain.remember(text, reply)
     else:
+        brain_used = True
         body.run(lambda r: (r.led("amber"),
                             faces.scanline(r, range(20, 110, 30), 0.08)))
+        prompt = _compound_prompt(text, turn_plan.residual, assistant_prefix)
         if speak_on_robot:
-            reply, streamed, err = _streamed_reply(text)
+            brain_reply, streamed, err = _streamed_reply(
+                text, prompt=prompt, assistant_prefix=assistant_prefix)
+            if brain_reply:
+                reply = " ".join(x for x in (assistant_prefix, brain_reply)
+                                 if x)
         else:
             try:
-                reply = brain.chat(text)
+                brain_reply = brain.chat(text, prompt=prompt,
+                                         assistant_prefix=assistant_prefix)
+                reply = " ".join(x for x in (assistant_prefix, brain_reply)
+                                 if x)
             except Exception as e:
                 err = str(e)
+                if assistant_prefix:
+                    reply, partial = assistant_prefix, True
     if not reply:
         body.run(lambda r: r.led("red"))
         return {"reply": "", "error": err}
@@ -178,7 +248,7 @@ def chat_turn(text, speak_on_robot):
     # the reply is a little performance: cues out of the text, faces to the
     # cascade (as emojis), sounds/moves to the body, clean words to the voice
     plan = cues.parse(reply)
-    if routine is None and CFG.speech_mode == "soundbyte":
+    if brain_used and not routine_names and CFG.speech_mode == "soundbyte":
         plan = cues.condense(plan, burst_seconds=CFG.speech_burst)
     voice_error = None
     body.emote(plan.display)
@@ -196,14 +266,28 @@ def chat_turn(text, speak_on_robot):
                                 faces.blink(r, 2, 0.1)))
     out = {"reply": plan.display, "cues": plan.steps,
            "spoke": speak_on_robot and voice_error is None}
-    if routine:
-        out["routine"] = routine
+    if routine_names:
+        out["routine"] = routine_names[0]
+        out["routines"] = routine_names
+    if partial:
+        out["partial"] = True
+        out["error"] = err
     if voice_error:
         out["voice_error"] = voice_error
     return out
 
 
-def _streamed_reply(text):
+def _compound_prompt(original, residual, assistant_prefix):
+    if not assistant_prefix:
+        return None
+    return (
+        "Original request: " + original + "\n"
+        "Already answered locally: " + assistant_prefix + "\n"
+        "Answer only the unresolved request: " + residual
+    )
+
+
+def _streamed_reply(text, *, prompt=None, assistant_prefix=""):
     """Streaming pipeline: each completed LLM sentence flows into the
     speech synthesizer while later sentences are still generating — BMO
     starts talking before the reply is done.  Returns (reply, streamed, err).
@@ -220,7 +304,8 @@ def _streamed_reply(text):
     stream_job, stream_err = speech.speak(text, units=unit_iter())
     if stream_err is not None:
         try:
-            return brain.chat(text), False, None
+            return brain.chat(text, prompt=prompt,
+                              assistant_prefix=assistant_prefix), False, None
         except Exception as e:
             return None, False, str(e)
 
@@ -249,7 +334,8 @@ def _streamed_reply(text):
         unit_queue.put(speech_text)
 
     try:
-        reply = brain.stream(text, on_sentence)
+        reply = brain.stream(text, on_sentence, prompt=prompt,
+                             assistant_prefix=assistant_prefix)
         if budget is not None:
             # same guarantee as condense(): the performance always has a
             # soundbyte, even when the model gave no sound cue
@@ -260,7 +346,8 @@ def _streamed_reply(text):
     except Exception as e:
         stream_job["stop"].set()
         try:
-            return brain.chat(text), False, None
+            return brain.chat(text, prompt=prompt,
+                              assistant_prefix=assistant_prefix), False, None
         except Exception as e2:
             return None, False, f"stream: {e}; retry: {e2}"
     finally:

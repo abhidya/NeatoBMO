@@ -234,13 +234,15 @@ int main(void)
     assert(coli_ops_kv_cache_layout(1, HEADS, HEAD_DIM, 4, sizeof(float),
                                     &kv_layout) == COLI_OK);
     uint8_t kv_cache[1u * 2u * 4u * HIDDEN * sizeof(float)] = {0};
+    coli_kv_cache_t *cache = NULL;
+    assert(coli_kv_cache_open_ram(&kv_layout, kv_cache, sizeof(kv_cache),
+                                  &cache) == COLI_OK);
     uint8_t workspace[4096];
     const float input[HIDDEN] = {0.25f, -0.5f, 0.75f, -1.0f};
     float output[HIDDEN];
     coli_olmoe_layer_stats_t stats;
     assert(coli_olmoe_layer_decode(&model, 0, 0, input, HIDDEN, output, HIDDEN,
-                                   kv_cache, sizeof(kv_cache), &kv_layout,
-                                   workspace, sizeof(workspace),
+                                   cache, workspace, sizeof(workspace),
                                    &stats) == COLI_OK);
 
     float norm[HIDDEN];
@@ -267,9 +269,8 @@ int main(void)
     memset(kv_cache, 0, sizeof(kv_cache));
     uint32_t next_token = UINT32_MAX;
     coli_olmoe_decode_stats_t decode_stats;
-    assert(coli_olmoe_decode_next_token(&model, 0, 0, kv_cache,
-                                        sizeof(kv_cache), &kv_layout,
-                                        workspace, sizeof(workspace),
+    assert(coli_olmoe_decode_next_token(&model, 0, 0, cache, workspace,
+                                        sizeof(workspace),
                                         &next_token, &decode_stats) == COLI_OK);
     assert(next_token == 0);
     assert(decode_stats.layers_executed == 1);
@@ -282,8 +283,7 @@ int main(void)
     size_t generated_count = 0;
     coli_olmoe_generate_stats_t generate_stats;
     assert(coli_olmoe_generate_greedy(&model, prompt_ids, 1, generated_ids,
-                                      3, 2, &generated_count, kv_cache,
-                                      sizeof(kv_cache), &kv_layout, workspace,
+                                      3, 2, &generated_count, cache, workspace,
                                       sizeof(workspace),
                                       &generate_stats) == COLI_OK);
     assert(generated_count == 3);
@@ -294,6 +294,7 @@ int main(void)
     assert(generate_stats.generated_tokens == 2);
     assert(!generate_stats.stopped_on_eos);
 
+    coli_kv_cache_close(cache);
     coli_model_close(&model);
     coli_store_close(store);
     unlink(path);

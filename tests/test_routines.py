@@ -6,6 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from neatobmo import cues, routines, tts_bank
+import neatobmo.turns as turns
 
 
 class TestIntentMatching(unittest.TestCase):

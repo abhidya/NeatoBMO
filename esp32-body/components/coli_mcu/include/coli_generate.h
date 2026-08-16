@@ -37,6 +37,10 @@ typedef struct {
     size_t max_new_tokens;
     size_t workspace_bytes;
     size_t decoded_chunk_bytes;
+    /** Optional writable KV backing file. NULL keeps the legacy RAM backend. */
+    const char *kv_cache_path;
+    /** Resident file-cache page size; required when kv_cache_path is set. */
+    size_t kv_page_bytes;
     coli_generate_cancel_fn should_cancel;
     coli_generate_yield_fn yield;
     coli_generate_log_fn log_chunk;
@@ -50,6 +54,7 @@ typedef struct {
     size_t generated_tokens;
     size_t decoded_bytes;
     size_t kv_cache_bytes;
+    size_t kv_cache_resident_bytes;
     size_t workspace_bytes;
     uint32_t last_token_id;
 } coli_generate_result_t;

@@ -26,6 +26,7 @@
 #define COLI_TOKENIZER_FILE COLI_MOUNT_PATH "/tokenizer.ctok"
 #define COLI_GEMMA_TOKENIZER_FILE COLI_MOUNT_PATH "/tokenizer.cspm"
 #define COLI_PROMPT_FILE COLI_MOUNT_PATH "/prompt.txt"
+#define COLI_OLMOE_KV_FILE COLI_MOUNT_PATH "/olmoe.kv"
 #define COLI_GEMMA_MODEL_DIR \
     COLI_MOUNT_PATH "/neatobmo-models/gemma-3-270m-q8_0"
 #define COLI_GEMMA_MODEL_FILE COLI_GEMMA_MODEL_DIR "/model.bmoq"
@@ -34,11 +35,12 @@
 #define COLI_READ_BUFFER_BYTES (16u * 1024u)
 #define COLI_BENCHMARK_BYTES (512u * 1024u)
 #define COLI_DEMO_PROMPT_BYTES 192u
-#define COLI_OLMOE_CONTEXT_TOKENS 4u
+#define COLI_OLMOE_CONTEXT_TOKENS 4096u
 #define COLI_GEMMA_CONTEXT_TOKENS 16u
 #define COLI_DEMO_MAX_NEW_TOKENS 1u
 #define COLI_DEMO_WORKSPACE_BYTES (768u * 1024u)
 #define COLI_DEMO_DECODED_CHUNK_BYTES 256u
+#define COLI_KV_PAGE_BYTES (64u * 1024u)
 
 static const char *TAG = "coli_msc";
 
@@ -332,6 +334,8 @@ static void offline_generate_task(void *arg)
                 .max_new_tokens = COLI_DEMO_MAX_NEW_TOKENS,
                 .workspace_bytes = COLI_DEMO_WORKSPACE_BYTES,
                 .decoded_chunk_bytes = COLI_DEMO_DECODED_CHUNK_BYTES,
+                .kv_cache_path = COLI_OLMOE_KV_FILE,
+                .kv_page_bytes = COLI_KV_PAGE_BYTES,
                 .should_cancel = generate_cancelled,
                 .yield = generate_yield,
                 .log_chunk = generate_log_chunk,
@@ -343,11 +347,13 @@ static void offline_generate_task(void *arg)
         if (status == COLI_OK) {
             ESP_LOGI(TAG,
                      "offline OLMoE done prompt_tokens=%u generated=%u "
-                     "decoded=%u kv=%u workspace=%u last_token=%" PRIu32,
+                     "decoded=%u kv=%u resident_kv=%u workspace=%u "
+                     "last_token=%" PRIu32,
                      (unsigned)result.prompt_tokens,
                      (unsigned)result.generated_tokens,
                      (unsigned)result.decoded_bytes,
                      (unsigned)result.kv_cache_bytes,
+                     (unsigned)result.kv_cache_resident_bytes,
                      (unsigned)result.workspace_bytes, result.last_token_id);
         } else if (status != COLI_ERR_REMOVED) {
             ESP_LOGW(TAG, "offline OLMoE unavailable stage=%d status=%d",

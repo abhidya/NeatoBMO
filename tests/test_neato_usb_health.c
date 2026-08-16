@@ -10,11 +10,14 @@ static void rx_stall_requires_bounded_successful_probes(void)
     neato_usb_health_init(&health);
     neato_usb_health_connected(&health, 1000);
 
-    assert(neato_usb_health_tx(&health, true, 30000) == NEATO_USB_HEALTH_OK);
-    assert(neato_usb_health_tx(&health, true, 89999) == NEATO_USB_HEALTH_OK);
-    assert(neato_usb_health_tx(&health, true, 91000) == NEATO_USB_HEALTH_OK);
-    assert(neato_usb_health_tx(&health, true, 121000) == NEATO_USB_HEALTH_OK);
-    assert(neato_usb_health_tx(&health, true, 151000) ==
+    uint32_t first_stale = 1000 + NEATO_USB_HEALTH_RX_STALL_MS;
+    assert(neato_usb_health_tx(&health, true, first_stale - 1) ==
+           NEATO_USB_HEALTH_OK);
+    assert(neato_usb_health_tx(&health, true, first_stale) ==
+           NEATO_USB_HEALTH_OK);
+    assert(neato_usb_health_tx(&health, true, first_stale + 30000) ==
+           NEATO_USB_HEALTH_OK);
+    assert(neato_usb_health_tx(&health, true, first_stale + 60000) ==
            NEATO_USB_HEALTH_RECOVER_RX_STALL);
 }
 
@@ -24,11 +27,18 @@ static void rx_resets_stall_counter(void)
     neato_usb_health_init(&health);
     neato_usb_health_connected(&health, 0);
 
-    assert(neato_usb_health_tx(&health, true, 90000) == NEATO_USB_HEALTH_OK);
-    assert(neato_usb_health_tx(&health, true, 120000) == NEATO_USB_HEALTH_OK);
-    neato_usb_health_rx(&health, 121000);
-    assert(neato_usb_health_tx(&health, true, 150000) == NEATO_USB_HEALTH_OK);
-    assert(neato_usb_health_tx(&health, true, 211000) == NEATO_USB_HEALTH_OK);
+    uint32_t first_stale = NEATO_USB_HEALTH_RX_STALL_MS;
+    assert(neato_usb_health_tx(&health, true, first_stale) ==
+           NEATO_USB_HEALTH_OK);
+    assert(neato_usb_health_tx(&health, true, first_stale + 30000) ==
+           NEATO_USB_HEALTH_OK);
+    neato_usb_health_rx(&health, first_stale + 31000);
+    assert(neato_usb_health_tx(&health, true, first_stale + 60000) ==
+           NEATO_USB_HEALTH_OK);
+    assert(neato_usb_health_tx(
+               &health, true,
+               first_stale + 31000 + NEATO_USB_HEALTH_RX_STALL_MS
+           ) == NEATO_USB_HEALTH_OK);
 }
 
 static void consecutive_tx_failures_request_recovery(void)

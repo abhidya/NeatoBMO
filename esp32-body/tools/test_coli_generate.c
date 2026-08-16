@@ -238,6 +238,8 @@ static void write_ctok(const char *path)
 typedef struct {
     uint8_t bytes[8];
     size_t count;
+    size_t yields;
+    bool cancel_after_first_chunk;
 } capture_t;
 
 static void capture_chunk(void *context, const uint8_t *bytes, size_t count)
@@ -246,6 +248,18 @@ static void capture_chunk(void *context, const uint8_t *bytes, size_t count)
     assert(capture->count + count <= sizeof(capture->bytes));
     memcpy(capture->bytes + capture->count, bytes, count);
     capture->count += count;
+}
+
+static void capture_yield(void *context)
+{
+    capture_t *capture = context;
+    ++capture->yields;
+}
+
+static bool capture_cancel(void *context)
+{
+    capture_t *capture = context;
+    return capture->cancel_after_first_chunk && capture->count > 0;
 }
 
 int main(void)
@@ -276,6 +290,8 @@ int main(void)
         .workspace_bytes = 4096,
         .decoded_chunk_bytes = 4,
         .log_chunk = capture_chunk,
+        .yield = capture_yield,
+        .should_cancel = capture_cancel,
         .callback_context = &capture,
     };
     coli_generate_result_t result;
@@ -288,10 +304,48 @@ int main(void)
     assert(capture.count == 2);
     assert(capture.bytes[0] == 0 && capture.bytes[1] == 0);
 
+    char kv_path[] = "/tmp/coli-generate-kv-XXXXXX";
+    fd = mkstemp(kv_path);
+    assert(fd >= 0);
+    close(fd);
+    memset(&capture, 0, sizeof(capture));
+    config.kv_cache_path = kv_path;
+    config.kv_page_bytes = 17;
+    assert(coli_generate_olmoe_greedy(model_store, tokenizer_store, &config,
+                                      &result) == COLI_OK);
+    assert(result.stage == COLI_GENERATE_STAGE_DONE);
+    assert(result.generated_tokens == 2);
+    assert(result.decoded_bytes == 2);
+    assert(result.kv_cache_resident_bytes == 17);
+    assert(result.kv_cache_resident_bytes < result.kv_cache_bytes);
+    assert(capture.count == 2);
+
+    memset(&capture, 0, sizeof(capture));
+    config.context_tokens = 4096;
+    config.kv_page_bytes = 4096;
+    assert(coli_generate_olmoe_greedy(model_store, tokenizer_store, &config,
+                                      &result) == COLI_OK);
+    assert(result.generated_tokens == 2);
+    assert(result.kv_cache_bytes == 4096u * 2u * HIDDEN * sizeof(float));
+    assert(result.kv_cache_resident_bytes == 4096);
+    assert(result.kv_cache_resident_bytes < result.kv_cache_bytes);
+
+    memset(&capture, 0, sizeof(capture));
+    capture.cancel_after_first_chunk = true;
+    config.context_tokens = 3;
+    config.kv_cache_path = NULL;
+    assert(coli_generate_olmoe_greedy(model_store, tokenizer_store, &config,
+                                      &result) == COLI_ERR_REMOVED);
+    assert(result.stage == COLI_GENERATE_STAGE_CANCELLED);
+    assert(result.generated_tokens == 1);
+    assert(result.decoded_bytes == 1);
+    assert(capture.count == 1);
+
     coli_store_close(tokenizer_store);
     coli_store_close(model_store);
     unlink(tokenizer_path);
     unlink(model_path);
+    unlink(kv_path);
     puts("coli_generate OLMoE BMOQ+CTOK prompt-to-text: PASS");
     return 0;
 }

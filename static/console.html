@@ -91,6 +91,10 @@
        padding:0;flex:none;opacity:.65}
  #wake.on{opacity:1;animation:pulse 2.2s infinite}
  @keyframes pulse{50%{box-shadow:0 4px 0 var(--bezel),0 0 0 9px rgba(242,99,90,.28)}}
+ @media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .think span{display:none}
+ }
  .mini{padding:6px 12px;font-size:13px;background:var(--cream);color:var(--ink);
        border-radius:12px;box-shadow:0 3px 0 var(--bezel)}
  .mini.playing{background:var(--green);color:#12400a}
@@ -167,8 +171,8 @@
 <div class="pane on" id="p-chat">
 <canvas id="face" width="128" height="64"></canvas>
 <div id="conn">checking body…</div>
-<div id="status">BMO · voice: espeak-ng → sound-bank speech</div>
-<div id="log"></div>
+<div id="status" role="status" aria-live="polite" aria-atomic="true">BMO · voice: espeak-ng → sound-bank speech</div>
+<div id="log" aria-live="polite" aria-relevant="additions"></div>
 <div class="slot" title="insert game cartridge"></div>
 <div id="bar">
   <button id="mic" title="hold to talk">🎤</button>
@@ -278,6 +282,7 @@ const log=document.getElementById('log');
 function add(cls,text){const d=document.createElement('div');d.className='msg '+cls;
  d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;}
 const STATUS_DEFAULT='BMO · voice: espeak-ng → sound-bank speech';
+const reducedMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 // body connection pill
 async function health(){const c=document.getElementById('conn');
  try{const j=await(await fetch('/health')).json();
@@ -285,8 +290,9 @@ async function health(){const c=document.getElementById('conn');
   c.textContent=j.robot?('body connected'+(j.via?' · '+j.via:'')):'body not attached';
  }catch(e){c.classList.remove('ok');c.textContent='console offline';}}
 health();setInterval(health,5000);
-function thinkBubble(){const d=document.createElement('div');d.className='msg bmo think';
- d.innerHTML='<span></span><span></span><span></span>';
+function thinkBubble(text){const d=document.createElement('div');d.className='msg bmo think';
+ d.setAttribute('aria-hidden','true');
+ d.innerHTML=reducedMotion?(text||'Thinking about the rest…'):'<span></span><span></span><span></span>';
  log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
 // voice output selector (persisted)
 const voiceSel=document.getElementById('voice');
@@ -304,34 +310,120 @@ async function speakLocal(text){
  }
 }
 let pending=false;
+async function* readTurnEvents(r){
+ const ctype=(r.headers.get('Content-Type')||'').toLowerCase();
+ if(!ctype.includes('application/x-ndjson')||!r.body){
+  yield {type:'legacy_json',payload:await r.json()};
+  return;
+ }
+ const reader=r.body.getReader(),decoder=new TextDecoder();
+ let buf='';
+ while(true){
+  const {value,done}=await reader.read();
+  if(done)break;
+  buf+=decoder.decode(value,{stream:true});
+  const lines=buf.split('\n');buf=lines.pop();
+  for(const line of lines){
+   if(!line.trim())continue;
+   yield JSON.parse(line);
+  }
+ }
+ buf+=decoder.decode();
+ if(buf.trim())yield JSON.parse(buf);
+}
+function removeThinkingBubble(state){
+ if(state.think){state.think.remove();state.think=null;}
+}
+function stopBrainThinking(state){
+ clearInterval(state.tick);state.tick=null;
+ stopThinkingSounds();removeThinkingBubble(state);
+}
+function renderBmoTurnPart(state,display){
+ if(!display)return;
+ state.displayed+=1;
+ add('bmo',display);faceCascade(display);
+ try{if(facesOpen())previewOnly(display);}catch(e){}
+ if(voiceSel.value==='local')speakLocal(display);
+}
+function startBrainThinking(state,event){
+ if(state.brainStarted)return;
+ state.brainStarted=true;
+ state.brainStartedAt=Date.now();
+ const summary=event.residual_summary?' about the rest…':'…';
+ document.getElementById('status').textContent='Thinking'+summary+' 0s';
+ state.tick=setInterval(()=>{
+  document.getElementById('status').textContent='Thinking'+summary+' '+
+   Math.floor((Date.now()-state.brainStartedAt)/1000)+'s';
+ },1000);
+ faceThink();
+ state.think=thinkBubble('Thinking about the rest…');
+ startThinkingSounds();
+}
+function completeTurn(state,event){
+ state.terminal=true;stopBrainThinking(state);
+ if(!state.displayed&&event.reply)renderBmoTurnPart(state,event.reply);
+ document.getElementById('status').textContent=event.voice_error
+  ? 'BMO · robot voice: '+event.voice_error
+  : (event.partial?'BMO answered part of that.':STATUS_DEFAULT);
+}
+function renderTurnError(state,event){
+ state.hadError=true;
+ stopBrainThinking(state);faceSad();
+ const msg=state.displayed
+  ? 'BMO answered part of that, but the rest failed.'
+  : (event.message||'(brain unreachable)');
+ add('bmo',msg);
+ document.getElementById('status').textContent=event.recoverable?'BMO hit a recoverable snag.':STATUS_DEFAULT;
+}
+async function handleTurnEvent(state,event){
+ if(event.type==='legacy_json'){
+  const j=event.payload;
+  if(j.error)throw new Error(j.error);
+  completeTurn(state,{reply:j.reply,cues:j.cues||[],voice_error:j.voice_error,partial:false});
+  return;
+ }
+ if(event.type==='turn_started')return;
+ if(event.type==='routine_result'){renderBmoTurnPart(state,event.display);return;}
+ if(event.type==='brain_started'){startBrainThinking(state,event);return;}
+ if(event.type==='brain_result'){
+  if(state.brainStarted&&!state.firstBrainResult){
+   state.firstBrainResult=true;stopBrainThinking(state);
+   document.getElementById('status').textContent='Answering the rest…';
+  }
+  renderBmoTurnPart(state,event.display);return;
+ }
+ if(event.type==='turn_error'){renderTurnError(state,event);return;}
+ if(event.type==='turn_completed'){completeTurn(state,event);}
+}
 async function send(text){
  if(pending)return;
  pending=true;
  const st=document.getElementById('status'),txtEl=document.getElementById('txt'),
-       btn=document.getElementById('sendbtn'),t0=Date.now();
+       btn=document.getElementById('sendbtn');
  txtEl.disabled=true;btn.disabled=true;
- st.textContent='thinking… 0s';
- const tick=setInterval(()=>{st.textContent='thinking… '+Math.floor((Date.now()-t0)/1000)+'s';},1000);
- add('you',text);faceThink();
- const think=thinkBubble();
- startThinkingSounds();
+ st.textContent='Checking…';
+ add('you',text);
+ const state={displayed:0,brainStarted:false,firstBrainResult:false,terminal:false,hadError:false,
+  think:null,tick:null};
  try{
   const r=await fetch('/chat',{method:'POST',body:JSON.stringify({text,
-   speak:voiceSel.value==='robot'})});
-  const j=await r.json();
-  clearInterval(tick);think.remove();
-  add('bmo',j.reply);faceCascade(j.reply);
-  st.textContent=j.voice_error
-   ? 'BMO · robot voice: '+j.voice_error
-   : STATUS_DEFAULT;
-  try{if(facesOpen())previewOnly(j.reply);}catch(e){}
-  if(voiceSel.value==='local')speakLocal(j.reply);
+   speak:voiceSel.value==='robot'}),headers:{'Accept':'application/x-ndjson, application/json',
+   'Content-Type':'application/json'}});
+  if(!r.ok)throw new Error('chat failed');
+  for await(const event of readTurnEvents(r))await handleTurnEvent(state,event);
+  if(!state.terminal&&!state.hadError){
+   stopBrainThinking(state);faceSad();
+   if(state.displayed)add('bmo','BMO answered part of that, but the rest failed.');
+   else add('bmo','(brain unreachable)');
+   st.textContent=STATUS_DEFAULT;
+  }
  }catch(e){
-  clearInterval(tick);think.remove();
-  faceSad();add('bmo','(brain unreachable)');
+  stopBrainThinking(state);faceSad();
+  if(!state.hadError)
+   add('bmo',state.displayed?'BMO answered part of that, but the rest failed.':'(brain unreachable)');
   st.textContent=STATUS_DEFAULT;
  }finally{
-  clearInterval(tick);stopThinkingSounds();pending=false;
+  stopBrainThinking(state);pending=false;
   txtEl.disabled=false;btn.disabled=false;txtEl.focus();
  }
 }
