@@ -117,8 +117,10 @@ here in the same change.
 - **neato_protocol** (`src/neato_protocol.c`) — the command vocabulary
   above the transport (LCD ops, PlaySound, TestMode, LEDs). Encodes the
   hardware footguns so callers speak intent, not strings.
-- **coli_mcu** (`components/coli_mcu/`) — on-MCU LLM runtime: USB-MSC
-  model storage, the **BMOQ** quantized-model format, streamed Q4 kernels,
+- **On-MCU LLM runtime — removed.** The bespoke BMOQ quantized-model format
+  and its streamed Q4 kernels were deleted: they re-quantized already-quantized
+  weights and destroyed model quality. Inference is to be served by upstream
+  Colibri (GGUF) rather than a hand-rolled format. Historic detail:
   and an OLMoE prompt-to-text decode loop (MoE routing, file-backed paged
   KV cache, streamed attention) plus experimental Gemma/GLM-5.2 paths.
   Host-testable by design (`tools/Makefile`).

@@ -5,5 +5,4 @@ idf_component_register(SRCS "main.c" "neato_usb.c" "neato_usb_health.c" "neato_p
                        EMBED_TXTFILES "index.html" "wifi.html"
                        PRIV_REQUIRES esp_wifi esp_netif esp_event nvs_flash lwip
                                      esp_http_server app_update dns_server
-                                     esp_driver_uart esp_http_client mbedtls json
-                                     coli_mcu)
+                                     esp_driver_uart esp_http_client mbedtls json)

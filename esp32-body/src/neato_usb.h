@@ -17,7 +17,7 @@
 /* ---- lifecycle ----------------------------------------------------------
  * install: create transport state, install the USB host + CDC-ACM drivers
  * and spawn the USB library task.  Call once; peer USB class clients
- * (coli_mcu MSC) may register after this.
+ * (USB MSC) may register after this.
  * start: spawn the connection-manager task that waits for the robot,
  * opens only the observed Neato VID/PID, sets line coding, and invokes
  * on_connect after each (re)connect. Updater reboot may leave the device absent

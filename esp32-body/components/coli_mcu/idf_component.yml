@@ -1,6 +1,0 @@
-version: "0.1.0-dev"
-description: "SSD-streamed Colibri model inference for ESP32-S3"
-targets:
-  - esp32s3
-dependencies:
-  idf: ">=5.5"
