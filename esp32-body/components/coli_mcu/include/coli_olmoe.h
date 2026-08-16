@@ -117,6 +117,11 @@ typedef struct {
     bool stopped_on_eos;
 } coli_olmoe_generate_stats_t;
 
+typedef coli_status_t (*coli_olmoe_layer_observer_fn)(
+    void *context,
+    uint32_t layer,
+    const coli_moe_stats_t *moe_stats);
+
 typedef coli_status_t (*coli_olmoe_token_fn)(void *context,
                                              uint32_t token_id,
                                              size_t generated_index);
@@ -148,6 +153,20 @@ coli_status_t coli_olmoe_decode_next_token(
     void *workspace,
     size_t workspace_bytes,
     uint32_t *out_token_id,
+    coli_olmoe_decode_stats_t *stats);
+
+coli_status_t coli_olmoe_decode_eval_token(
+    const coli_model_t *model,
+    uint32_t input_token_id,
+    uint32_t position,
+    coli_kv_cache_t *kv_cache,
+    void *workspace,
+    size_t workspace_bytes,
+    float *out_logits,
+    size_t out_logit_count,
+    uint32_t *out_token_id,
+    coli_olmoe_layer_observer_fn on_layer,
+    void *observer_context,
     coli_olmoe_decode_stats_t *stats);
 
 coli_status_t coli_olmoe_generate_greedy(

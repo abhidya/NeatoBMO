@@ -9,6 +9,9 @@ make -C tools        # build all thirteen with -Wall -Wextra -Werror
 make -C tools test   # build and run them
 ```
 
+`make -C tools` also builds `tools/build/bmoq-eval-olmoe`, the host-side
+teacher-forced OLMoE BMOQ evaluator used by `tools/bmoq_eval/`.
+
 What each test proves:
 
 - `test_bmoq` — BMOQ parser plus tiled reads: a deterministic 16 MiB tensor
@@ -71,6 +74,33 @@ weights. It validates the official `allenai/OLMoE-1B-7B-0924` shape by default,
 streams tensors row-by-row, writes grouped symmetric Q4 weights plus float32
 scale tensors, and embeds an OLMoE manifest/config block for firmware loading.
 Use `--allow-nonstandard` only for synthetic fixtures or deliberate forks.
+
+Run the paired BF16-vs-BMOQ host quality benchmark:
+
+```sh
+python3 tools/bmoq_eval/eval_hf_olmoe.py \
+  --model allenai/OLMoE-1B-7B-0924 \
+  --input benchmark.jsonl \
+  --output runs/olmoe-bf16-results.jsonl
+
+python3 tools/bmoq_eval/eval_bmoq.py \
+  --executable tools/build/bmoq-eval-olmoe \
+  --model model.bmoq \
+  --tokenizer tokenizer.ctok \
+  --input benchmark.jsonl \
+  --output runs/olmoe-bmoq-results.jsonl \
+  --dump-logits \
+  --dump-routing
+
+python3 tools/bmoq_eval/compare_quantization.py \
+  --reference runs/olmoe-bf16-results.jsonl \
+  --candidate runs/olmoe-bmoq-results.jsonl \
+  --report runs/bmoq-vs-bf16.json
+```
+
+For exact pairing, the C BMOQ evaluator currently expects `benchmark.jsonl`
+records to contain pre-tokenized `tokens`; the tokenizer path is recorded in
+variant metadata so the run remains auditable.
 
 Inspect or export a local GLM-5.2 safetensors checkpoint to BMOQ v2:
 

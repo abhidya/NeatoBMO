@@ -254,14 +254,18 @@ coli_status_t coli_olmoe_layer_decode(const coli_model_t *model,
     return COLI_OK;
 }
 
-coli_status_t coli_olmoe_decode_next_token(
+static coli_status_t decode_token_impl(
     const coli_model_t *model,
     uint32_t input_token_id,
     uint32_t position,
     coli_kv_cache_t *kv_cache,
     void *workspace,
     size_t workspace_bytes,
+    float *out_logits,
+    size_t out_logit_count,
     uint32_t *out_token_id,
+    coli_olmoe_layer_observer_fn on_layer,
+    void *observer_context,
     coli_olmoe_decode_stats_t *stats)
 {
     const coli_kv_cache_layout_t *kv_layout =
@@ -269,7 +273,8 @@ coli_status_t coli_olmoe_decode_next_token(
     if (!model || !kv_cache || !kv_layout || !workspace || !out_token_id ||
         !stats || model->config.hidden_size == 0 ||
         input_token_id >= model->config.vocab_size ||
-        position >= kv_layout->max_tokens)
+        position >= kv_layout->max_tokens ||
+        (out_logits && out_logit_count != model->config.vocab_size))
         return COLI_ERR_ARGUMENT;
 
     memset(stats, 0, sizeof(*stats));
@@ -300,6 +305,10 @@ coli_status_t coli_olmoe_decode_next_token(
                                          kv_cache, cursor, remaining,
                                          &layer_stats);
         if (status != COLI_OK) return status;
+        if (on_layer) {
+            status = on_layer(observer_context, layer, &layer_stats.moe);
+            if (status != COLI_OK) return status;
+        }
         stats->last_layer = layer_stats;
         ++stats->layers_executed;
         float *swap = state;
@@ -317,15 +326,67 @@ coli_status_t coli_olmoe_decode_next_token(
         coli_model_find(model, COLI_OLMOE_TENSOR_LM_HEAD);
     const bmoq_tensor_t *lm_scales =
         coli_model_find(model, coli_olmoe_scale_id(COLI_OLMOE_TENSOR_LM_HEAD));
-    status = coli_q4_argmax(model, lm_head, lm_scales, state, hidden_count,
-                            cursor, remaining, out_token_id,
-                            &stats->selected_logit, &stats->lm_head_q4);
+    if (out_logits) {
+        status = coli_q4_matvec(model, lm_head, lm_scales, state, hidden_count,
+                                out_logits, out_logit_count, cursor, remaining,
+                                &stats->lm_head_q4);
+        if (status != COLI_OK) return status;
+        float best = out_logits[0];
+        uint32_t best_id = 0;
+        for (uint32_t token = 1; token < model->config.vocab_size; ++token) {
+            if (out_logits[token] > best) {
+                best = out_logits[token];
+                best_id = token;
+            }
+        }
+        *out_token_id = best_id;
+        stats->selected_logit = best;
+    } else {
+        status = coli_q4_argmax(model, lm_head, lm_scales, state, hidden_count,
+                                cursor, remaining, out_token_id,
+                                &stats->selected_logit, &stats->lm_head_q4);
+    }
     if (status != COLI_OK) return status;
 
     stats->peak_workspace_bytes = workspace_bytes - remaining;
     if (stats->peak_workspace_bytes < stats->last_layer.peak_workspace_bytes)
         stats->peak_workspace_bytes = stats->last_layer.peak_workspace_bytes;
     return COLI_OK;
+}
+
+coli_status_t coli_olmoe_decode_next_token(
+    const coli_model_t *model,
+    uint32_t input_token_id,
+    uint32_t position,
+    coli_kv_cache_t *kv_cache,
+    void *workspace,
+    size_t workspace_bytes,
+    uint32_t *out_token_id,
+    coli_olmoe_decode_stats_t *stats)
+{
+    return decode_token_impl(model, input_token_id, position, kv_cache,
+                             workspace, workspace_bytes, NULL, 0,
+                             out_token_id, NULL, NULL, stats);
+}
+
+coli_status_t coli_olmoe_decode_eval_token(
+    const coli_model_t *model,
+    uint32_t input_token_id,
+    uint32_t position,
+    coli_kv_cache_t *kv_cache,
+    void *workspace,
+    size_t workspace_bytes,
+    float *out_logits,
+    size_t out_logit_count,
+    uint32_t *out_token_id,
+    coli_olmoe_layer_observer_fn on_layer,
+    void *observer_context,
+    coli_olmoe_decode_stats_t *stats)
+{
+    return decode_token_impl(model, input_token_id, position, kv_cache,
+                             workspace, workspace_bytes, out_logits,
+                             out_logit_count, out_token_id, on_layer,
+                             observer_context, stats);
 }
 
 coli_status_t coli_olmoe_generate_greedy_stream(

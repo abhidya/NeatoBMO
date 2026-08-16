@@ -339,17 +339,32 @@ coli_status_t coli_inkling_attention_decode(
         local_layer ? config->swa_head_dim : config->head_dim;
     const uint32_t extent =
         local_layer ? config->sliding_window : config->rel_extent;
-    const uint32_t kv_stride = layout->key_token_bytes / sizeof(float);
     const size_t kv_values = (size_t)kv_heads * head_dim;
+    const uint64_t layer_key_bytes =
+        layout->variable_layer_capacities
+            ? layout->layer_key_token_bytes[layer]
+            : layout->key_token_bytes;
+    const uint64_t layer_value_bytes =
+        layout->variable_layer_capacities
+            ? layout->layer_value_token_bytes[layer]
+            : layout->value_token_bytes;
+    if (layer_key_bytes % sizeof(float) != 0 ||
+        layer_value_bytes % sizeof(float) != 0 ||
+        layer_key_bytes / sizeof(float) > SIZE_MAX ||
+        layer_value_bytes / sizeof(float) > SIZE_MAX)
+        return COLI_ERR_FORMAT;
+    const size_t key_stride = (size_t)(layer_key_bytes / sizeof(float));
+    const size_t value_stride = (size_t)(layer_value_bytes / sizeof(float));
     if (heads == 0 || kv_heads == 0 || heads % kv_heads != 0 ||
         head_dim == 0 || output_count < (size_t)heads * head_dim ||
-        score_count < position + 1u || key_scratch_count < kv_stride ||
-        value_scratch_count < kv_stride || kv_values > kv_stride ||
+        score_count < position + 1u || key_scratch_count < key_stride ||
+        value_scratch_count < value_stride || kv_values != key_stride ||
+        kv_values != value_stride ||
         relative_bias_count < extent)
         return COLI_ERR_ARGUMENT;
 
-    memset(key_scratch, 0, kv_stride * sizeof(*key_scratch));
-    memset(value_scratch, 0, kv_stride * sizeof(*value_scratch));
+    memset(key_scratch, 0, key_stride * sizeof(*key_scratch));
+    memset(value_scratch, 0, value_stride * sizeof(*value_scratch));
     memcpy(key_scratch, key, kv_values * sizeof(*key_scratch));
     memcpy(value_scratch, value, kv_values * sizeof(*value_scratch));
     coli_status_t status = coli_kv_cache_write_token(

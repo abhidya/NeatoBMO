@@ -1,0 +1,257 @@
+{
+  "by": {
+    "expert": {
+      "l0:e0": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l0:e1": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l0:e2": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l0:e3": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l0:e4": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l0:e5": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l0:e6": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l0:e7": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l1:e10": {
+        "count": 6,
+        "router_presence_agreement": 0.6666666666666666
+      },
+      "l1:e11": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l1:e12": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l1:e13": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l1:e14": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l1:e15": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l1:e16": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      },
+      "l1:e17": {
+        "count": 6,
+        "router_presence_agreement": 1.0
+      }
+    },
+    "layer": {
+      "0": {
+        "candidate_nll": 1.0848843246112627,
+        "candidate_perplexity": 2.9590975041870804,
+        "cosine": 0.9999214138240896,
+        "count": 6,
+        "delta_nll": 0.01704491147805709,
+        "kl": 0.00010490097755697912,
+        "perplexity_increase_pct": 1.7191004850892533,
+        "reference_nll": 1.0678394131332056,
+        "reference_perplexity": 2.909087369112989,
+        "router_overlap": 1.0,
+        "router_weight_mae": 0.0010000000000000009,
+        "top1_agreement": 1.0,
+        "top5_overlap": 1.0
+      },
+      "1": {
+        "candidate_nll": 1.0848843246112627,
+        "candidate_perplexity": 2.9590975041870804,
+        "cosine": 0.9999214138240896,
+        "count": 6,
+        "delta_nll": 0.01704491147805709,
+        "kl": 0.00010490097755697912,
+        "perplexity_increase_pct": 1.7191004850892533,
+        "reference_nll": 1.0678394131332056,
+        "reference_perplexity": 2.909087369112989,
+        "router_overlap": 0.9583333333333334,
+        "router_weight_mae": 0.01961635532891339,
+        "top1_agreement": 1.0,
+        "top5_overlap": 1.0
+      }
+    },
+    "prompt_category": {
+      "bmo-cue": {
+        "candidate_nll": 1.042126813260311,
+        "candidate_perplexity": 2.835240633900375,
+        "cosine": 0.9999286069906893,
+        "count": 3,
+        "delta_nll": 0.012793897229906648,
+        "kl": 7.98541937467132e-05,
+        "perplexity_increase_pct": 1.2876089277916059,
+        "reference_nll": 1.0293329160304043,
+        "reference_perplexity": 2.7991979116829886,
+        "router_overlap": 0.9791666666666666,
+        "router_weight_mae": 0.010308177664456696,
+        "top1_agreement": 1.0,
+        "top5_overlap": 1.0
+      },
+      "motion-safety": {
+        "candidate_nll": 1.1276418359622145,
+        "candidate_perplexity": 3.088365034907258,
+        "cosine": 0.9999142206574901,
+        "count": 3,
+        "delta_nll": 0.021295925726207532,
+        "kl": 0.00012994776136724504,
+        "perplexity_increase_pct": 2.1524302234436465,
+        "reference_nll": 1.106345910236007,
+        "reference_perplexity": 3.023290809775065,
+        "router_overlap": 0.9791666666666666,
+        "router_weight_mae": 0.010308177664456696,
+        "top1_agreement": 1.0,
+        "top5_overlap": 1.0
+      }
+    },
+    "sequence_length": {
+      "4": {
+        "candidate_nll": 1.0848843246112627,
+        "candidate_perplexity": 2.9590975041870804,
+        "cosine": 0.9999214138240896,
+        "count": 6,
+        "delta_nll": 0.01704491147805709,
+        "kl": 0.00010490097755697912,
+        "perplexity_increase_pct": 1.7191004850892533,
+        "reference_nll": 1.0678394131332056,
+        "reference_perplexity": 2.909087369112989,
+        "router_overlap": 0.9791666666666666,
+        "router_weight_mae": 0.010308177664456694,
+        "top1_agreement": 1.0,
+        "top5_overlap": 1.0
+      }
+    },
+    "tensor_precision": {
+      "Q4_GROUP32": {
+        "candidate_nll": 1.0848843246112627,
+        "candidate_perplexity": 2.9590975041870804,
+        "cosine": 0.9999214138240896,
+        "count": 6,
+        "delta_nll": 0.01704491147805709,
+        "kl": 0.00010490097755697912,
+        "perplexity_increase_pct": 1.7191004850892533,
+        "reference_nll": 1.0678394131332056,
+        "reference_perplexity": 2.909087369112989,
+        "router_overlap": 0.9791666666666666,
+        "router_weight_mae": 0.010308177664456694,
+        "top1_agreement": 1.0,
+        "top5_overlap": 1.0
+      }
+    },
+    "token_position": {
+      "1": {
+        "candidate_nll": 1.0800886693250573,
+        "candidate_perplexity": 2.9449406653900714,
+        "cosine": 0.9999354098855714,
+        "count": 2,
+        "delta_nll": 0.012838634472620347,
+        "kl": 8.038659257638182e-05,
+        "perplexity_increase_pct": 1.2921403574972068,
+        "reference_nll": 1.067250034852437,
+        "reference_perplexity": 2.907373321361651,
+        "router_overlap": 1.0,
+        "router_weight_mae": 0.0010000000000000009,
+        "top1_agreement": 1.0,
+        "top5_overlap": 1.0
+      },
+      "2": {
+        "candidate_nll": 1.08411590662564,
+        "candidate_perplexity": 2.9568245538434557,
+        "cosine": 0.999931475238854,
+        "count": 2,
+        "delta_nll": 0.01686587177320331,
+        "kl": 9.754188301837406e-05,
+        "perplexity_increase_pct": 1.7008903575769674,
+        "reference_nll": 1.0672500348524367,
+        "reference_perplexity": 2.9073733213616504,
+        "router_overlap": 0.9375,
+        "router_weight_mae": 0.028924532993370087,
+        "top1_agreement": 1.0,
+        "top5_overlap": 1.0
+      },
+      "3": {
+        "candidate_nll": 1.0904483978830908,
+        "candidate_perplexity": 2.975608029810387,
+        "cosine": 0.9998973563478438,
+        "count": 2,
+        "delta_nll": 0.021430228188347833,
+        "kl": 0.0001367744570761815,
+        "perplexity_increase_pct": 2.1661504676469434,
+        "reference_nll": 1.069018169694743,
+        "reference_perplexity": 2.912518496772251,
+        "router_overlap": 1.0,
+        "router_weight_mae": 0.0010000000000000009,
+        "top1_agreement": 1.0,
+        "top5_overlap": 1.0
+      }
+    }
+  },
+  "candidate": {
+    "path": "esp32-body/tools/bmoq_eval/fixtures/tiny/bmoq-results.jsonl",
+    "variant": {
+      "model": "synthetic-olmoe-tiny",
+      "name": "fixture-bmoq",
+      "quant_group_size": 32,
+      "runtime": "deterministic-fixture",
+      "tensor_precision": "Q4_GROUP32"
+    }
+  },
+  "comparison": "bf16_reference_vs_bmoq_candidate",
+  "overall": {
+    "candidate_nll": 1.0848843246112627,
+    "candidate_perplexity": 2.9590975041870804,
+    "cosine": 0.9999214138240896,
+    "count": 6,
+    "delta_nll": 0.01704491147805709,
+    "kl": 0.00010490097755697912,
+    "perplexity_increase_pct": 1.7191004850892533,
+    "reference_nll": 1.0678394131332056,
+    "reference_perplexity": 2.909087369112989,
+    "router_overlap": 0.9791666666666666,
+    "router_weight_mae": 0.010308177664456694,
+    "top1_agreement": 1.0,
+    "top5_overlap": 1.0
+  },
+  "paired_categorical": {
+    "tokens_compared": 6,
+    "top1_changed": 0,
+    "top1_same": 6
+  },
+  "reference": {
+    "path": "esp32-body/tools/bmoq_eval/fixtures/tiny/bf16-results.jsonl",
+    "variant": {
+      "model": "synthetic-olmoe-tiny",
+      "name": "fixture-bf16",
+      "quant_group_size": null,
+      "runtime": "deterministic-fixture",
+      "tensor_precision": "BF16"
+    }
+  },
+  "schema_version": 1
+}
