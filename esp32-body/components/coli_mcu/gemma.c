@@ -72,6 +72,18 @@ static coli_status_t read_dense_f32(const coli_model_t *model, uint32_t tensor_i
     return coli_tensor_read(model, tensor, 0, output, count * sizeof(float));
 }
 
+/* GeGLU: Gemma gates with the tanh approximation of GELU, not SiLU. */
+static void gemma_gelu_gated(const float *gate, const float *up, float *output,
+                             size_t count)
+{
+    for (size_t i = 0; i < count; ++i) {
+        float x = gate[i];
+        float inner = 0.7978845608028654f * (x + 0.044715f * x * x * x);
+        float gelu = 0.5f * x * (1.0f + tanhf(inner));
+        output[i] = gelu * up[i];
+    }
+}
+
 static coli_status_t gemma_rmsnorm(const coli_model_t *model,
                                    uint32_t tensor_id,
                                    const float *input,
@@ -87,8 +99,13 @@ static coli_status_t gemma_rmsnorm(const coli_model_t *model,
         sum_squares += (double)input[i] * (double)input[i];
     const float scale =
         1.0f / sqrtf((float)(sum_squares / (double)count) + 1.0e-6f);
+    /* Plain multiply, not (1 + w): llama.cpp's GGUF converter folds Gemma's
+     * +1 into every *norm.weight tensor at conversion time, and the exporter
+     * copies those tensors verbatim. Adding 1 again computes (2 + w_hf) in
+     * every norm — the first sub-step where the runtime diverged from the
+     * reference on the real checkpoint. */
     for (size_t i = 0; i < count; ++i)
-        output[i] = input[i] * scale * (1.0f + weight_workspace[i]);
+        output[i] = input[i] * scale * weight_workspace[i];
     return COLI_OK;
 }
 
@@ -133,30 +150,36 @@ static coli_status_t rope_apply_gqa(float *query, float *key,
     if (!query || !key || query_heads == 0 || kv_heads == 0 ||
         head_dim == 0 || (head_dim & 1u) != 0 || !(theta_base > 1.0f))
         return COLI_ERR_ARGUMENT;
+    /* Half-split ("rotate_half"/NEOX) rotation: dimension d pairs with
+     * d + head_dim/2, matching how Hugging Face and llama.cpp apply RoPE to
+     * Gemma weights. The exporter copies projection rows verbatim, so the
+     * interleaved (d, d+1) pairing would rotate the wrong coordinate pairs
+     * and scramble every attention head. */
+    const uint32_t half = head_dim / 2u;
     for (uint32_t head = 0; head < query_heads; ++head) {
         float *q_head = query + (size_t)head * head_dim;
-        for (uint32_t d = 0; d < head_dim; d += 2) {
-            const float exponent = (float)d / (float)head_dim;
+        for (uint32_t d = 0; d < half; ++d) {
+            const float exponent = (float)d / (float)half;
             const float angle = (float)position / powf(theta_base, exponent);
             const float cosine = cosf(angle);
             const float sine = sinf(angle);
             const float q0 = q_head[d];
-            const float q1 = q_head[d + 1];
+            const float q1 = q_head[d + half];
             q_head[d] = q0 * cosine - q1 * sine;
-            q_head[d + 1] = q0 * sine + q1 * cosine;
+            q_head[d + half] = q0 * sine + q1 * cosine;
         }
     }
     for (uint32_t head = 0; head < kv_heads; ++head) {
         float *k_head = key + (size_t)head * head_dim;
-        for (uint32_t d = 0; d < head_dim; d += 2) {
-            const float exponent = (float)d / (float)head_dim;
+        for (uint32_t d = 0; d < half; ++d) {
+            const float exponent = (float)d / (float)half;
             const float angle = (float)position / powf(theta_base, exponent);
             const float cosine = cosf(angle);
             const float sine = sinf(angle);
             const float k0 = k_head[d];
-            const float k1 = k_head[d + 1];
+            const float k1 = k_head[d + half];
             k_head[d] = k0 * cosine - k1 * sine;
-            k_head[d + 1] = k0 * sine + k1 * cosine;
+            k_head[d + half] = k0 * sine + k1 * cosine;
         }
     }
     return COLI_OK;
@@ -286,7 +309,16 @@ coli_status_t coli_gemma_layer_decode(const coli_model_t *model,
     const uint32_t head_dim = kv_layout->head_dim;
     const uint32_t attention_count = query_heads * head_dim;
     const uint32_t kv_count = kv_heads * head_dim;
-    const uint32_t sliding_window = model->config.num_experts;
+    /* Gemma 3 interleaves attention kinds in a fixed published pattern:
+     * every 6th layer is full/global attention with rope_theta from the
+     * checkpoint metadata (1e6), the rest are sliding-window layers with the
+     * local base frequency of 1e4. One theta for all layers rotates five of
+     * every six layers with the wrong angles. */
+    const bool global_layer = (layer + 1u) % 6u == 0u;
+    const float rope_theta =
+        global_layer ? (float)model->config.rope_theta : 10000.0f;
+    const uint32_t sliding_window =
+        global_layer ? 0u : model->config.num_experts;
     const size_t intermediate_count = model->config.intermediate_size;
 
     void *cursor = workspace;
@@ -360,7 +392,7 @@ coli_status_t coli_gemma_layer_decode(const coli_model_t *model,
                               head_dim, weight);
     if (status != COLI_OK) return status;
     status = rope_apply_gqa(query, key, query_heads, kv_heads, head_dim,
-                            position, (float)model->config.rope_theta);
+                            position, rope_theta);
     if (status != COLI_OK) return status;
 
     void *key_slot = NULL;
@@ -407,7 +439,8 @@ coli_status_t coli_gemma_layer_decode(const coli_model_t *model,
                         q4_workspace_bytes, &q4_stats);
     if (status != COLI_OK) return status;
     accumulate_q4(&stats->ffn_q4, &q4_stats);
-    status = coli_ops_silu_gated(gate, up, gate, intermediate_count);
+    gemma_gelu_gated(gate, up, gate, intermediate_count);
+    status = COLI_OK;
     if (status != COLI_OK) return status;
     status = q4_project(model, coli_gemma_ffn_down_id(layer), gate,
                         intermediate_count, ffn, hidden_count, q4_workspace,
@@ -467,6 +500,14 @@ coli_status_t coli_gemma_decode_next_token(
                                state, hidden_count, cursor, remaining,
                                &stats->embedding_q4);
     if (status != COLI_OK) return status;
+
+    /* Gemma scales token embeddings by sqrt(hidden_size) before the first
+     * layer (the HF "normalizer"). Omitting it feeds every layer activations
+     * ~25x too small on the 270M checkpoint and yields garbage text; the
+     * synthetic fixtures never caught it because their reference implemented
+     * the same omission. */
+    const float embedding_scale = sqrtf((float)hidden_count);
+    for (size_t i = 0; i < hidden_count; ++i) state[i] *= embedding_scale;
 
     for (uint32_t layer = 0; layer < model->config.num_hidden_layers; ++layer) {
         coli_gemma_layer_stats_t layer_stats;
