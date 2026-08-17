@@ -26,6 +26,7 @@
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "faces.h"
+#include "files.h"
 #include "neato_audio.h"
 #include "neato_usb.h"
 #include "remote_soundboard.h"
@@ -393,7 +394,7 @@ void web_start(void)
     neato_rx_subscribe(net_ws_push);
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.lru_purge_enable = true;
-    cfg.max_uri_handlers = 15;
+    cfg.max_uri_handlers = 18;
     cfg.stack_size = 12288;
     if (httpd_start(&s_server, &cfg) != ESP_OK) {
         ESP_LOGE(TAG, "httpd start failed");
@@ -415,10 +416,16 @@ void web_start(void)
     static const httpd_uri_t soundstatus = { .uri = "/soundboard/status", .method = HTTP_GET,
                                             .handler = soundboard_status_get };
     static const httpd_uri_t emote = { .uri = "/emote", .method = HTTP_POST, .handler = emote_post };
+    static const httpd_uri_t file_put = { .uri = "/file", .method = HTTP_POST, .handler = files_put_post };
+    static const httpd_uri_t file_get = { .uri = "/file", .method = HTTP_GET, .handler = files_get };
+    static const httpd_uri_t files_list = { .uri = "/files", .method = HTTP_GET, .handler = files_list_get };
     static const httpd_uri_t completion = {
         .uri = "/v1/completions", .method = HTTP_POST,
         .handler = coli_completion_post,
     };
+    httpd_register_uri_handler(s_server, &file_put);
+    httpd_register_uri_handler(s_server, &file_get);
+    httpd_register_uri_handler(s_server, &files_list);
     httpd_register_uri_handler(s_server, &speak);
     httpd_register_uri_handler(s_server, &bank);
     httpd_register_uri_handler(s_server, &soundplay);

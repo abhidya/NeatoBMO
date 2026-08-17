@@ -28,7 +28,7 @@ TESTS := test_bmoq test_q4_matvec test_q8_matvec test_coli_ops test_coli_moe \
          test_coli_kv_cache test_coli_kv_attention test_coli_glm52 \
          test_coli_inkling
 BINS := $(addprefix $(BUILD)/,$(TESTS))
-HOST_TOOLS := ctok-encode coli-run
+HOST_TOOLS := ctok-encode cspm-encode coli-run
 HOST_TOOL_BINS := $(addprefix $(BUILD)/,$(HOST_TOOLS))
 
 all: $(BINS) $(HOST_TOOL_BINS)
@@ -116,6 +116,12 @@ $(BUILD)/coli-run: coli_run.c $(MCU)/model_format.c $(MCU)/store_file.c \
 		$(MCU)/olmoe.c $(MCU)/gemma.c $(MCU)/gemma_generate.c $(MCU)/glm52.c \
 		$(MCU)/glm52_generate.c $(MCU)/tokenizer.c $(MCU)/spm.c \
 		$(MCU)/generate.c $(MCU)/runtime.c | $(BUILD)
+	$(CC) $(HOST_TOOL_CFLAGS) $^ -o $@ $(LDLIBS)
+
+# Encodes stdin with an exported .cspm so its token ids can be diffed against
+# the reference tokenizer. This is how the word-initial over-segmentation
+# documented in docs/ESP32_OFFLINE_MODEL.md was found.
+$(BUILD)/cspm-encode: cspm_encode.c $(MCU)/store_file.c $(MCU)/spm.c | $(BUILD)
 	$(CC) $(HOST_TOOL_CFLAGS) $^ -o $@ $(LDLIBS)
 
 # Encodes stdin with an exported .ctok so its token ids can be diffed against

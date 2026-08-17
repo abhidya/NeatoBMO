@@ -102,6 +102,41 @@ stage cues** — no `[happy]`, no `[sound:beep]`. Sound, face and voice are
 orchestrated host-side by `neatobmo/cues.py` against separate endpoints; the
 on-device model emits plain text only.
 
+## Open blocker: the SPM tokenizer over-segments word-initial tokens
+
+`coli_spm_encode` returns a segmentation that reconstructs the input exactly but
+is far from score-optimal, and only for text that does not begin with a space:
+
+| input | reference | CSPM |
+|---|---|---|
+| `Hello` | `[9259]` | `[310, 535, 346, 349]` = `H` `el` `l` `o` |
+| `the` | `[1437]` | `[354, 499]` |
+| `France` | `[4255, 508, 588]` | `[308, 352, 508, 588]` |
+| `" the"` (leading space) | `[494, 499]` | `[494, 499]` — matches |
+
+Every prompt starts with a word, so the first word always shatters and the model
+receives noise. This is why on-device Gemma answers "Hello BMO!" with an
+unrelated completion even though the weights are byte-exact and the layer math
+matches the reference to 2.4e-05.
+
+It is not a stale artifact: regenerating the `.cspm` from the instruction-tuned
+GGUF produces byte-identical output. `tokenizer.ggml.model` is `llama` with
+262144 scores, so unigram Viterbi is the right algorithm, and both the exporter
+and `spm.c` do honour `add_space_prefix=false`. The fault is therefore in the
+graph the exporter emits or in how Viterbi scores it — a full-word token such as
+`the` (1437) is either unreachable from position 0 or is losing to two
+fragments, which correct unigram scores would not allow.
+
+Reproduce with:
+
+```sh
+make -C esp32-body/tools build/cspm-encode
+printf 'Hello' | esp32-body/tools/build/cspm-encode tokenizer.cspm   # expect 9259
+```
+
+Fixing this is a prerequisite for any on-device quality claim. Until then the
+device path is proven only down to the token level, not end to end.
+
 ## Known gaps
 
 * The body still joins wifi on boot (`wifi_mgr`). Inference is offline, but the

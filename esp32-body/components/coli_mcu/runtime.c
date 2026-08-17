@@ -10,15 +10,83 @@
 /* Gemma ships a SentencePiece tokenizer rather than CTOK; adapt it to the
  * engine's tokenizer callbacks so the one runtime entry point serves every
  * architecture the firmware can open. */
+/* Gemma instruction-tuned checkpoints answer a *conversation*, not a text
+ * completion. Given a bare prompt they continue it: "Hello BMO!" returns
+ * "The word 'beloved'". Wrapped in the turn markers below the same weights
+ * answer "Hello! I'm BMO. How can I help you today?".
+ *
+ * The SPM tokenizer only treats BOS/EOS/PAD as special, so "<start_of_turn>"
+ * as text would byte-fallback into garbage; the marker ids are injected
+ * directly instead. They are Gemma-specific, so they are verified against the
+ * vocabulary before use and templating is skipped if they do not match. */
+#define GEMMA_START_OF_TURN 105u
+#define GEMMA_END_OF_TURN 106u
+#define GEMMA_NEWLINE 107u
+
+static bool gemma_markers_present(const coli_spm_t *spm)
+{
+    uint8_t text[32];
+    size_t bytes = 0;
+    const uint32_t start = GEMMA_START_OF_TURN;
+    if (coli_spm_decode(spm, &start, 1, text, sizeof(text), &bytes) != COLI_OK)
+        return false;
+    return bytes == 15u && memcmp(text, "<start_of_turn>", 15u) == 0;
+}
+
+static coli_status_t push_id(uint32_t id, uint32_t *ids, size_t capacity,
+                             size_t *count)
+{
+    if (*count >= capacity) return COLI_ERR_RANGE;
+    ids[(*count)++] = id;
+    return COLI_OK;
+}
+
 static coli_status_t runtime_spm_encode(
     void *context, coli_store_t *store, const uint8_t *prompt,
     size_t prompt_bytes, uint32_t *token_ids, size_t token_capacity,
     size_t *out_token_count)
 {
     (void)store;
-    return coli_spm_encode((const coli_spm_t *)context, prompt, prompt_bytes,
-                           token_ids, token_capacity, out_token_count,
-                           COLI_SPM_ENCODE_ADD_BOS);
+    const coli_spm_t *spm = (const coli_spm_t *)context;
+    if (!gemma_markers_present(spm))
+        return coli_spm_encode(spm, prompt, prompt_bytes, token_ids,
+                               token_capacity, out_token_count,
+                               COLI_SPM_ENCODE_ADD_BOS);
+
+    size_t count = 0;
+    coli_status_t status = COLI_OK;
+    /* <bos><start_of_turn>user\n */
+    if ((status = push_id(spm->bos_token_id, token_ids, token_capacity, &count)) != COLI_OK ||
+        (status = push_id(GEMMA_START_OF_TURN, token_ids, token_capacity, &count)) != COLI_OK)
+        return status;
+    size_t role_count = 0;
+    status = coli_spm_encode(spm, (const uint8_t *)"user\n", 5u,
+                             token_ids + count, token_capacity - count,
+                             &role_count, COLI_SPM_ENCODE_DEFAULT);
+    if (status != COLI_OK) return status;
+    count += role_count;
+
+    size_t body_count = 0;
+    status = coli_spm_encode(spm, prompt, prompt_bytes, token_ids + count,
+                             token_capacity - count, &body_count,
+                             COLI_SPM_ENCODE_DEFAULT);
+    if (status != COLI_OK) return status;
+    count += body_count;
+
+    /* <end_of_turn>\n<start_of_turn>model\n */
+    if ((status = push_id(GEMMA_END_OF_TURN, token_ids, token_capacity, &count)) != COLI_OK ||
+        (status = push_id(GEMMA_NEWLINE, token_ids, token_capacity, &count)) != COLI_OK ||
+        (status = push_id(GEMMA_START_OF_TURN, token_ids, token_capacity, &count)) != COLI_OK)
+        return status;
+    size_t tail_count = 0;
+    status = coli_spm_encode(spm, (const uint8_t *)"model\n", 6u,
+                             token_ids + count, token_capacity - count,
+                             &tail_count, COLI_SPM_ENCODE_DEFAULT);
+    if (status != COLI_OK) return status;
+    count += tail_count;
+
+    *out_token_count = count;
+    return COLI_OK;
 }
 
 static coli_status_t runtime_spm_decode(

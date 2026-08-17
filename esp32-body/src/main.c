@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "debug_uart.h"
 #include "faces.h"
+#include "files.h"
 #include "neato_audio.h"
 #include "neato_protocol.h"
 #include "neato_usb.h"
@@ -37,6 +38,7 @@ void app_main(void)
 {
     ESP_ERROR_CHECK(neato_audio_init());
     ESP_ERROR_CHECK(remote_soundboard_init());
+    ESP_ERROR_CHECK(files_init());
     wifi_log_start();
     web_start();
     debug_uart_start();
