@@ -422,7 +422,10 @@ static esp_err_t mount_device(uint8_t address, mounted_device_t *mounted)
 
     const esp_vfs_fat_mount_config_t config = {
         .format_if_mount_failed = false,
-        .max_files = 2,
+        /* model + tokenizer + the paged KV state file are open at once on
+         * this mount, so a cap of 2 fails the third open mid-generation.
+         * Four leaves room for a report or prompt file alongside them. */
+        .max_files = 4,
         .allocation_unit_size = 4096,
     };
     err = msc_host_vfs_register(mounted->device, COLI_MOUNT_PATH, &config,
