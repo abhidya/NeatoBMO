@@ -187,6 +187,7 @@ history lives in [docs/sound-burn-forensics.md](docs/sound-burn-forensics.md).
 | `bmo_agent.py` | CLI tool-calling agent (drive/sounds/LED via any OpenAI-compatible LLM) |
 | `neatobmo/` | Robot library: transports, typed commands, sounds, behaviors, emoji faces (`emote.py`), stage cues (`cues.py`), instant routines (`routines.py`), compound-turn planner (`turns.py`), soundboard clip voice (`soundboard_voice.py`), TTS banks (`tts_bank.py`) |
 | `esp32-body/` | ESP32-S3 firmware (PlatformIO + ESP-IDF): USB CDC-ACM host ↔ Neato, dashboard + WS bridge + `/emote` + `/speak` + streaming `/soundbank` + OTA (`:80`), log mirror (`:2323`), raw bridge (`:3333`), debug-UART bridge (`:3334`) |
+| `esp32-body/components/coli_mcu/` | On-MCU brain runtime: USB-MSC storage, BMOQ model format, streamed Q4 kernels, OLMoE prompt-to-text (MoE + KV cache + streamed attention) plus experimental Gemma/GLM-5.2 paths |
 | `tools/` | Voice server, sound-bank builders/probes, firmware archive/patch tooling, lidar viewer, cue demo/profiler, ESP32 web simulator |
 | `tests/` | Unit tests (see Local development) |
 | `assets/` | Captured sound-bank evidence, validated BMO bank, original recovery image |
@@ -233,7 +234,7 @@ history lives in [docs/sound-burn-forensics.md](docs/sound-burn-forensics.md).
 - 🚧 Native streamed speech awaits the XV `PlaySound File` firmware patch
   ([FIRMWARE_SOUND_PATCH.md](FIRMWARE_SOUND_PATCH.md)); until then any
   sound-flash write is governed by the write gates.
-- ❌ On-MCU brain runtime removed (bespoke BMOQ format re-quantized already-quantized weights and destroyed quality; use upstream Colibri + GGUF). Historic note: physical
+- 🚧 On-MCU brain runtime (`coli_mcu`): OLMoE prompt-to-text works; physical
   device latency/parity still being proven.
 
 ## License & credits

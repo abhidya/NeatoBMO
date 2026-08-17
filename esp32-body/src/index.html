@@ -37,6 +37,11 @@
   #status { padding:6px 10px; font-weight:600; }
   .ok { color:#4cc38a; } .bad { color:#e06c75; }
   #drive { text-align:center; padding:6px; }
+  #files { border-bottom:1px solid #232a36; padding:8px; }
+  #filestate { color:#8a96a8; font-size:12px; min-height:16px; display:block; }
+  #filelist a { display:block; color:#4cc38a; text-decoration:none; font-size:12px;
+                padding:2px 0; word-break:break-all; }
+  #filelist a:hover { text-decoration:underline; }
   @media (max-width: 700px) { body { flex-direction:column; } #right { width:100%; height:45%; } }
 </style>
 <div id="left">
@@ -64,6 +69,11 @@
     <button onclick="send('GetDigitalSensors')">Digital</button>
     <button onclick="send('PlaySound 1')">Beep</button>
     <button onclick="send('Help')">Help</button>
+  </div>
+  <div id="files">
+    <button onclick="loadFiles()">📄 decrypted software</button>
+    <span id="filestate"></span>
+    <div id="filelist"></div>
   </div>
   <section id="soundboard">
     <div id="soundbar">
@@ -205,8 +215,20 @@ async function pollSoundStatus(){try{const status=await(await fetch('/soundboard
  if(['queued','downloading','installing','playing'].includes(status.state)&&!soundPoll)soundPoll=setInterval(pollSoundStatus,700);
  if(!['queued','downloading','installing','playing'].includes(status.state)&&soundPoll){clearInterval(soundPoll);soundPoll=null;}
  }catch(error){soundState.textContent=`Status unavailable: ${error.message}`;}}
+async function loadFiles(){
+ const state=document.getElementById('filestate'),list=document.getElementById('filelist');
+ state.textContent='Loading…';list.innerHTML='';
+ try{const r=await fetch('/files');if(!r.ok)throw Error('HTTP '+r.status);
+  const files=await r.json();
+  if(!Array.isArray(files)||!files.length){state.textContent='No decrypted files yet.';return;}
+  state.textContent=files.length+' file'+(files.length>1?'s':'')+':';
+  for(const f of files){const a=document.createElement('a');
+   a.textContent=`${f.name} (${f.size} B)`;a.href='/file?name='+encodeURIComponent(f.name);
+   list.appendChild(a);}
+ }catch(error){state.textContent='Files unavailable: '+error.message;}}
 soundSearch.addEventListener('input',renderSounds);soundFilter.addEventListener('change',renderSounds);
 connect();
 loadSoundCatalog();
 pollSoundStatus();
+loadFiles();
 </script>

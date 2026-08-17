@@ -17,6 +17,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include "cJSON.h"
+#include "coli_mcu.h"
+#include "coli_runtime.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -34,6 +36,14 @@ static const char *TAG = "web";
 static httpd_handle_t s_server = NULL;
 static int s_ws_fd = -1;
 
+#define COLI_API_PROMPT_BYTES 2048u
+#define COLI_API_DECODED_CHUNK_BYTES 256u
+#define COLI_API_DEFAULT_MAX_TOKENS 64u
+
+typedef struct {
+    httpd_req_t *request;
+    bool failed;
+} coli_http_stream_t;
 
 extern const char index_html_start[] asm("_binary_index_html_start");
 extern const char index_html_end[] asm("_binary_index_html_end");
@@ -137,6 +147,157 @@ static esp_err_t ota_post(httpd_req_t *req)
     return ESP_OK;
 }
 
+static bool coli_http_cancelled(void *context)
+{
+    const coli_http_stream_t *stream = context;
+    return stream->failed || !coli_mcu_storage_ready();
+}
+
+static void coli_http_yield(void *context)
+{
+    (void)context;
+    taskYIELD();
+}
+
+static void coli_http_chunk(void *context, const uint8_t *bytes, size_t count)
+{
+    coli_http_stream_t *stream = context;
+    char event[COLI_API_DECODED_CHUNK_BYTES * 6u + 48u];
+    size_t used = 0;
+    static const char prefix[] = "data: {\"choices\":[{\"text\":\"";
+    static const char suffix[] = "\"}]}\n\n";
+    memcpy(event, prefix, sizeof(prefix) - 1u);
+    used = sizeof(prefix) - 1u;
+    for (size_t i = 0; i < count && used + sizeof(suffix) + 6u < sizeof(event);
+         ++i) {
+        uint8_t byte = bytes[i];
+        if (byte == '\"' || byte == '\\') {
+            event[used++] = '\\';
+            event[used++] = (char)byte;
+        } else if (byte == '\n' || byte == '\r' || byte == '\t') {
+            event[used++] = '\\';
+            event[used++] = byte == '\n' ? 'n' : byte == '\r' ? 'r' : 't';
+        } else if (byte < 0x20u) {
+            static const char hex[] = "0123456789abcdef";
+            event[used++] = '\\';
+            event[used++] = 'u';
+            event[used++] = '0';
+            event[used++] = '0';
+            event[used++] = hex[byte >> 4u];
+            event[used++] = hex[byte & 0x0fu];
+        } else {
+            event[used++] = (char)byte;
+        }
+    }
+    memcpy(event + used, suffix, sizeof(suffix) - 1u);
+    used += sizeof(suffix) - 1u;
+    if (httpd_resp_send_chunk(stream->request, event, used) != ESP_OK)
+        stream->failed = true;
+}
+
+static esp_err_t coli_completion_post(httpd_req_t *req)
+{
+    if (!coli_mcu_storage_ready()) {
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        return httpd_resp_sendstr(req, "Colibri SSD is not mounted");
+    }
+    if (req->content_len <= 0 || req->content_len > COLI_API_PROMPT_BYTES)
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
+                                   "prompt body must be 1..2048 bytes");
+
+    char *body = malloc((size_t)req->content_len + 1u);
+    if (!body)
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
+                                   "out of memory");
+    int received = 0;
+    while (received < req->content_len) {
+        int got = httpd_req_recv(req, body + received,
+                                 req->content_len - received);
+        if (got == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (got <= 0) {
+            free(body);
+            return ESP_FAIL;
+        }
+        received += got;
+    }
+    body[received] = 0;
+
+    const char *prompt = body;
+    size_t prompt_bytes = (size_t)received;
+    size_t max_tokens = COLI_API_DEFAULT_MAX_TOKENS;
+    cJSON *json = NULL;
+    if (body[0] == '{') {
+        json = cJSON_ParseWithLength(body, (size_t)received);
+        cJSON *prompt_item = cJSON_GetObjectItemCaseSensitive(json, "prompt");
+        cJSON *max_item = cJSON_GetObjectItemCaseSensitive(json, "max_tokens");
+        if (!cJSON_IsString(prompt_item) || !prompt_item->valuestring) {
+            cJSON_Delete(json);
+            free(body);
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
+                                       "JSON prompt string required");
+        }
+        prompt = prompt_item->valuestring;
+        prompt_bytes = strlen(prompt);
+        if (cJSON_IsNumber(max_item) && max_item->valuedouble >= 1.0) {
+            double requested = max_item->valuedouble;
+            max_tokens = requested >= CONFIG_COLI_MCU_CONTEXT_TOKENS
+                             ? CONFIG_COLI_MCU_CONTEXT_TOKENS - 1u
+                             : (size_t)requested;
+        }
+    }
+    if (prompt_bytes == 0) {
+        cJSON_Delete(json);
+        free(body);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
+                                   "prompt cannot be empty");
+    }
+    if (max_tokens >= CONFIG_COLI_MCU_CONTEXT_TOKENS)
+        max_tokens = CONFIG_COLI_MCU_CONTEXT_TOKENS - 1u;
+
+    coli_http_stream_t stream = {.request = req};
+    const coli_runtime_request_t request = {
+        .model_path = CONFIG_COLI_MCU_MOUNT_PATH "/" CONFIG_COLI_MCU_MODEL_FILE,
+        .tokenizer_path =
+            CONFIG_COLI_MCU_MOUNT_PATH "/" CONFIG_COLI_MCU_TOKENIZER_FILE,
+        .generation = {
+            .prompt = (const uint8_t *)prompt,
+            .prompt_bytes = prompt_bytes,
+            .context_tokens = CONFIG_COLI_MCU_CONTEXT_TOKENS,
+            .max_prompt_tokens = CONFIG_COLI_MCU_CONTEXT_TOKENS - max_tokens,
+            .max_new_tokens = max_tokens,
+            .workspace_bytes = CONFIG_COLI_MCU_WORKSPACE_BYTES,
+            .decoded_chunk_bytes = COLI_API_DECODED_CHUNK_BYTES,
+            .kv_cache_path =
+                CONFIG_COLI_MCU_MOUNT_PATH "/" CONFIG_COLI_MCU_KV_FILE,
+            .kv_page_bytes = CONFIG_COLI_MCU_KV_PAGE_BYTES,
+            .should_cancel = coli_http_cancelled,
+            .yield = coli_http_yield,
+            .log_chunk = coli_http_chunk,
+            .callback_context = &stream,
+        },
+    };
+    httpd_resp_set_type(req, "text/event-stream");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    coli_runtime_result_t result;
+    coli_status_t status = coli_runtime_generate(&request, &result);
+    cJSON_Delete(json);
+    free(body);
+    if (!stream.failed) {
+        if (status == COLI_OK)
+            httpd_resp_send_chunk(req, "data: [DONE]\n\n",
+                                  HTTPD_RESP_USE_STRLEN);
+        else {
+            char error[96];
+            int length = snprintf(error, sizeof(error),
+                                  "data: {\"error\":%d,\"architecture\":%" PRIu32
+                                  "}\n\n",
+                                  status, result.architecture);
+            httpd_resp_send_chunk(req, error, length);
+        }
+        httpd_resp_send_chunk(req, NULL, 0);
+    }
+    return stream.failed ? ESP_FAIL : ESP_OK;
+}
 
 /* ---- WiFi setup/settings handlers */
 static esp_err_t wifi_page_get(httpd_req_t *req)
@@ -254,11 +415,16 @@ void web_start(void)
     static const httpd_uri_t soundstatus = { .uri = "/soundboard/status", .method = HTTP_GET,
                                             .handler = soundboard_status_get };
     static const httpd_uri_t emote = { .uri = "/emote", .method = HTTP_POST, .handler = emote_post };
+    static const httpd_uri_t completion = {
+        .uri = "/v1/completions", .method = HTTP_POST,
+        .handler = coli_completion_post,
+    };
     httpd_register_uri_handler(s_server, &speak);
     httpd_register_uri_handler(s_server, &bank);
     httpd_register_uri_handler(s_server, &soundplay);
     httpd_register_uri_handler(s_server, &soundstatus);
     httpd_register_uri_handler(s_server, &emote);
+    httpd_register_uri_handler(s_server, &completion);
     httpd_register_uri_handler(s_server, &root);
     httpd_register_uri_handler(s_server, &ws);
     httpd_register_uri_handler(s_server, &ota);

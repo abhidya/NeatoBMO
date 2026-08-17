@@ -34,6 +34,7 @@ class State:
         self.allow_remote_modules = allow_remote_modules
         self.job = None
         self.installed_sha = ""
+        self.files = {}
         self.status = {
             "state": "idle", "key": "", "module_sha256": "", "error": "",
             "slot_index": 0, "slot_count": 0, "reused_module": False,
@@ -137,11 +138,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         if path == "/":
             page = render_index(self.headers.get("Host", "127.0.0.1:8080"))
             return self.reply(page, "text/html; charset=utf-8")
         if path == "/soundboard/status":
             return self.json(STATE.snapshot())
+        if path == "/files":
+            with STATE.lock:
+                files = [{"name": name, "size": len(data)}
+                         for name, data in sorted(STATE.files.items())]
+            return self.json(files)
+        if path == "/file":
+            name = query.get("name", [""])[0]
+            with STATE.lock:
+                data = STATE.files.get(name)
+            if data is None:
+                return self.json({"error": "not found"}, 404)
+            content_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
+            return self.reply(data, content_type)
         prefix = "/bmo-soundboard/"
         if path.startswith(prefix):
             relative = Path(urllib.parse.unquote(path[len(prefix):]))
@@ -156,6 +171,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        if path == "/file":
+            name = query.get("name", [""])[0]
+            if not name or not all(c.isalnum() or c in "._-" for c in name):
+                return self.json({"error": "bad name"}, 400)
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 2 * 1024 * 1024:
+                return self.json({"error": "file too large"}, 400)
+            with STATE.lock:
+                STATE.files[name] = self.rfile.read(length)
+            return self.reply(b"OK", "text/plain")
         if path != "/soundboard/play":
             return self.json({"error": "not found"}, 404)
         try:

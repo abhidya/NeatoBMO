@@ -33,7 +33,10 @@ esp32-body/wifi.local.env
 neatoos/build/
 neatoos/tools/__pycache__/
 
-# Local model working state: downloaded checkpoints and generated run outputs.
+# BMOQ evaluation working state: checkpoints, venv, and generated run outputs.
+# Benchmark corpora are reproducible from build_corpus.py plus the committed
+# .meta.json provenance, so the token files themselves are not tracked.
 .models/
 .venv*/
 runs/
+*.bmoq

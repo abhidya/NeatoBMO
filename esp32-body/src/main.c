@@ -19,6 +19,7 @@
 #include "remote_soundboard.h"
 #include "web.h"
 #include "wifi_log.h"
+#include "coli_mcu.h"
 
 static void on_neato_connect(void)
 {
@@ -42,6 +43,8 @@ void app_main(void)
     faces_start();
 
     ESP_ERROR_CHECK(neato_usb_install());
+    /* MSC is a peer USB class client. coli_mcu never installs a second host. */
+    ESP_ERROR_CHECK(coli_mcu_start());
     neato_usb_start(on_neato_connect);
 
     while (1) {

@@ -81,9 +81,8 @@ The plan below predates the implementation; these decisions supersede it:
   in CONTEXT.md. On the firmware side the Neato transport was extracted
   into `src/neato_usb.c` (transaction-handle binary streams) with a
   `src/neato_protocol.c` command vocabulary above it.
-- **On-MCU brain runtime removed.** The BMOQ format and `coli_mcu` runtime
-  were deleted; inference is to come from upstream Colibri consuming GGUF
-  weights directly, with no re-quantization step. Historic detail:
+- **On-MCU brain runtime exists.** `esp32-body/components/coli_mcu/` builds
+  into the S3 firmware: USB-MSC model storage, the BMOQ on-device container (no requantizing — downloaded quantized weights only), the
   format, streamed Q4 kernels that never assume a tensor fits in PSRAM, and
   an OLMoE prompt-to-text decode loop (MoE routing, file-backed paged KV
   cache, streamed attention, SSE streaming) plus experimental Gemma and
