@@ -33,6 +33,7 @@
  #tabs .tab:nth-child(4){--tabc:var(--green)}
  #tabs .tab:nth-child(5){--tabc:#c792ea}
  #tabs .tab:nth-child(6){--tabc:#ff9f43}
+ #tabs .tab:nth-child(7){--tabc:#f2a93b}
  .pane{display:none;flex:1;flex-direction:column;align-items:center;width:100%;min-height:0}
  .pane.on{display:flex}
  /* header avatar: a mini BMO face screen playing the stylized sprite
@@ -167,6 +168,7 @@
  <div class="tab" data-p="console" onclick="show('console')">⌨️ Console</div>
  <div class="tab" data-p="sensors" onclick="show('sensors')">📡 Sensors</div>
  <div class="tab" data-p="esp32" onclick="show('esp32')">🔧 ESP32</div>
+ <div class="tab" data-p="miner" onclick="show('miner');minerPoll()">⛏ Miner</div>
 </div>
 <div class="pane on" id="p-chat">
 <canvas id="face" width="128" height="64"></canvas>
@@ -265,6 +267,44 @@
  <input type="file" id="fw" accept=".bin">
  <button class="mini" onclick="ota()">Upload</button>
  <div id="otamsg" style="opacity:.8;font-size:13px;margin-top:6px"></div></div>
+</div>
+<div class="pane" id="p-miner" style="overflow-y:auto">
+ <div class="card"><b>⛏ Bitcoin lottery</b><br>
+  <span class="soundmeta">BMO hashes real block headers against a solo pool — a tiny ticket to
+  the whole block reward. Almost never wins; that's the fun. Solo mining is a lottery,
+  not a paycheck.</span>
+  <pre id="minerstats" style="font:15px/1.45 VT323,ui-monospace,monospace;white-space:pre-wrap;
+   word-break:break-word;background:var(--crt);color:var(--phos);border:3px solid var(--bezel);
+   border-radius:12px;padding:10px 12px;margin-top:8px">loading…</pre>
+ </div>
+ <div class="card"><b>Configuration</b><br>
+  <div style="display:grid;gap:8px;margin-top:8px">
+   <label class="soundmeta" style="display:grid;gap:4px">Bitcoin address (solo payout)
+    <input id="maddr" placeholder="bc1q… or 1… or 3…" style="padding:8px 10px;border-radius:10px;
+     border:3px solid #1f5d51;background:#fff;color:#0c3b31;font-size:16px">
+   </label>
+   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+    <label class="soundmeta" style="display:grid;gap:4px;flex:1;min-width:180px">Pool
+     <input id="mpool" placeholder="public-pool.io:3333" style="padding:8px 10px;border-radius:10px;
+      border:3px solid #1f5d51;background:#fff;color:#0c3b31;font-size:16px">
+    </label>
+    <label class="soundmeta" style="display:grid;gap:4px">Threads
+     <input id="mthreads" type="number" min="1" max="64" value="2" style="width:76px;padding:8px;
+      border-radius:10px;border:3px solid #1f5d51;background:#fff;color:#0c3b31;font-size:16px">
+    </label>
+    <label class="soundmeta" style="display:flex;align-items:center;gap:6px;height:44px">
+     <input id="mtls" type="checkbox"> TLS</label>
+    <label class="soundmeta" style="display:flex;align-items:center;gap:6px;height:44px">
+     <input id="menabled" type="checkbox" checked> Enabled</label>
+   </div>
+   <div style="display:flex;gap:8px;margin-top:4px">
+    <button class="mini" onclick="minerSave()">💾 Save</button>
+    <button class="mini" onclick="minerStart()">▶ Start</button>
+    <button class="mini" onclick="minerStop()">■ Stop</button>
+   </div>
+   <div id="minermsg" class="soundmeta"></div>
+  </div>
+ </div>
 </div>
 <div id="facepanel">
  <div id="fphead"><b>Faces</b><button class="mini" onclick="toggleFaces()">✕</button></div>
@@ -788,4 +828,62 @@ async function ttsRestore(){
  }catch(e){msg.textContent='request failed: '+e;}}
 document.getElementById('ttstext').addEventListener('keydown',e=>{
  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ttsSpeak();}});
+// ---- Bitcoin lottery miner panel ----
+let minerTimer=null;
+function fmtUptime(s){s=Math.max(0,s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),sec=Math.floor(s%60);
+ return h?`${h}h ${m}m ${sec}s`:m?`${m}m ${sec}s`:`${sec}s`;}
+function minerRender(j){
+ const s=document.getElementById('minerstats');
+ const lines=[
+  `state: ${j.state}`,
+  `pool: ${j.pool}${j.tls?' (tls)':''}`,
+  `workers: ${j.workers} · configured threads: ${j.threads}`,
+  `hashrate: ${j.hashrate_label}`,
+  `total hashes: ${(j.total_hashes||0).toLocaleString()}`,
+  `shares: ${j.shares_submitted} submitted · ${j.shares_accepted} ok · ${j.shares_rejected} bad`,
+  `best share: ${j.best_share_difficulty>0?j.best_share_difficulty.toFixed(2):'—'}`,
+  `closest so far: ${j.best_seen_difficulty>0?j.best_seen_difficulty.toFixed(2):'—'}`,
+  `block found: ${j.block_found?'YES!!! 🎉':'not yet'}`,
+  `uptime: ${fmtUptime(j.uptime_s)} · reconnects: ${j.reconnects}`,
+ ];
+ if(j.error)lines.push(`error: ${j.error}`);
+ s.textContent=lines.join('\n');
+ const addr=document.getElementById('maddr'),pool=document.getElementById('mpool'),
+       thr=document.getElementById('mthreads'),tls=document.getElementById('mtls'),
+       en=document.getElementById('menabled');
+ if(document.activeElement!==addr&&!addr.dataset.touched)addr.value=j.address||'';
+ if(document.activeElement!==pool&&!pool.dataset.touched)pool.value=j.pool||'';
+ if(document.activeElement!==thr&&!thr.dataset.touched)thr.value=j.threads;
+ if(document.activeElement!==tls&&!tls.dataset.touched)tls.checked=!!j.tls;
+ if(document.activeElement!==en&&!en.dataset.touched)en.checked=!!j.enabled;
+ const mining=j.state==='mining'||j.state==='connecting'||j.state==='starting';
+ if(mining){if(!minerTimer)minerTimer=setInterval(minerPoll,2000);}
+ else if(minerTimer){clearInterval(minerTimer);minerTimer=null;}
+}
+async function minerPoll(){try{minerRender(await(await fetch('/miner')).json());}catch(e){}}
+function minerValues(){return {
+ address:document.getElementById('maddr').value.trim(),
+ pool:document.getElementById('mpool').value.trim(),
+ threads:parseInt(document.getElementById('mthreads').value||'2',10),
+ tls:document.getElementById('mtls').checked,
+ enabled:document.getElementById('menabled').checked};}
+async function minerSave(){
+ const msg=document.getElementById('minermsg');msg.textContent='saving…';
+ try{const j=await(await fetch('/miner/config',{method:'POST',body:JSON.stringify(minerValues())})).json();
+  minerRender(j);msg.textContent=j.error?('failed: '+j.error):('saved · state: '+j.state);}
+ catch(e){msg.textContent='save failed: '+e;}}
+async function minerStart(){
+ const msg=document.getElementById('minermsg');
+ try{const j=await(await fetch('/miner/start',{method:'POST',body:'{}'})).json();
+  minerRender(j);msg.textContent=j.error?('start failed: '+j.error):('state: '+j.state);}
+ catch(e){msg.textContent='start failed: '+e;}}
+async function minerStop(){
+ const msg=document.getElementById('minermsg');
+ try{const j=await(await fetch('/miner/stop',{method:'POST',body:'{}'})).json();
+  minerRender(j);msg.textContent='state: '+j.state;}
+ catch(e){msg.textContent='stop failed: '+e;}}
+['maddr','mpool','mthreads'].forEach(id=>{const el=document.getElementById(id);
+ el.addEventListener('input',()=>{el.dataset.touched='1';});});
+['mtls','menabled'].forEach(id=>{const el=document.getElementById(id);
+ el.addEventListener('change',()=>{el.dataset.touched='1';});});
 </script>

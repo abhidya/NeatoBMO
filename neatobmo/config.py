@@ -35,10 +35,29 @@ class Config:
     default_voice: str = "bmo-rvc"
     soundboard_catalog: Path = (REPO_ROOT / "docs" / "bmo-soundboard" /
                                 "catalog.json")
+    # BMO's "decrypt my software" behaviour: the archived .enc image to work
+    # on and where recovered plaintext + reports land (BMO's SSD first).
+    decrypt_image: Path = Path(
+        "/Volumes/2TB/neato-firmware-archive/sources/"
+        "Neato-XV-Series-Cruz-Rev-113-Update/OriginalVorwerkFirmwareFiles/"
+        "Firmware25/XV11App.15893.P.bin.enc")          # NEATOBMO_DECRYPT_IMAGE
+    decrypt_output_dir: Path = Path(
+        "/Volumes/2TB/neato-firmware-archive/work/"
+        "plaintext-candidates")                        # NEATOBMO_DECRYPT_OUTPUT_DIR
+    miner_address: str = ""                           # NEATOBMO_MINER_ADDRESS
+    miner_pool: str = "public-pool.io:3333"           # NEATOBMO_MINER_POOL
+    miner_tls: bool = False                           # NEATOBMO_MINER_TLS
+    miner_threads: int = 2                            # NEATOBMO_MINER_THREADS
+    miner_enabled: bool = True                        # NEATOBMO_MINER_ENABLED
 
     @classmethod
     def from_env(cls):
         env = os.environ.get
+
+        def truthy(key, default=False):
+            return env(key, "1" if default else "0").strip().lower() in (
+                "1", "true", "yes", "on")
+
         return cls(
             brain=env("NEATOBMO_BRAIN", cls.brain).rstrip("/"),
             esp32=env("NEATOBMO_ESP32", cls.esp32),
@@ -51,4 +70,14 @@ class Config:
             brain_snap=env("NEATOBMO_BRAIN_SNAP", cls.brain_snap),
             soundboard_catalog=Path(env("NEATOBMO_SOUNDBOARD_CATALOG",
                                         str(cls.soundboard_catalog))),
+            decrypt_image=Path(env("NEATOBMO_DECRYPT_IMAGE",
+                                   str(cls.decrypt_image))),
+            decrypt_output_dir=Path(env("NEATOBMO_DECRYPT_OUTPUT_DIR",
+                                        str(cls.decrypt_output_dir))),
+            miner_address=env("NEATOBMO_MINER_ADDRESS", cls.miner_address),
+            miner_pool=env("NEATOBMO_MINER_POOL", cls.miner_pool),
+            miner_tls=truthy("NEATOBMO_MINER_TLS", cls.miner_tls),
+            miner_threads=int(env("NEATOBMO_MINER_THREADS",
+                                  str(cls.miner_threads))),
+            miner_enabled=truthy("NEATOBMO_MINER_ENABLED", cls.miner_enabled),
         )

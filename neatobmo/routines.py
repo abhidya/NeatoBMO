@@ -75,6 +75,59 @@ def _battery_reply(ctx):
     return f"Battery {pct:.0f} percent! {mood}"
 
 
+def _miner_reply(ctx):
+    """BMO reports on the Bitcoin lottery in-character."""
+    miner = ctx.get("miner")
+    if miner is None:
+        return "No coin machine! [sad] [sound:beep] [look]"
+    try:
+        status = miner.status()
+    except Exception:
+        status = {}
+    state = status.get("state")
+    # "disabled" with an address already saved is a different situation from
+    # having no wallet at all; telling a friend to set an address they just
+    # set reads as BMO not paying attention.
+    if state in ("no_address",) or not (status.get("address") or "").strip():
+        return ("BMO needs a coin wallet! Ask friend to set a bitcoin "
+                "address in the console. [surprised] [sound:json] [look]")
+    if state in ("idle", "disabled", "stopped"):
+        return ("Coin mine is off. Press start and BMO will dig! "
+                "[sleepy] [sound:beep] [look]")
+    if state in ("starting", "connecting"):
+        return "BMO plugging into the coin mine... [look] [sound:beep]"
+    if state == "error":
+        error = (status.get("error") or "unknown")[:60]
+        return f"Coin mine broke! {error}. [sad] [sound:json] [look]"
+    hashrate = status.get("hashrate_label") or "0 H/s"
+    if status.get("block_found"):
+        return (f"BMO WON the shiny coin lottery! {hashrate}! "
+                "[party] [sound:yeah] [spin]")
+    best = status.get("best_seen_difficulty") or 0
+    if state == "mining":
+        return (f"BMO digging for shiny coins! {hashrate}, closest luck "
+                f"{best:.1f}. No coin yet. [happy] [sound:videogames] [wiggle]")
+    return f"Coin mine off. BMO resting. {hashrate}. [sleepy] [sound:beep]"
+
+
+def _decrypt_reply(ctx):
+    """Run the real Cruz .enc decrypt attempt; celebrate only on a true hit.
+
+    The context carries the image path, the ESP32 client, and the output dir
+    (all optional).  The reply is stage-cue text, so a success's [dance]
+    [party] [sound:yeah] rides the normal cues pipeline to the body.
+    """
+    from . import decrypt
+    settings = ctx.get("decrypt") or {}
+    try:
+        result = decrypt.attempt(
+            settings.get("image"), esp32=ctx.get("esp32"),
+            output_dir=settings.get("output_dir"))
+        return result.reply
+    except Exception:
+        return decrypt.BROKEN_REPLY
+
+
 # Jokes need their words; every other script is soundbyte-first: at most a
 # few spoken words, the soundboard/moves/faces carry the feeling (matches
 # the SPEAK AT MOST 3 WORDS persona so BMO sounds the same either way).
@@ -129,6 +182,15 @@ ROUTINES = [
     {"name": "stop",
      "patterns": [r"\bstop\b", r"\bquiet\b", r"\bhush\b", r"\bcalm down\b"],
      "replies": ["Okay. Quiet mode. [neutral]"]},
+    {"name": "decrypt",
+     "patterns": [r"\bdecrypt\w*\b", r"\bunlock\w*\b",
+                  r"\bcrack(ed|ing)?\b", r"\bhack(ed|ing)?\b"],
+     "replies": [_decrypt_reply]},
+    {"name": "miner",
+     "patterns": [r"\b(bitcoin|btc|crypto)\b", r"\b(miner|mining|mine)\b",
+                  r"\blottery\b", r"\bhash ?rate\b", r"\bare you winning\b",
+                  r"\bshiny coin\b"],
+     "replies": [_miner_reply]},
 ]
 
 # follow-up handlers for armed expectations: name -> [(patterns, replies)]
@@ -159,6 +221,15 @@ _COVERAGE = {
     "sleep": [r"(good ?night|go to sleep|bed ?time)"],
     "game": [r"(play a game|wanna play|let'?s play(?: a game)?|video ?games?)"],
     "stop": [r"(stop|quiet|hush|calm down)"],
+    "decrypt": [r"(can you |please |would you )?(decrypt|unlock|crack|hack)"
+                r"( your| the)?( software| firmware)?"],
+    "miner": [r"(play( the)? )?(bitcoin|btc|crypto)( lottery| miner| mining)?",
+              r"(mine|mining|miner)( bitcoin| btc)?",
+              r"(how'?s|how is)( the)?( mining| miner| hashrate| hash rate)",
+              r"(any )?bitcoin(s)?( yet)?",
+              r"are you winning",
+              r"what'?s (your|the) hashrate",
+              r"bitcoin lottery"],
 }
 
 _FOLLOW_UP_COVERAGE = {

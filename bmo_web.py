@@ -41,6 +41,7 @@ from neatobmo.body import BodyController
 from neatobmo.brain import BrainClient
 from neatobmo.config import Config, REPO_ROOT
 from neatobmo.esp32 import Esp32Client
+from neatobmo.miner import LotteryMiner, MinerSettings
 from neatobmo.speech import SpeechService
 from neatobmo.soundboard_voice import SoundboardVoice
 from neatobmo.sounds import BMO_BANK, BMO_SEQUENCES, BMO_SOUND_SLOTS
@@ -82,6 +83,7 @@ speech = SpeechService(body, voice,
                        log_path=REPO_ROOT / "logs" / "tts-bank-operations.jsonl",
                        thinking_dir=REPO_ROOT / "assets" / "bmo-thinking-sounds")
 convo_state = routines.ConvoState()   # multi-turn follow-ups (single-user UI)
+miner = LotteryMiner(MinerSettings.from_config(CFG))   # the Bitcoin lottery
 
 
 def mood_chirp(r, reply):
@@ -89,6 +91,13 @@ def mood_chirp(r, reply):
     guessed mood through the soundboard (like R2-D2)."""
     sound = cues.BurstBudget.fallback_sound([], reply) or "beep"
     r.play(cues.SOUND_CUES.get(sound, sound))
+
+
+def _routine_ctx():
+    """Context handed to routine reply callables (time, battery, decrypt, miner)."""
+    return {"robot": body.robot, "esp32": esp32, "miner": miner,
+            "decrypt": {"image": CFG.decrypt_image,
+                        "output_dir": CFG.decrypt_output_dir}}
 
 
 # Colibri brain + neural voice auto-start: only attempted when the URLs
@@ -189,7 +198,7 @@ def chat_events(text, speak_on_robot):
     routine_names = []
 
     for index, step in enumerate(turn_plan.routines):
-        hit = routines.run(step.routine, convo_state, {"robot": body.robot})
+        hit = routines.run(step.routine, convo_state, _routine_ctx())
         if hit is None:
             continue
         plan = cues.parse(hit.reply)
@@ -325,7 +334,7 @@ def chat_turn(text, speak_on_robot):
         convo_state.expect = None
     local_replies = []
     for step in turn_plan.routines:
-        hit = routines.run(step.routine, convo_state, {"robot": body.robot})
+        hit = routines.run(step.routine, convo_state, _routine_ctx())
         if hit:
             local_replies.append(hit.reply)
             routine_names.append(hit.routine)
@@ -694,6 +703,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             return self._json({"robot": body.attached, "via": body.via,
                                "esp32": esp32.base_url})
+        if self.path == "/miner":
+            return self._json(miner.status())
         if self.path == "/tts-bank/status":
             with speech.lock:
                 return self._json({**speech.status(), "voices": TTS_VOICES})
@@ -802,6 +813,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"out": esp32.ota(raw)})
             except Exception as e:
                 return self._json({"error": str(e)})
+        if self.path == "/miner/start":
+            return self._json(miner.start())
+        if self.path == "/miner/stop":
+            return self._json(miner.stop())
+        if self.path == "/miner/config":
+            try:
+                return self._json(miner.configure(json.loads(raw or b"{}")))
+            except ValueError as e:
+                return self._json({"error": str(e)})
         # /chat
         chat_request = json.loads(raw)
         text = chat_request.get("text", "")
@@ -838,6 +858,10 @@ if __name__ == "__main__":
                   "| bridge:", bridge_error)
     ensure_brain()
     ensure_voice()
+    miner.autostart()
     threading.Thread(target=precache_routine_tts, daemon=True).start()
     print(f"BMO voice console: http://localhost:{CFG.port}")
-    ThreadingHTTPServer(("0.0.0.0", CFG.port), Handler).serve_forever()
+    try:
+        ThreadingHTTPServer(("0.0.0.0", CFG.port), Handler).serve_forever()
+    finally:
+        miner.stop()

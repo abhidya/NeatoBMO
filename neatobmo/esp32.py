@@ -1,12 +1,14 @@
 """One adapter for the ESP32 body board's HTTP endpoints.
 
-The device exposes /speak, /emote, /ota, and /soundbank (see
-esp32-body/src/web.c and neato_audio.c).  Every caller goes through this
-client, so the endpoint names, timeouts, the "OK" reply convention, and
-the X-Bank-SHA256 header live in exactly one place — and tests can hand
-any module a fake with the same four methods.
+The device exposes /speak, /emote, /ota, /soundbank, and the SPIFFS-backed
+web-portal files (/file, /files) — see esp32-body/src/web.c, neato_audio.c
+and files.c.  Every caller goes through this client, so the endpoint names,
+timeouts, the "OK" reply convention, and the X-Bank-SHA256 header live in
+exactly one place — and tests can hand any module a fake with the same
+methods.
 """
 import hashlib
+import json
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -37,6 +39,17 @@ class Esp32Client:
         except OSError as exc:
             raise Esp32Error(f"ESP32 {path} unreachable: {exc}") from exc
 
+    def _get(self, path, timeout):
+        req = urllib.request.Request(self.base_url + path)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace").strip()
+            raise Esp32Error(detail or f"ESP32 {path} returned HTTP {exc.code}") from exc
+        except OSError as exc:
+            raise Esp32Error(f"ESP32 {path} unreachable: {exc}") from exc
+
     def _post_ok(self, path, data, content_type, timeout, headers=None):
         reply = self._post(path, data, content_type, timeout, headers)
         if reply != "OK":
@@ -61,3 +74,16 @@ class Esp32Client:
         self._post_ok(
             "/soundbank", payload, "application/octet-stream", timeout=90,
             headers={"X-Bank-SHA256": hashlib.sha256(payload).hexdigest()})
+
+    def put_file(self, name, payload):
+        """Store a file in the device's SPIFFS-backed web portal."""
+        self._post_ok("/file?name=" + urllib.parse.quote(name),
+                      bytes(payload), "application/octet-stream", timeout=60)
+
+    def get_file(self, name):
+        """Fetch a file the device is serving on its web portal."""
+        return self._get("/file?name=" + urllib.parse.quote(name), timeout=30)
+
+    def list_files(self):
+        """JSON list of the files the device is serving, name+size."""
+        return json.loads(self._get("/files", timeout=10).decode())
