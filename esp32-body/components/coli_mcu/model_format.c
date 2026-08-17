@@ -67,6 +67,16 @@ static bool validate_known_tensor(const bmoq_tensor_t *tensor)
                             &elements) &&
                (elements & 1u) == 0 && tensor->byte_length == elements / 2;
     }
+    if (tensor->layout == BMOQ_LAYOUT_Q8_ROW_MAJOR) {
+        if (tensor->dtype != BMOQ_DTYPE_Q8_0 || tensor->dimensions[0] == 0 ||
+            tensor->dimensions[1] == 0 || tensor->dimensions[2] != 1 ||
+            tensor->dimensions[3] != 1 || tensor->quant_group < 2 ||
+            tensor->dimensions[1] % tensor->quant_group != 0)
+            return false;
+        return multiply_u64(tensor->dimensions[0], tensor->dimensions[1],
+                            &elements) &&
+               tensor->byte_length == elements;
+    }
     if (tensor->layout == BMOQ_LAYOUT_GROUP_SCALES_F32) {
         if (tensor->dtype != BMOQ_DTYPE_F32 || tensor->dimensions[0] == 0 ||
             tensor->dimensions[1] == 0 || tensor->dimensions[2] != 1 ||

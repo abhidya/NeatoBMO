@@ -62,7 +62,9 @@ static coli_status_t infer_head_dim(const coli_model_t *model,
         return COLI_ERR_ARGUMENT;
     const bmoq_tensor_t *k_proj =
         coli_model_find(model, coli_gemma_k_proj_id(0));
-    if (!k_proj || k_proj->layout != BMOQ_LAYOUT_Q4_ROW_MAJOR ||
+    if (!k_proj ||
+        (k_proj->layout != BMOQ_LAYOUT_Q4_ROW_MAJOR &&
+         k_proj->layout != BMOQ_LAYOUT_Q8_ROW_MAJOR) ||
         k_proj->dimensions[0] == 0 ||
         k_proj->dimensions[0] % model->config.num_key_value_heads != 0)
         return COLI_ERR_FORMAT;

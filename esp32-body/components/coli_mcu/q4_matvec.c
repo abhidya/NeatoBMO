@@ -20,6 +20,19 @@ static int8_t unpack_q4(uint8_t packed, bool high)
     return nibble < 8 ? (int8_t)nibble : (int8_t)(nibble - 16);
 }
 
+/* Q8_0 rows store one signed byte per weight; Q4 packs two per byte. The
+ * kernels are otherwise identical, so they branch on this per tensor. */
+static bool is_q8(const bmoq_tensor_t *weights)
+{
+    return weights && weights->dtype == BMOQ_DTYPE_Q8_0;
+}
+
+static int8_t decode_weight(const uint8_t *packed, uint32_t within, bool q8)
+{
+    return q8 ? (int8_t)packed[within]
+              : unpack_q4(packed[within / 2], (within & 1u) != 0);
+}
+
 static void count_read(coli_q4_stats_t *stats, uint64_t absolute_offset,
                        size_t length, bool scale)
 {
@@ -36,9 +49,13 @@ static void count_read(coli_q4_stats_t *stats, uint64_t absolute_offset,
 static bool compatible_tensors(const bmoq_tensor_t *weights,
                                const bmoq_tensor_t *scales)
 {
-    if (!weights || !scales || weights->dtype != BMOQ_DTYPE_Q4_SYM ||
-        weights->layout != BMOQ_LAYOUT_Q4_ROW_MAJOR ||
-        scales->dtype != BMOQ_DTYPE_F32 ||
+    if (!weights || !scales)
+        return false;
+    bool q4_pair = weights->dtype == BMOQ_DTYPE_Q4_SYM &&
+                   weights->layout == BMOQ_LAYOUT_Q4_ROW_MAJOR;
+    bool q8_pair = weights->dtype == BMOQ_DTYPE_Q8_0 &&
+                   weights->layout == BMOQ_LAYOUT_Q8_ROW_MAJOR;
+    if ((!q4_pair && !q8_pair) || scales->dtype != BMOQ_DTYPE_F32 ||
         scales->layout != BMOQ_LAYOUT_GROUP_SCALES_F32 ||
         weights->quant_group != scales->quant_group ||
         weights->quant_group < 2 || (weights->quant_group & 1u) != 0 ||
@@ -48,7 +65,8 @@ static bool compatible_tensors(const bmoq_tensor_t *weights,
         return false;
     uint32_t groups = weights->dimensions[1] / weights->quant_group;
     uint64_t weight_bytes =
-        (uint64_t)weights->dimensions[0] * weights->dimensions[1] / 2;
+        (uint64_t)weights->dimensions[0] * weights->dimensions[1] /
+        (q8_pair ? 1u : 2u);
     uint64_t scale_bytes =
         (uint64_t)weights->dimensions[0] * groups * sizeof(float);
     return weights->byte_length == weight_bytes &&
@@ -74,7 +92,8 @@ static coli_status_t setup_tiling(const bmoq_tensor_t *weights,
     const uint32_t columns = weights->dimensions[1];
     const uint32_t group_size = weights->quant_group;
     const uint32_t groups_per_row = columns / group_size;
-    const size_t group_weight_bytes = group_size / 2;
+    const size_t group_weight_bytes =
+        is_q8(weights) ? group_size : group_size / 2;
     const size_t group_workspace_bytes = group_weight_bytes + sizeof(float);
     if (vector_count != columns || workspace_bytes < group_workspace_bytes)
         return COLI_ERR_RANGE;
@@ -104,7 +123,8 @@ static coli_status_t read_group_tile(const coli_model_t *model,
 {
     size_t weight_bytes = (size_t)group_count * group_weight_bytes;
     size_t scale_bytes = (size_t)group_count * sizeof(float);
-    uint64_t row_weight_bytes = (uint64_t)weights->dimensions[1] / 2;
+    uint64_t row_weight_bytes =
+        (uint64_t)weights->dimensions[1] / (is_q8(weights) ? 1u : 2u);
     uint64_t row_scale_bytes = (uint64_t)groups_per_row * sizeof(float);
     uint64_t weight_offset = (uint64_t)row * row_weight_bytes +
                              (uint64_t)first_group * group_weight_bytes;
@@ -157,6 +177,7 @@ coli_status_t coli_q4_matvec_rows(
     if (status != COLI_OK) return status;
     const uint32_t rows = weights->dimensions[0];
     const uint32_t group_size = weights->quant_group;
+    const bool q8 = is_q8(weights);
     if (row_count == 0 || first_row > rows || row_count > rows - first_row ||
         output_count != row_count)
         return COLI_ERR_RANGE;
@@ -179,7 +200,7 @@ coli_status_t coli_q4_matvec_rows(
                 const uint8_t *packed = bytes + group * group_weight_bytes;
                 uint32_t column = (first_group + group) * group_size;
                 for (uint32_t within = 0; within < group_size; ++within) {
-                    int8_t q = unpack_q4(packed[within / 2], (within & 1u) != 0);
+                    int8_t q = decode_weight(packed, within, q8);
                     sum += (float)q * scale * input[column + within];
                 }
             }
@@ -208,6 +229,7 @@ coli_status_t coli_q4_transposed_rows(
     if (status != COLI_OK) return status;
     const uint32_t rows = weights->dimensions[0];
     const uint32_t group_size = weights->quant_group;
+    const bool q8 = is_q8(weights);
     if (row_count == 0 || first_row > rows || row_count > rows - first_row ||
         input_count != row_count || output_count > SIZE_MAX / sizeof(*output))
         return COLI_ERR_RANGE;
@@ -233,8 +255,7 @@ coli_status_t coli_q4_transposed_rows(
                 const uint32_t column =
                     (first_group + group) * group_size;
                 for (uint32_t within = 0; within < group_size; ++within) {
-                    const int8_t q = unpack_q4(
-                        packed[within / 2], (within & 1u) != 0);
+                    const int8_t q = decode_weight(packed, within, q8);
                     output[column + within] +=
                         coefficient * (float)q * scale;
                 }
@@ -267,6 +288,7 @@ coli_status_t coli_q4_dequantize_row(const coli_model_t *model,
     if (status != COLI_OK) return status;
     const uint32_t columns = weights->dimensions[1];
     const uint32_t group_size = weights->quant_group;
+    const bool q8 = is_q8(weights);
     for (uint32_t first_group = 0; first_group < groups_per_row;) {
         uint32_t remaining = groups_per_row - first_group;
         uint32_t group_count = remaining < tile_groups ? remaining : tile_groups;
@@ -280,7 +302,7 @@ coli_status_t coli_q4_dequantize_row(const coli_model_t *model,
             const uint8_t *packed = bytes + group * group_weight_bytes;
             uint32_t column = (first_group + group) * group_size;
             for (uint32_t within = 0; within < group_size; ++within) {
-                int8_t q = unpack_q4(packed[within / 2], (within & 1u) != 0);
+                int8_t q = decode_weight(packed, within, q8);
                 output[column + within] = (float)q * scale;
             }
         }
@@ -309,6 +331,7 @@ coli_status_t coli_q4_argmax(const coli_model_t *model,
     if (status != COLI_OK) return status;
     const uint32_t rows = weights->dimensions[0];
     const uint32_t group_size = weights->quant_group;
+    const bool q8 = is_q8(weights);
 
     float best = 0.0f;
     uint32_t best_row = 0;
@@ -329,8 +352,7 @@ coli_status_t coli_q4_argmax(const coli_model_t *model,
                 const uint8_t *packed = bytes + group * group_weight_bytes;
                 uint32_t column = (first_group + group) * group_size;
                 for (uint32_t within = 0; within < group_size; ++within) {
-                    int8_t q = unpack_q4(packed[within / 2],
-                                         (within & 1u) != 0);
+                    int8_t q = decode_weight(packed, within, q8);
                     sum += (float)q * scale * input[column + within];
                 }
             }

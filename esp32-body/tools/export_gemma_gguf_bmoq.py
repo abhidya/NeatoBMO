@@ -2,8 +2,9 @@
 """Convert a local Gemma 3 GGUF into streamed BMOQ.
 
 The converter is offline-only and streams GGUF tensors row-by-row. Q8_0 tensors
-are dequantized a row at a time and requantized to the firmware's grouped
-symmetric Q4 format plus float32 scales.
+are repacked verbatim: int8 codes are copied as-is and f16 block scales widen
+exactly to float32. Nothing is requantized, so device inference sees exactly
+the published quantization.
 """
 
 from __future__ import annotations
@@ -25,11 +26,13 @@ ENDIAN_MARKER = 0x01020304
 DTYPE_OPAQUE = 0
 DTYPE_F32 = 1
 DTYPE_Q4_SYM = 2
+DTYPE_Q8_0 = 3
 
 LAYOUT_OPAQUE = 0
 LAYOUT_Q4_ROW_MAJOR = 1
 LAYOUT_GROUP_SCALES_F32 = 2
 LAYOUT_DENSE_F32 = 3
+LAYOUT_Q8_ROW_MAJOR = 6
 
 ARCH_GEMMA3 = 2
 MANIFEST_TENSOR_ID = 0x47454D33
@@ -226,6 +229,23 @@ class GgufSource:
     def shape(self, name: str) -> tuple[int, ...]:
         return self.tensors[name].shape
 
+    def row_blocks(self, name: str, row: int) -> bytes:
+        """Raw GGUF Q8_0 blocks for one row: per 32 weights, f16 scale + 32 int8."""
+        tensor = self.tensors[name]
+        if len(tensor.shape) != 2:
+            raise ValueError(f"{name} is not a matrix")
+        rows, columns = tensor.shape
+        if row < 0 or row >= rows:
+            raise IndexError(row)
+        if tensor.ggml_type != GGUF_TYPE_Q8_0:
+            raise ValueError(f"{name}: expected Q8_0, found type {tensor.ggml_type}")
+        if columns % 32:
+            raise ValueError(f"{name}: Q8_0 columns must be divisible by 32")
+        row_bytes = columns // 32 * 34
+        with self.path.open("rb") as file:
+            file.seek(self.data_start + tensor.offset + row * row_bytes)
+            return file.read(row_bytes)
+
     def row_floats(self, name: str, row: int) -> list[float]:
         tensor = self.tensors[name]
         if len(tensor.shape) != 2:
@@ -270,23 +290,23 @@ def _f16_to_float(two: bytes) -> float:
     return struct.unpack("<e", two)[0]
 
 
-def quantize_row(row: list[float], group_size: int) -> tuple[bytes, bytes]:
-    if len(row) % group_size:
-        raise ValueError("Q4 group size must divide every matrix row")
-    packed = bytearray(len(row) // 2)
+def split_q8_row(blocks: bytes) -> tuple[bytes, bytes]:
+    """Split raw Q8_0 blocks into int8 weights and f32 group scales.
+
+    Lossless by construction: the int8 codes are copied verbatim and every f16
+    scale widens exactly to f32. No value is requantized. This replaced a
+    Q8_0 -> Q4 requantizer that stacked a second lossy pass on top of the
+    published quantization and destroyed model quality.
+    """
+    if len(blocks) % 34:
+        raise ValueError("Q8_0 row length must be a multiple of 34-byte blocks")
+    weights = bytearray()
     scales = bytearray()
-    for group_start in range(0, len(row), group_size):
-        group = row[group_start : group_start + group_size]
-        max_abs = max(abs(v) for v in group)
-        scale = max_abs / 7.0 if max_abs > 0.0 else 1.0
+    for cursor in range(0, len(blocks), 34):
+        scale = _f16_to_float(blocks[cursor : cursor + 2])
         scales.extend(struct.pack("<f", scale))
-        for offset in range(0, group_size, 2):
-            low = int(round(group[offset] / scale)) if max_abs > 0.0 else 0
-            high = int(round(group[offset + 1] / scale)) if max_abs > 0.0 else 0
-            low = max(-8, min(7, low)) & 0xF
-            high = max(-8, min(7, high)) & 0xF
-            packed[(group_start + offset) // 2] = low | (high << 4)
-    return bytes(packed), bytes(scales)
+        weights.extend(blocks[cursor + 2 : cursor + 34])
+    return bytes(weights), bytes(scales)
 
 
 def dense_writer(source: GgufSource, tensor: LogicalTensor) -> Callable[[object], None]:
@@ -297,17 +317,17 @@ def dense_writer(source: GgufSource, tensor: LogicalTensor) -> Callable[[object]
     return write
 
 
-def q4_writers(source: GgufSource, tensor: LogicalTensor, group_size: int) -> tuple[Callable[[object], None], Callable[[object], None]]:
+def q8_writers(source: GgufSource, tensor: LogicalTensor) -> tuple[Callable[[object], None], Callable[[object], None]]:
     rows = tensor.shape[0]
 
     def write_weights(output: object) -> None:
         for row_index in range(rows):
-            packed, _ = quantize_row(source.row_floats(tensor.gguf_name, row_index), group_size)
-            output.write(packed)
+            weights, _ = split_q8_row(source.row_blocks(tensor.gguf_name, row_index))
+            output.write(weights)
 
     def write_scales(output: object) -> None:
         for row_index in range(rows):
-            _, scales = quantize_row(source.row_floats(tensor.gguf_name, row_index), group_size)
+            _, scales = split_q8_row(source.row_blocks(tensor.gguf_name, row_index))
             output.write(scales)
 
     return write_weights, write_scales
@@ -338,15 +358,17 @@ def physical_tensors(source: GgufSource, config: GemmaConfig) -> list[PhysicalTe
             if columns % config.quant_group:
                 raise ValueError(f"{logical.gguf_name}: group size {config.quant_group} does not divide {columns}")
             groups = columns // config.quant_group
-            write_weights, write_scales = q4_writers(source, logical, config.quant_group)
+            if config.quant_group != 32:
+                raise ValueError("Q8_0 passthrough requires the GGUF block size of 32")
+            write_weights, write_scales = q8_writers(source, logical)
             result.append(
                 PhysicalTensor(
                     logical.tensor_id,
-                    DTYPE_Q4_SYM,
+                    DTYPE_Q8_0,
                     config.quant_group,
                     (rows, columns, 1, 1),
-                    rows * columns // 2,
-                    LAYOUT_Q4_ROW_MAJOR,
+                    rows * columns,
+                    LAYOUT_Q8_ROW_MAJOR,
                     logical.short_name,
                     logical.gguf_name,
                     write_weights,
@@ -432,7 +454,7 @@ def plan_bmoq(source: GgufSource, group_size: int) -> tuple[GemmaConfig, list[Ph
         "version": VERSION,
         "architecture": "gemma3",
         "config": config.__dict__,
-        "quantization": {"type": "q8_0_to_grouped_symmetric_q4", "group_size": group_size},
+        "quantization": {"type": "q8_0_passthrough", "group_size": group_size},
         "source": {"path": str(source.path), "gguf_tensor_count": len(source.tensors)},
         "unsupported": [],
         "tensor_count_without_manifest": len(tensors),

@@ -25,6 +25,13 @@ typedef enum {
     BMOQ_DTYPE_OPAQUE = 0,
     BMOQ_DTYPE_F32 = 1,
     BMOQ_DTYPE_Q4_SYM = 2,
+    /** Signed 8-bit weights with one float32 scale per group.
+     *
+     * This is a lossless repack of GGUF Q8_0: the int8 codes are copied
+     * verbatim and the f16 block scales widen exactly to f32. It exists so
+     * already-quantized downloads run on-device without a second, quality-
+     * destroying requantization pass. */
+    BMOQ_DTYPE_Q8_0 = 3,
 } bmoq_dtype_t;
 
 typedef enum {
@@ -39,6 +46,8 @@ typedef enum {
     BMOQ_LAYOUT_Q4_EXPERT_BUNDLE = 4,
     /** Float32 group scales concatenated by expert: [expert, row, group]. */
     BMOQ_LAYOUT_EXPERT_GROUP_SCALES_F32 = 5,
+    /** One signed 8-bit value per byte, row-major, no row padding. */
+    BMOQ_LAYOUT_Q8_ROW_MAJOR = 6,
 } bmoq_layout_t;
 
 typedef enum {

@@ -22,13 +22,13 @@ HOST_TOOL_CFLAGS := $(CFLAGS) -O2 -ffp-contract=off -D_DARWIN_C_SOURCE
 MCU := ../components/coli_mcu
 BUILD := build
 
-TESTS := test_bmoq test_q4_matvec test_coli_ops test_coli_moe \
+TESTS := test_bmoq test_q4_matvec test_q8_matvec test_coli_ops test_coli_moe \
          test_coli_olmoe_layer test_coli_generate test_coli_tokenizer \
          test_coli_spm test_coli_gemma test_coli_gemma_generate \
          test_coli_kv_cache test_coli_kv_attention test_coli_glm52 \
          test_coli_inkling
 BINS := $(addprefix $(BUILD)/,$(TESTS))
-HOST_TOOLS := ctok-encode
+HOST_TOOLS := ctok-encode coli-run
 HOST_TOOL_BINS := $(addprefix $(BUILD)/,$(HOST_TOOLS))
 
 all: $(BINS) $(HOST_TOOL_BINS)
@@ -40,6 +40,10 @@ $(BUILD)/test_bmoq: test_bmoq.c $(MCU)/model_format.c $(MCU)/store_file.c | $(BU
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
 $(BUILD)/test_q4_matvec: test_q4_matvec.c $(MCU)/model_format.c \
+		$(MCU)/store_file.c $(MCU)/q4_matvec.c | $(BUILD)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
+
+$(BUILD)/test_q8_matvec: test_q8_matvec.c $(MCU)/model_format.c \
 		$(MCU)/store_file.c $(MCU)/q4_matvec.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
@@ -58,7 +62,8 @@ $(BUILD)/test_coli_olmoe_layer: test_coli_olmoe_layer.c $(MCU)/model_format.c \
 $(BUILD)/test_coli_generate: test_coli_generate.c $(MCU)/model_format.c \
 		$(MCU)/store_file.c $(MCU)/q4_matvec.c $(MCU)/ops.c $(MCU)/moe.c \
 		$(MCU)/kv_cache.c $(MCU)/olmoe.c $(MCU)/tokenizer.c \
-		$(MCU)/glm52.c $(MCU)/glm52_generate.c $(MCU)/generate.c \
+		$(MCU)/glm52.c $(MCU)/glm52_generate.c $(MCU)/gemma.c \
+		$(MCU)/gemma_generate.c $(MCU)/spm.c $(MCU)/generate.c \
 		$(MCU)/runtime.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
@@ -92,7 +97,8 @@ $(BUILD)/test_coli_kv_attention: test_coli_kv_attention.c \
 $(BUILD)/test_coli_glm52: test_coli_glm52.c $(MCU)/model_format.c \
 		$(MCU)/store_file.c $(MCU)/kv_cache.c $(MCU)/ops.c $(MCU)/q4_matvec.c \
 		$(MCU)/moe.c $(MCU)/olmoe.c $(MCU)/glm52.c \
-		$(MCU)/glm52_generate.c $(MCU)/tokenizer.c $(MCU)/generate.c \
+		$(MCU)/glm52_generate.c $(MCU)/gemma.c $(MCU)/gemma_generate.c \
+		$(MCU)/spm.c $(MCU)/tokenizer.c $(MCU)/generate.c \
 		$(MCU)/runtime.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
@@ -101,6 +107,16 @@ $(BUILD)/test_coli_inkling: test_coli_inkling.c $(MCU)/model_format.c \
 		$(MCU)/q4_matvec.c $(MCU)/inkling.c \
 		$(MCU)/inkling_generate.c | $(BUILD)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
+
+# The firmware inference entry point (coli_runtime_generate) built for the
+# host: offline prompt-to-text proof for a model file before it ships to the
+# device SSD.
+$(BUILD)/coli-run: coli_run.c $(MCU)/model_format.c $(MCU)/store_file.c \
+		$(MCU)/q4_matvec.c $(MCU)/ops.c $(MCU)/moe.c $(MCU)/kv_cache.c \
+		$(MCU)/olmoe.c $(MCU)/gemma.c $(MCU)/gemma_generate.c $(MCU)/glm52.c \
+		$(MCU)/glm52_generate.c $(MCU)/tokenizer.c $(MCU)/spm.c \
+		$(MCU)/generate.c $(MCU)/runtime.c | $(BUILD)
+	$(CC) $(HOST_TOOL_CFLAGS) $^ -o $@ $(LDLIBS)
 
 # Encodes stdin with an exported .ctok so its token ids can be diffed against
 # the reference tokenizer. This is how the OLMoE pre-tokenizer divergence
